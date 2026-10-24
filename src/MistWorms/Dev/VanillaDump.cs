@@ -11,6 +11,7 @@ using BepInEx;
 using MistWorms.Colony;
 using MistWorms.Config;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 
 namespace MistWorms.Dev
@@ -22,9 +23,10 @@ namespace MistWorms.Dev
     /// </summary>
     internal static class VanillaDump
     {
-        private static readonly string[] ReferenceCreatures = { VanillaNames.Tick, VanillaNames.Seeker, VanillaNames.SeekerBrood, VanillaNames.SeekerBrute };
+        private static readonly string[] ReferenceCreatures = { VanillaNames.Tick, VanillaNames.Seeker, VanillaNames.SeekerBrood, VanillaNames.SeekerBrute, VanillaNames.Leech, VanillaNames.Blob };
         private static readonly string[] FxPrefixes = { "sfx_", "vfx_", "fx_" };
-        private static readonly string[] FxKeywords = { "tick", "seeker", "brood", "egg", "bug", "insect", "crawl", "squish", "death", "blood" };
+        private static readonly string[] FxKeywords = { "tick", "seeker", "brood", "egg", "bug", "insect", "crawl", "squish", "death", "blood",
+            "hit", "hurt", "leech", "blob", "boar", "ooze", "goo", "slime", "green", "puke", "guck", "poison" };
         private static readonly string[] DestructibleKeywords = { "egg", "sac", "seeker", "dvergr", "nest", "cocoon" };
         private static readonly string[] RequiredShaders = { VanillaNames.ShaderCreature, VanillaNames.ShaderPiece, "Custom/Vegetation", "Custom/Player" };
 
@@ -92,6 +94,10 @@ namespace MistWorms.Dev
             Section(sb, "6. Shaders and instancing", s => probes = DumpShaders(s, prefabs));
             Section(sb, "7. Layers and hit masks", s => DumpLayers(s, prefabs));
             Section(sb, "8. Engine and game versions", DumpVersions);
+            Section(sb, "9. Custom/Creature shader: keywords, defaults, ranges", DumpCreatureShader);
+            Section(sb, "10. Particle systems of priority and hit / hurt / blood effects", s => DumpParticles(s, prefabs));
+            Section(sb, "11. Effects referenced by the dumped creatures", s => DumpReferencedEffects(s, prefabs));
+            Section(sb, "12. Albedo and gloss texture statistics", s => DumpTextureStats(s, prefabs));
 
             try
             {
@@ -118,7 +124,7 @@ namespace MistWorms.Dev
         {
             var names = new SortedSet<string>(ReferenceCreatures, StringComparer.Ordinal);
             foreach (GameObject p in prefabs)
-                if (p.name.Contains(VanillaNames.Seeker) || p.name.Contains(VanillaNames.Tick)) names.Add(p.name);
+                if (IsCreatureCandidate(p.name)) names.Add(p.name);
 
             var creatures = new List<GameObject>();
             var others = new List<object[]>();
@@ -177,7 +183,7 @@ namespace MistWorms.Dev
                 }
             }
 
-            sb.AppendLine("### Other prefabs matching Seeker / Tick").AppendLine();
+            sb.AppendLine("### Other prefabs matching Seeker / Tick / Leech / Blob").AppendLine();
             Table(sb, new[] { "Prefab", "Components" }, others);
 
             sb.AppendLine("### Shader properties (creature materials)").AppendLine();
@@ -256,6 +262,18 @@ namespace MistWorms.Dev
                 }
             }
             Table(sb, new[] { "Renderer", "Type", "Mesh", "Material", "Shader", "Textures", "Keywords", "Instancing", "Queue" }, rows);
+
+            var seenMats = new HashSet<Material>();
+            foreach (Renderer r in p.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!(r is MeshRenderer || r is SkinnedMeshRenderer)) continue;
+                foreach (Material m in r.sharedMaterials)
+                    if (m != null && seenMats.Add(m))
+                    {
+                        try { MaterialValues(sb, m, RelPath(r.transform, p.transform)); }
+                        catch (Exception e) { sb.AppendLine($"> material `{m.name}` values failed: {Esc(e.Message)}").AppendLine(); }
+                    }
+            }
         }
 
         // ------------------------------------------------------------------ 1b. world-space sizes
@@ -980,6 +998,374 @@ namespace MistWorms.Dev
 
         private static string SafeGameVersion() => Safe(() => global::Version.CurrentVersion.ToString());
 
+        // ------------------------------------------------------------------ 1 (extra). material values
+
+        private static bool IsCreatureCandidate(string name) =>
+            name.Contains(VanillaNames.Seeker) || name.Contains(VanillaNames.Tick) || name.Contains(VanillaNames.Leech) || name.Contains(VanillaNames.Blob);
+
+        private static string C(Color c) => $"RGBA({F(c.r)}, {F(c.g)}, {F(c.b)}, {F(c.a)})";
+
+        private static string TextureInfo(Texture t)
+        {
+            string fmt;
+            try { fmt = t.graphicsFormat.ToString(); }
+            catch (Exception e) { fmt = "error: " + e.Message; }
+            return $"{t.name} ({t.width}x{t.height}, filter {t.filterMode}, wrap {t.wrapMode}, aniso {t.anisoLevel}, mips {t.mipmapCount}, format {fmt})";
+        }
+
+        private static void MaterialValues(StringBuilder sb, Material m, string rendererPath)
+        {
+            Shader sh = m.shader;
+            sb.AppendLine($"Material values `{m.name}` (renderer {rendererPath}, shader `{(sh ? sh.name : "null")}`). " +
+                          $"Active keywords: [{string.Join(" ", m.shaderKeywords ?? new string[0])}].").AppendLine();
+            if (sh == null) return;
+            var rows = new List<object[]>();
+            int count = sh.GetPropertyCount();
+            for (int i = 0; i < count; i++)
+            {
+                string name = sh.GetPropertyName(i);
+                ShaderPropertyType type = sh.GetPropertyType(i);
+                string value;
+                try
+                {
+                    switch (type)
+                    {
+                        case ShaderPropertyType.Float:
+                            value = F(m.GetFloat(name));
+                            break;
+                        case ShaderPropertyType.Range:
+                        {
+                            Vector2 lim = sh.GetPropertyRangeLimits(i);
+                            value = $"{F(m.GetFloat(name))} (range {F(lim.x)}..{F(lim.y)})";
+                            break;
+                        }
+                        case ShaderPropertyType.Color:
+                            value = C(m.GetColor(name));
+                            break;
+                        case ShaderPropertyType.Vector:
+                            value = C(m.GetVector(name));
+                            break;
+                        case ShaderPropertyType.Int:
+                            value = m.GetInteger(name).ToString(CultureInfo.InvariantCulture);
+                            break;
+                        case ShaderPropertyType.Texture:
+                        {
+                            Texture t = m.GetTexture(name);
+                            value = (t != null ? TextureInfo(t) : "none") + $"; scale {m.GetTextureScale(name)}, offset {m.GetTextureOffset(name)}";
+                            break;
+                        }
+                        default:
+                            value = "?";
+                            break;
+                    }
+                }
+                catch (Exception e)
+                {
+                    value = "error: " + e.Message;
+                }
+                rows.Add(new object[] { name, type, value });
+            }
+            Table(sb, new[] { "Property", "Type", "Value" }, rows);
+        }
+
+        // ------------------------------------------------------------------ 9. Custom/Creature shader
+
+        private static void DumpCreatureShader(StringBuilder sb)
+        {
+            if (!SeenShaders.TryGetValue(VanillaNames.ShaderCreature, out Shader sh) || sh == null)
+            {
+                sb.AppendLine($"**`{VanillaNames.ShaderCreature}` was not seen on any material.**").AppendLine();
+                return;
+            }
+
+            sb.AppendLine("### Keyword space").AppendLine();
+            try
+            {
+                string[] kws = sh.keywordSpace.keywordNames;
+                sb.AppendLine($"{kws.Length} keywords: {string.Join(", ", kws.Select(k => "`" + k + "`"))}").AppendLine();
+            }
+            catch (Exception e)
+            {
+                sb.AppendLine("keywordSpace unavailable: " + e.Message).AppendLine();
+            }
+
+            sb.AppendLine("### Property defaults and range limits").AppendLine();
+            var rows = new List<object[]>();
+            foreach (string name in new[] { "_Cutoff", "_Glossiness", "_MetalGloss", "_NoiseGlowEdge", "_BumpScale" })
+            {
+                int idx = sh.FindPropertyIndex(name);
+                if (idx < 0) { rows.Add(new object[] { name, "absent", "-", "-" }); continue; }
+                string def, lim;
+                try { def = F(sh.GetPropertyDefaultFloatValue(idx)); } catch (Exception e) { def = "error: " + e.Message; }
+                try { Vector2 l = sh.GetPropertyRangeLimits(idx); lim = $"{F(l.x)} .. {F(l.y)}"; } catch (Exception e) { lim = "error: " + e.Message; }
+                rows.Add(new object[] { name, sh.GetPropertyType(idx), def, lim });
+            }
+            Table(sb, new[] { "Property", "Type", "Default", "Range limits" }, rows);
+        }
+
+        // ------------------------------------------------------------------ 10. particles
+
+        private static readonly string[] PriorityFx =
+        {
+            "fx_TickBloodHit", "fx_tick_death", "fx_seeker_hurt", "fx_seeker_death", "fx_babyseeker_hurt", "fx_babyseeker_death",
+            "vfx_leech_hit", "vfx_leech_death", "vfx_blob_hit", "vfx_blob_death", "vfx_boar_hit", "vfx_BloodHit", "vfx_BloodDeath",
+            "fx_bloodweapon_hit", "vfx_Poison", "vfx_Slimed", "fx_Puke", "fx_Eat_Green", "vfx_GuckSackHit",
+        };
+
+        private static string Curve(ParticleSystem.MinMaxCurve c)
+        {
+            switch (c.mode)
+            {
+                case ParticleSystemCurveMode.Constant: return $"Constant {F(c.constant)}";
+                case ParticleSystemCurveMode.TwoConstants: return $"TwoConstants {F(c.constantMin)} .. {F(c.constantMax)}";
+                case ParticleSystemCurveMode.Curve:
+                    return $"Curve x{F(c.curveMultiplier)} [{CurveKeys(c.curve)}]";
+                default:
+                    return $"TwoCurves x{F(c.curveMultiplier)} min [{CurveKeys(c.curveMin)}] max [{CurveKeys(c.curveMax)}]";
+            }
+        }
+
+        private static string CurveKeys(AnimationCurve a) =>
+            a == null ? "" : string.Join(" ", a.keys.Select(k => $"({F(k.time)}:{F(k.value)})"));
+
+        private static string GradientKeys(Gradient g) =>
+            g == null ? "null" : $"mode {g.mode} color [{string.Join(" ", g.colorKeys.Select(k => $"{F(k.time)}:{C(k.color)}"))}] alpha [{string.Join(" ", g.alphaKeys.Select(k => $"{F(k.time)}:{F(k.alpha)}"))}]";
+
+        private static string StartColor(ParticleSystem.MinMaxGradient g)
+        {
+            switch (g.mode)
+            {
+                case ParticleSystemGradientMode.Color: return $"Color {C(g.color)}";
+                case ParticleSystemGradientMode.TwoColors: return $"TwoColors {C(g.colorMin)} .. {C(g.colorMax)}";
+                case ParticleSystemGradientMode.Gradient: return $"Gradient {GradientKeys(g.gradient)}";
+                case ParticleSystemGradientMode.TwoGradients: return $"TwoGradients min {GradientKeys(g.gradientMin)} max {GradientKeys(g.gradientMax)}";
+                default: return $"{g.mode} {GradientKeys(g.gradient)}";
+            }
+        }
+
+        private static string ParticleRenderer(ParticleSystem ps)
+        {
+            var r = ps.GetComponent<ParticleSystemRenderer>();
+            if (r == null) return "no renderer";
+            Material m = r.sharedMaterial;
+            if (m == null) return $"{r.renderMode}, no sharedMaterial";
+            var parts = new List<string> { $"mode {r.renderMode}", $"shader {(m.shader ? m.shader.name : "null")}", $"material {m.name}" };
+            if (m.HasProperty("_MainTex"))
+            {
+                Texture t = m.GetTexture("_MainTex");
+                parts.Add("_MainTex " + (t != null ? $"{t.name} ({t.width}x{t.height})" : "none"));
+            }
+            if (m.HasProperty("_Color")) parts.Add("_Color " + C(m.GetColor("_Color")));
+            if (m.HasProperty("_TintColor")) parts.Add("_TintColor " + C(m.GetColor("_TintColor")));
+            return string.Join("; ", parts);
+        }
+
+        private static void DumpParticles(StringBuilder sb, List<GameObject> prefabs)
+        {
+            var wanted = new List<GameObject>();
+            var missing = new List<string>();
+            foreach (string n in PriorityFx)
+            {
+                GameObject p = FindPrefab(prefabs, n);
+                if (p == null) missing.Add(n); else wanted.Add(p);
+            }
+            foreach (GameObject p in prefabs)
+            {
+                string lower = p.name.ToLowerInvariant();
+                if (!FxPrefixes.Any(x => lower.StartsWith(x, StringComparison.Ordinal))) continue;
+                if (!(lower.Contains("blood") || lower.Contains("hurt") || (lower.Contains("hit") && !lower.Contains("white")))) continue;
+                if (!wanted.Contains(p)) wanted.Add(p);
+            }
+            wanted.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+
+            sb.AppendLine($"Detailed: the priority list ({PriorityFx.Length}) plus every sfx_/vfx_/fx_ prefab whose name contains blood, hurt or hit ({wanted.Count} prefabs). " +
+                          $"Missing priority prefabs: {(missing.Count == 0 ? "none" : string.Join(", ", missing))}.").AppendLine();
+
+            var rows = new List<object[]>();
+            foreach (GameObject p in wanted)
+            {
+                bool priority = PriorityFx.Contains(p.name);
+                ParticleSystem[] systems = p.GetComponentsInChildren<ParticleSystem>(true);
+                if (systems.Length == 0) { rows.Add(new object[] { p.name, priority ? "yes" : "", "-", "no ParticleSystem" }); continue; }
+                foreach (ParticleSystem ps in systems)
+                {
+                    string detail;
+                    try
+                    {
+                        ParticleSystem.MainModule main = ps.main;
+                        detail = $"startColor: {StartColor(main.startColor)} | startSize: {Curve(main.startSize)} | startLifetime: {Curve(main.startLifetime)} | " +
+                                 $"maxParticles {main.maxParticles} | simulationSpace {main.simulationSpace} | renderer: {ParticleRenderer(ps)}";
+                    }
+                    catch (Exception e) { detail = "error: " + e.Message; }
+                    rows.Add(new object[] { p.name, priority ? "yes" : "", RelPath(ps.transform, p.transform), detail });
+                }
+            }
+            Table(sb, new[] { "Prefab", "Priority", "ParticleSystem", "Details" }, rows);
+        }
+
+        // ------------------------------------------------------------------ 11. referenced effects
+
+        private static IEnumerable<GameObject> HumanoidItems(Humanoid h)
+        {
+            var list = new List<GameObject>();
+            void Add(IEnumerable<GameObject> gos) { if (gos != null) list.AddRange(gos.Where(g => g != null)); }
+            Add(h.m_defaultItems);
+            Add(h.m_randomWeapon);
+            Add(h.m_randomArmor);
+            Add(h.m_randomShield);
+            if (h.m_randomSets != null) foreach (Humanoid.ItemSet set in h.m_randomSets) Add(set.m_items);
+            if (h.m_randomItems != null) Add(h.m_randomItems.Select(r => r.m_prefab));
+            if (h.m_unarmedWeapon != null) list.Add(h.m_unarmedWeapon.gameObject);
+            return list;
+        }
+
+        private static void CollectEffects(object o, string label, Dictionary<GameObject, HashSet<string>> map, int depth)
+        {
+            if (o == null || depth > 3) return;
+            foreach (FieldInfo f in o.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (f.FieldType == typeof(EffectList))
+                {
+                    var list = f.GetValue(o) as EffectList;
+                    if (list?.m_effectPrefabs == null) continue;
+                    foreach (EffectList.EffectData e in list.m_effectPrefabs)
+                    {
+                        if (e == null || e.m_prefab == null) continue;
+                        if (!map.TryGetValue(e.m_prefab, out HashSet<string> set)) map[e.m_prefab] = set = new HashSet<string>(StringComparer.Ordinal);
+                        set.Add(label + "." + f.Name);
+                    }
+                }
+                else if (f.FieldType == typeof(Attack))
+                {
+                    CollectEffects(f.GetValue(o), label + "." + f.Name, map, depth + 1);
+                }
+            }
+        }
+
+        private static void DumpReferencedEffects(StringBuilder sb, List<GameObject> prefabs)
+        {
+            var map = new Dictionary<GameObject, HashSet<string>>();
+            var creatureNames = new List<string>();
+            foreach (GameObject p in prefabs)
+            {
+                if (!IsCreatureCandidate(p.name) || p.GetComponent<Character>() == null) continue;
+                creatureNames.Add(p.name);
+                foreach (MonoBehaviour mb in p.GetComponentsInChildren<MonoBehaviour>(true))
+                    if (mb != null) CollectEffects(mb, p.name + ":" + mb.GetType().Name, map, 0);
+                if (p.GetComponent<Character>() is Humanoid h)
+                    foreach (GameObject item in HumanoidItems(h))
+                    {
+                        ItemDrop id = item.GetComponent<ItemDrop>();
+                        if (id != null) CollectEffects(id.m_itemData.m_shared, p.name + ":item " + item.name, map, 0);
+                    }
+            }
+
+            creatureNames.Sort(StringComparer.Ordinal);
+            sb.AppendLine($"Creatures scanned (reflection over every public `EffectList` field of their components and of their Humanoid items SharedData / Attack): {string.Join(", ", creatureNames)}. " +
+                          "Only sfx_ / vfx_ / fx_ prefabs are listed, whether or not they are in ZNetScene.").AppendLine();
+
+            var rows = new List<object[]>();
+            foreach (KeyValuePair<GameObject, HashSet<string>> kv in map.OrderBy(k => k.Key.name, StringComparer.Ordinal))
+            {
+                GameObject p = kv.Key;
+                string lower = p.name.ToLowerInvariant();
+                if (!FxPrefixes.Any(x => lower.StartsWith(x, StringComparison.Ordinal))) continue;
+                string clips = string.Join(", ", p.GetComponentsInChildren<ZSFX>(true)
+                    .Select(z => "[" + (z.m_audioClips == null ? "" : string.Join(", ", z.m_audioClips.Where(a => a != null).Select(a => a.name))) + "]"));
+                rows.Add(new object[] { p.name, string.Join("; ", kv.Value.OrderBy(x => x, StringComparer.Ordinal)),
+                    ZNetScene.instance.m_prefabs.Contains(p) ? "net" : (ZNetScene.instance.m_nonNetViewPrefabs.Contains(p) ? "non-net" : "NOT in ZNetScene"),
+                    ComponentList(p), clips.Length > 0 ? clips : "-" });
+            }
+            Table(sb, new[] { "Prefab", "Referenced by", "ZNetScene", "Root components", "ZSFX clips" }, rows);
+        }
+
+        // ------------------------------------------------------------------ 12. texture statistics
+
+        private static readonly string[] StatTextureNames = { "babyseeker_d", "Feasting_d", "Feasting_m" };
+
+        private static void DumpTextureStats(StringBuilder sb, List<GameObject> prefabs)
+        {
+            var targets = new List<KeyValuePair<string, Texture>>();
+            var seen = new HashSet<Texture>();
+            foreach (Texture t in Resources.FindObjectsOfTypeAll<Texture>())
+                if (t != null && StatTextureNames.Any(n => string.Equals(n, t.name, StringComparison.OrdinalIgnoreCase)) && seen.Add(t))
+                    targets.Add(new KeyValuePair<string, Texture>("by name", t));
+            foreach (string cn in new[] { VanillaNames.Leech, VanillaNames.Blob })
+            {
+                GameObject p = FindPrefab(prefabs, cn);
+                if (p == null) { sb.AppendLine($"`{cn}` missing from ZNetScene.").AppendLine(); continue; }
+                foreach (Renderer r in p.GetComponentsInChildren<Renderer>(true))
+                    foreach (Material m in r.sharedMaterials)
+                    {
+                        Texture t = m != null && m.HasProperty(VanillaNames.PropMainTex) ? m.GetTexture(VanillaNames.PropMainTex) : null;
+                        if (t != null && seen.Add(t)) targets.Add(new KeyValuePair<string, Texture>(cn + " _MainTex", t));
+                    }
+            }
+            foreach (string n in StatTextureNames)
+                if (!targets.Any(kv => string.Equals(kv.Value.name, n, StringComparison.OrdinalIgnoreCase)))
+                    sb.AppendLine($"Texture `{n}` not found among loaded textures.").AppendLine();
+
+            sb.AppendLine("Each texture is blitted to a temporary ARGB32 RenderTexture (sRGB read/write matched to the source format so the bytes are the stored values), " +
+                          "read back with ReadPixels; values are 0..255. Temporary objects are released.").AppendLine();
+            var rows = new List<object[]>();
+            foreach (KeyValuePair<string, Texture> kv in targets)
+            {
+                try
+                {
+                    foreach (object[] row in ChannelStats(kv.Key, kv.Value)) rows.Add(row);
+                }
+                catch (Exception e)
+                {
+                    rows.Add(new object[] { kv.Key, kv.Value.name, "error: " + e.Message });
+                }
+            }
+            Table(sb, new[] { "Source", "Texture", "Size / sRGB", "Channel", "Mean", "Min", "Max" }, rows);
+        }
+
+        private static IEnumerable<object[]> ChannelStats(string source, Texture t)
+        {
+            int w = t.width, h = t.height;
+            bool srgb = GraphicsFormatUtility.IsSRGBFormat(t.graphicsFormat);
+            RenderTexture prev = RenderTexture.active;
+            RenderTexture rt = null;
+            Texture2D readable = null;
+            Color32[] px;
+            try
+            {
+                rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, srgb ? RenderTextureReadWrite.sRGB : RenderTextureReadWrite.Linear);
+                Graphics.Blit(t, rt);
+                RenderTexture.active = rt;
+                readable = new Texture2D(w, h, TextureFormat.RGBA32, false, !srgb);
+                readable.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                px = readable.GetPixels32();
+            }
+            finally
+            {
+                RenderTexture.active = prev;
+                if (rt != null) RenderTexture.ReleaseTemporary(rt);
+                if (readable != null) UnityEngine.Object.Destroy(readable);
+            }
+
+            var sum = new double[4];
+            var min = new int[] { 255, 255, 255, 255 };
+            var max = new int[4];
+            foreach (Color32 c in px)
+            {
+                int[] v = { c.r, c.g, c.b, c.a };
+                for (int i = 0; i < 4; i++)
+                {
+                    sum[i] += v[i];
+                    if (v[i] < min[i]) min[i] = v[i];
+                    if (v[i] > max[i]) max[i] = v[i];
+                }
+            }
+            string[] names = { "R", "G", "B", "A" };
+            var rows = new List<object[]>();
+            for (int i = 0; i < 4; i++)
+                rows.Add(new object[] { source, t.name, $"{w}x{h} / {(srgb ? "sRGB" : "linear")}", names[i], px.Length > 0 ? sum[i] / px.Length : 0.0, min[i], max[i] });
+            return rows;
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static void Section(StringBuilder sb, string title, Action<StringBuilder> body)
@@ -1103,7 +1489,7 @@ namespace MistWorms.Dev
             foreach (string prop in m.GetTexturePropertyNames())
             {
                 Texture t = m.GetTexture(prop);
-                if (t != null) parts.Add($"{prop}={t.name} ({t.width}x{t.height})");
+                if (t != null) parts.Add($"{prop}={TextureInfo(t)}");
             }
             return string.Join(", ", parts);
         }

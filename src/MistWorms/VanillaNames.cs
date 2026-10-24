@@ -18,6 +18,8 @@ namespace MistWorms
         // The spec's "soldat fouineur" / "SeekerSoldier" does not exist (dump L304 "missing from ZNetScene"):
         // the soldier is SeekerBrute.
         public const string SeekerBrute = "SeekerBrute";       // confirmed (dump L14, $enemy_seekerbrute)
+        public const string Leech = "Leech";                   // unverified (phase 4A dump, section 1 confirms): swamp leech, green-blood reference
+        public const string Blob = "Blob";                     // unverified (phase 4A dump, section 1 confirms): swamp blob, green-blood reference
         public const string Dverger = "Dverger";               // unverified (spec §5.4, mine faction reference): not covered by the dump
 
         /// <summary>Clone base for MW_WritheMass, in order of preference (spec §20.1 fallback chain).</summary>

@@ -1,6 +1,6 @@
 # MistWorms vanilla dump
 
-Generated 2026-10-24 14:30:00 by `VanillaDump` (MistWorms 0.1.0). Valheim `1.0.20`, Unity `6000.0.75f1`. Raw output, to be curated into `docs/vanilla-reference.md`.
+Generated 2026-10-24 19:57:01 by `VanillaDump` (MistWorms 0.1.0). Valheim `1.0.20`, Unity `6000.0.75f1`. Raw output, to be curated into `docs/vanilla-reference.md`.
 
 ## 1. Reference creatures
 
@@ -9,6 +9,16 @@ Generated 2026-10-24 14:30:00 by `VanillaDump` (MistWorms 0.1.0). Valheim `1.0.2
 | Prefab | m_name | Health | Speed | Walk | Run | Turn | RunTurn | Faction | Group | Flying | Boss | TolerateFire |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Aspect_SeekerQueen | $enemy_aspect_seekerqueen (Aspect de la Matriarche rampante) | 1700 | 4 | 2 | 8 | 50 | 120 | Boss |  | False | False | False |
+| Blob | $enemy_blob (Blob) | 50 | 1 | 5 | 2 | 100 | 100 | Undead |  | False | False | False |
+| BlobAspect | $enemy_blob (Blob) | 50 | 1 | 5 | 2 | 100 | 100 | Undead |  | False | False | False |
+| BlobElite | $enemy_blobelite (Oozer) | 150 | 1 | 5 | 2 | 100 | 100 | Undead |  | False | False | False |
+| BlobFrost | $enemy_blobfrost (Blob de givre) | 50 | 1 | 5 | 2 | 100 | 100 | MountainMonsters |  | False | False | False |
+| BlobLava | $enemy_bloblava (Blob de lave) | 300 | 1 | 5 | 2 | 100 | 100 | Demon |  | False | False | True |
+| BlobMork | $enemy_blobmork (Pâte sans forme) | 150 | 1 | 5 | 2 | 100 | 100 | DeepNorth |  | False | False | False |
+| BlobMorkMini | $enemy_blobmorkmini (Petite pâte) | 50 | 2 | 10 | 4 | 100 | 100 | DeepNorth |  | False | False | False |
+| BlobTar | $enemy_blobtar (Excroissance) | 100 | 1 | 5 | 3 | 100 | 100 | Undead |  | False | False | False |
+| Leech | $enemy_leech (Sangsue) | 60 | 2 | 5 | 2 | 50 | 50 | Undead |  | False | False | False |
+| Leech_cave | $enemy_leech (Sangsue) | 60 | 2 | 5 | 2 | 50 | 50 | Undead |  | False | False | False |
 | Seeker | $enemy_seeker (Fouineur) | 200 | 2 | 5 | 6 | 150 | 250 | MistlandsMonsters |  | False | False | False |
 | SeekerBrood | $enemy_babyseeker (Jeune fouineur) | 20 | 1 | 1 | 3 | 150 | 250 | MistlandsMonsters |  | False | False | False |
 | SeekerBrute | $enemy_seekerbrute (Soldat fouineur) | 1500 | 2 | 2 | 6 | 80 | 150 | MistlandsMonsters |  | False | False | False |
@@ -20,6 +30,16 @@ Generated 2026-10-24 14:30:00 by `VanillaDump` (MistWorms 0.1.0). Valheim `1.0.2
 | Prefab | AI | ViewRange | ViewAngle | HearRange | AlertRange | AfraidOfFire | AvoidFire | PathAgentType | AttackPlayerObjects | IdleSound (interval, chance) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Aspect_SeekerQueen | MonsterAI | 30 | 90 | 9999 | 30 | False | False | SeekerQueen | True | sfx_HiveQueen_idle (5 s, 0.5) |
+| Blob | MonsterAI | 30 | 90 | 9999 | 9999 | False | False | HumanoidNoSwim | False | sfx_blob_idle (10 s, 0.25) |
+| BlobAspect | MonsterAI | 30 | 90 | 9999 | 9999 | False | False | HumanoidNoSwim | False | sfx_blob_idle (10 s, 0.25) |
+| BlobElite | MonsterAI | 30 | 90 | 9999 | 9999 | False | False | HumanoidNoSwim | False | sfx_blob_idle (10 s, 0.25) |
+| BlobFrost | MonsterAI | 30 | 90 | 9999 | 9999 | False | False | HumanoidNoSwim | False | sfx_blob_idle (10 s, 0.25) |
+| BlobLava | MonsterAI | 30 | 90 | 9999 | 9999 | False | False | HumanoidNoSwim | False | sfx_bloblava_idle (5 s, 0.5) |
+| BlobMork | MonsterAI | 30 | 90 | 9999 | 9999 | False | False | HumanoidNoSwim | False | sfx_blob_idle (10 s, 0.25) |
+| BlobMorkMini | MonsterAI | 30 | 90 | 9999 | 9999 | False | False | HumanoidNoSwim | False | sfx_blob_idle (10 s, 0.25) |
+| BlobTar | MonsterAI | 30 | 90 | 9999 | 9999 | False | False | Humanoid | True | sfx_blobtar_idle (10 s, 0.25) |
+| Leech | MonsterAI | 30 | 360 | 9999 | 20 | False | False | Fish | False | sfx_leech_idle (10 s, 0.5) |
+| Leech_cave | MonsterAI | 30 | 360 | 9999 | 20 | False | False | Fish | False | sfx_leech_idle (10 s, 0.5) |
 | Seeker | MonsterAI | 30 | 120 | 9999 | 30 | False | False | Humanoid | True | sfx_seeker_idle, sfx_seeker_overlay (5 s, 0.5) |
 | SeekerBrood | MonsterAI | 30 | 120 | 9999 | 30 | False | False | Humanoid | True | sfx_baby_seeker_idle (5 s, 0.5) |
 | SeekerBrute | MonsterAI | 30 | 90 | 9999 | 30 | False | False | HumanoidBig | True | sfx_seeker_brute_idle (10 s, 0.5) |
@@ -31,6 +51,16 @@ Generated 2026-10-24 14:30:00 by `VanillaDump` (MistWorms 0.1.0). Valheim `1.0.2
 | Prefab | blunt | slash | pierce | chop | pickaxe | fire | frost | lightning | poison | spirit | nonPlayer |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Aspect_SeekerQueen | Normal | Normal | Resistant | Ignore | Ignore | Normal | Normal | Normal | Normal | Immune | Immune |
+| Blob | Weak | Resistant | Resistant | Ignore | Ignore | Resistant | Weak | Weak | Immune | Normal | Normal |
+| BlobAspect | Weak | Resistant | Resistant | Ignore | Ignore | Resistant | Weak | Weak | Immune | Normal | Normal |
+| BlobElite | Weak | Resistant | Resistant | Ignore | Ignore | Resistant | Weak | Weak | Immune | Normal | Normal |
+| BlobFrost | Weak | Resistant | Resistant | Ignore | Ignore | Weak | VeryResistant | Weak | Immune | Normal | Normal |
+| BlobLava | Weak | Normal | Resistant | Ignore | Ignore | Immune | Weak | Weak | Resistant | Normal | Normal |
+| BlobMork | Weak | Resistant | Resistant | Ignore | Ignore | Resistant | Weak | Weak | Immune | Normal | Normal |
+| BlobMorkMini | Weak | Resistant | Resistant | Ignore | Ignore | Resistant | Weak | Weak | Immune | Normal | Normal |
+| BlobTar | Weak | Resistant | Resistant | Ignore | Ignore | Weak | Resistant | Normal | Immune | Normal | Normal |
+| Leech | Normal | Normal | Normal | Ignore | Ignore | Immune | Normal | Normal | Resistant | Immune | Normal |
+| Leech_cave | Normal | Normal | Normal | Ignore | Ignore | Immune | Normal | Normal | Resistant | Immune | Normal |
 | Seeker | Resistant | Resistant | Resistant | Ignore | Ignore | Normal | Normal | Normal | Normal | Immune | Normal |
 | SeekerBrood | Resistant | Resistant | Resistant | Ignore | Ignore | Normal | Normal | Normal | Normal | Immune | Normal |
 | SeekerBrute | Resistant | Resistant | Resistant | Ignore | Ignore | Normal | Normal | Normal | Normal | Immune | Normal |
@@ -44,6 +74,16 @@ Mesh AABB is computed from mesh/skin local bounds in root space (LOD0 only, inac
 | Prefab | Root scale | Mesh AABB size (root space) | Renderer.bounds size (as-is) | Colliders |
 | --- | --- | --- | --- | --- |
 | Aspect_SeekerQueen | 1 x 1 x 1 | 10.39 x 12.077 x 14.86 (min y -1.533) | 10.39 x 12.077 x 14.86 | Aspect_SeekerQueen: CapsuleCollider r 1.4 h 7 dir 1 center 0 x 3.5 x 0 layer character scale 1 x 1 x 1; Visual/Armature/Hip/1/2/3/4/5/character collider (3): CapsuleCollider r 1.2 h 5.204 dir 1 center 0 x 0.842 x 0 layer character_noenv scale 1 x 1 x 1; Visual/Armature/Hip/1/2/3/character collider (3): CapsuleCollider r 1.5 h 5.204 dir 1 center 0 x 0.842 x 0 layer character_noenv scale 1 x 1 x 1; Visual/Armature/Hip/1/character collider (3): CapsuleCollider r 1.7 h 4 dir 1 center 0 x 0 x 0 layer character_noenv scale 1 x 1 x 1; Visual/Armature/Hip/8/9/10/11/12/13/14/15/16/17/head/WeakSpot_head: CapsuleCollider r 0.9 h 4 dir 1 center 0 x 0 x 0 layer character_noenv scale 1.201 x 1.201 x 1.201; Visual/Attack collider: CapsuleCollider r 1.7 h 7.129 dir 1 center 0 x 0.31 x 0 layer character_noenv scale 1 x 1 x 1; RunHitDamager: BoxCollider size 2.73 x 2.43 x 1 center 0 x 0 x 0 trigger layer weapon scale 1 x 1 x 2.42 |
+| Blob | 1 x 1 x 1 | 2.079 x 1.257 x 1.885 (min y -0.242) | 2.079 x 1.257 x 1.885 | Blob: CapsuleCollider r 0.78 h 1.5 dir 1 center 0 x 0.77 x -0.048 layer character scale 1 x 1 x 1 |
+| BlobAspect | 1 x 1 x 1 | 2.079 x 1.257 x 1.885 (min y -0.242) | 2.079 x 1.257 x 1.885 | BlobAspect: CapsuleCollider r 0.78 h 1.5 dir 1 center 0 x 0.77 x -0.048 layer character scale 1 x 1 x 1 |
+| BlobElite | 1 x 1 x 1 | 3.048 x 1.843 x 2.765 (min y -0.539) | 3.048 x 1.843 x 2.765 | BlobElite: CapsuleCollider r 1.2 h 1 dir 1 center 0 x 1 x -0.048 layer character scale 1 x 1 x 1 |
+| BlobFrost | 1 x 1 x 1 | 2.079 x 1.257 x 1.885 (min y -0.242) | 2.079 x 1.257 x 1.885 | BlobFrost: CapsuleCollider r 0.78 h 1.5 dir 1 center 0 x 0.77 x -0.048 layer character scale 1 x 1 x 1 |
+| BlobLava | 1 x 1 x 1 | 2.978 x 2.915 x 3.394 (min y -0.412) | 2.978 x 2.915 x 3.394 | BlobLava: CapsuleCollider r 0.78 h 1.5 dir 1 center 0 x 0.77 x -0.048 layer character scale 1 x 1 x 1 |
+| BlobMork | 1 x 1 x 1 | 2.079 x 1.257 x 1.885 (min y -0.242) | 2.079 x 1.257 x 1.885 | BlobMork: CapsuleCollider r 0.78 h 1.5 dir 1 center 0 x 0.77 x -0.048 layer character scale 1 x 1 x 1 |
+| BlobMorkMini | 1 x 1 x 1 | 1.039 x 0.628 x 0.943 (min y -0.121) | 1.039 x 0.628 x 0.943 | BlobMorkMini: CapsuleCollider r 0.78 h 1.5 dir 1 center 0 x 0.77 x -0.048 layer character scale 1 x 1 x 1 |
+| BlobTar | 1 x 1 x 1 | 2.079 x 1.257 x 1.885 (min y -0.242) | 2.079 x 1.257 x 1.885 | BlobTar: CapsuleCollider r 0.78 h 1.5 dir 1 center 0 x 0.77 x -0.048 layer character scale 1 x 1 x 1 |
+| Leech | 1 x 1 x 1 | 0.58 x 0.679 x 4.58 (min y -0.116) | 0.58 x 0.679 x 4.58 | Leech: CapsuleCollider r 0.3 h 1.5 dir 2 center 0 x 0.3 x 0 layer character scale 1 x 1 x 1; attack_hitbox: SphereCollider r 0.8 center 0 x 0 x 0 layer hitbox scale 1 x 1 x 1 |
+| Leech_cave | 1 x 1 x 1 | 0.58 x 0.679 x 4.58 (min y -0.116) | 0.58 x 0.679 x 4.58 | Leech_cave: CapsuleCollider r 0.3 h 1.5 dir 2 center 0 x 0.3 x 0 layer character scale 1 x 1 x 1; attack_hitbox: SphereCollider r 0.8 center 0 x 0 x 0 layer hitbox scale 1 x 1 x 1 |
 | Seeker | 1 x 1 x 1 | 3.205 x 3.21 x 5.524 (min y -0.836) | 3.205 x 3.21 x 5.524 | Seeker: CapsuleCollider r 0.8 h 1 dir 1 center 0 x 0.8 x 0 layer character scale 1 x 1 x 1; character collider: CapsuleCollider r 0.6 h 2.45 dir 1 center 0 x 0 x 0 layer character_noenv scale 1 x 1 x 1 |
 | SeekerBrood | 1 x 1 x 1 | 1.202 x 1.204 x 2.072 (min y -0.313) | 1.202 x 1.204 x 2.072 | SeekerBrood: CapsuleCollider r 0.6 h 1 dir 1 center 0 x 0.6 x 0 layer character scale 1 x 1 x 1 |
 | SeekerBrute | 1 x 1 x 1 | 4.398 x 2.667 x 4.913 (min y -0.224) | 4.398 x 2.667 x 4.913 | SeekerBrute: CapsuleCollider r 1.2 h 2.2 dir 1 center 0 x 1.2 x 0 layer character scale 1 x 1 x 1; Visual/Armature/root/root2/hip/l.hip/l.backleg1/l.backleg2/l.backleg3/character collider (1): SphereCollider r 1 center 0 x 0 x 0 layer character_noenv scale 0.55 x 0.55 x 0.55; Visual/Armature/root/root2/hip/r.hip/r.backleg1/r.backleg2/r.backleg3/character collider (1): SphereCollider r 1 center 0 x 0 x 0 layer character_noenv scale 0.55 x 0.55 x 0.55; Visual/Armature/root/root2/hip/spine/l.shoulder/l.frontarm1/l.frontarm2/l.frontarm3/character collider (1): SphereCollider r 1 center 0 x 0 x 0 layer character_noenv scale 0.584 x 0.584 x 0.584; Visual/Armature/root/root2/hip/spine/neck/head/character collider (1): SphereCollider r 1 center 0 x 0 x 0 layer character_noenv scale 0.703 x 0.703 x 0.703; Visual/Armature/root/root2/hip/spine/r.shoulder/r.frontarm1/r.frontarm2/r.frontarm3/character collider (1): SphereCollider r 1 center 0 x 0 x 0 layer character_noenv scale 0.584 x 0.584 x 0.584; Visual/Armature/root/root2/hip/tail/WeakSpot_ass: SphereCollider r 1 center 0 x 0 x 0 layer character_noenv scale 0.825 x 0.825 x 0.825; Visual/Armature/root/root2/character collider: CapsuleCollider r 0.71 h 2.537 dir 1 center 0 x 0.179 x 0.053 layer character_noenv scale 1 x 1.011 x 1 |
@@ -88,7 +128,692 @@ Renderers and materials:
 | Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Visual/Cube | SkinnedMeshRenderer | Cube (7308 v) | Aspect_mat | Custom/Distortion |  | _GRADIENTASALPHA_ON | False | 3000 |
-| Visual/Plane | SkinnedMeshRenderer | Plane (1032 v) | seeker_queen | Custom/Creature | _MainTex=SeekerQueen_d (512x512), _BumpMap=SeekerQueen_n (512x512) | _TWOSIDEDNORMALS_ON | True | 2000 |
+| Visual/Plane | SkinnedMeshRenderer | Plane (1032 v) | seeker_queen | Custom/Creature | _MainTex=SeekerQueen_d (512x512, filter Point, wrap Repeat, aniso 1, mips 10, format RGBA_DXT5_SRGB), _BumpMap=SeekerQueen_n (512x512, filter Point, wrap Repeat, aniso 1, mips 10, format RGBA_DXT5_UNorm) | _TWOSIDEDNORMALS_ON | True | 2000 |
+
+Material values `Aspect_mat` (renderer Visual/Cube, shader `Custom/Distortion`). Active keywords: [_GRADIENTASALPHA_ON].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _Color | Color | RGBA(0.277, 0.525, 0.66, 0.992) |
+| _MainTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _NormalTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Glossiness | Range | 0.429 (range 0..1) |
+| _Metallic | Range | 0 (range 0..1) |
+| _NormalScale | Float | 1 |
+| _RefractionIntensity | Float | 2 |
+| _WaveVel | Float | 1 |
+| _DepthFade | Float | 1 |
+
+Material values `seeker_queen` (renderer Visual/Plane, shader `Custom/Creature`). Active keywords: [_TWOSIDEDNORMALS_ON].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _ColorFoldout | Float | 0 |
+| _MainTex | Texture | SeekerQueen_d (512x512, filter Point, wrap Repeat, aniso 1, mips 10, format RGBA_DXT5_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex_ST | Vector | RGBA(1, 1, 0, 0) |
+| _HSVHeader | Float | 0 |
+| _Hue | Range | 0 (range -0.5..0.5) |
+| _Saturation | Range | 0 (range -1..1) |
+| _Value | Range | 0 (range -1..1) |
+| _EmissionSpacer | Float | 0 |
+| _EmissionMap | Texture | none; scale (0.00, 1.00), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(0, 0, 0, 1) |
+| _SmoothnessFoldout | Float | 0 |
+| _MetallicGlossMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Metallic | Range | 0 (range 0..1) |
+| _MetalColor | Color | RGBA(1, 0.099, 0.099, 1) |
+| _UseGlossmap | Float | 0 |
+| _Glossiness | Range | 0.364 (range 0..1) |
+| _MetalGloss | Range | 0 (range 0..1) |
+| _NormalFoldout | Float | 0 |
+| _BumpMap | Texture | SeekerQueen_n (512x512, filter Point, wrap Repeat, aniso 1, mips 10, format RGBA_DXT5_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _BumpScale | Range | 1 (range 0..10) |
+| _TwoSidedNormals | Float | 1 |
+| _MiscFoldout | Float | 0 |
+| _Cull | Float | 0 |
+| _Cutoff | Range | 0.3 (range 0..1) |
+| _AddRain | Float | 0 |
+| _NoiseGlowEnabled | Float | 0 |
+| _UseStyles | Float | 0 |
+| _SnowCover | Range | 0 (range 0..1) |
+| _StylesFoldout | Float | 0 |
+| _StyleTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Style | Float | 0 |
+| _NoiseGlowFoldout | Float | 0 |
+| _SnapNoiseToPixel | Float | 1 |
+| _NoiseGlowTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _NoiseGlowSize | Float | 3 |
+| _NoiseGlowColor | Color | RGBA(1, 1, 1, 1) |
+| _NoiseGlowEdge | Range | 0 (range 0..1) |
+
+### Blob
+
+Components: CapsuleCollider, Rigidbody, Humanoid, CharacterDrop, ZNetView, ZSyncTransform, ZSyncAnimation, MonsterAI, FootStep
+
+Attacks (Humanoid items):
+
+| Source | Item | Type | Damages | AttackType | Anim | Range | Height | Angle | RayWidth | AI range | AI interval | Force | Projectile | Hit effects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default | blob_attack_aoe | OneHandedWeapon | poison 90 | Area | attack | 0 | 0.5 | 90 | 4 | 2 | 2 | 0 | - | vfx_HitSparks, sfx_greydwarf_attack_hit |
+
+Drops (CharacterDrop):
+
+| Item | Min | Max | Chance | OnePerPlayer | LevelMultiplier | DontScale |
+| --- | --- | --- | --- | --- | --- | --- |
+| TrophyBlob | 1 | 1 | 0.1 | False | True | False |
+| Ooze | 1 | 2 | 1 | False | True | False |
+
+Effects:
+
+| List | Prefabs |
+| --- | --- |
+| m_hitEffects | vfx_blob_hit, sfx_blob_hit |
+| m_critHitEffects | fx_crit |
+| m_backstabHitEffects | fx_backstab |
+| m_deathEffects | vfx_blob_death, sfx_blob_death |
+| BaseAI.m_alertedEffects | sfx_blob_alerted |
+| BaseAI.m_idleSound | sfx_blob_idle |
+| MonsterAI.m_wakeupEffects | - |
+| MonsterAI.m_sleepEffects | - |
+
+Renderers and materials:
+
+| Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visual/blob/Cube | SkinnedMeshRenderer | Cube (120 v) | blob | Custom/Blob | _MainTex=blob_d (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB), _BumpMap=blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm), _FlowTexture=blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB), _FlowMaskTex=blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB) | _NORMALMAP | True | 2000 |
+
+Material values `blob` (renderer Visual/blob/Cube, shader `Custom/Blob`). Active keywords: [_NORMALMAP].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex | Texture | blob_d (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (3.00, 3.00), offset (0.00, 0.00) |
+| _Glossiness | Range | 0.753 (range 0..1) |
+| _Metallic | Range | 0 (range 0..1) |
+| _BumpScale | Float | 0.84 |
+| _BumpMap | Texture | blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedAll | Float | -8 |
+| _FlowMaskTex | Texture | blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedY | Float | -10 |
+| _FlowTexture | Texture | blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowColor | Color | RGBA(1, 0.89, 0, 1) |
+| _EmissiveColor | Color | RGBA(0.302, 0.395, 0.093, 1) |
+| _SSS | Color | RGBA(0.188, 0.588, 0.03, 1) |
+
+### BlobAspect
+
+Components: CapsuleCollider, Rigidbody, Humanoid, CharacterDrop, ZNetView, ZSyncTransform, ZSyncAnimation, MonsterAI, FootStep
+
+Attacks (Humanoid items):
+
+| Source | Item | Type | Damages | AttackType | Anim | Range | Height | Angle | RayWidth | AI range | AI interval | Force | Projectile | Hit effects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default | blob_attack_aoe | OneHandedWeapon | poison 90 | Area | attack | 0 | 0.5 | 90 | 4 | 2 | 2 | 0 | - | vfx_HitSparks, sfx_greydwarf_attack_hit |
+
+Drops (CharacterDrop):
+
+| Item | Min | Max | Chance | OnePerPlayer | LevelMultiplier | DontScale |
+| --- | --- | --- | --- | --- | --- | --- |
+| TrophyBlob | 1 | 1 | 0.1 | False | True | False |
+| Ooze | 1 | 2 | 1 | False | True | False |
+
+Effects:
+
+| List | Prefabs |
+| --- | --- |
+| m_hitEffects | vfx_blob_hit, sfx_blob_hit |
+| m_critHitEffects | fx_crit |
+| m_backstabHitEffects | fx_backstab |
+| m_deathEffects | vfx_blob_death, sfx_blob_death |
+| BaseAI.m_alertedEffects | sfx_blob_alerted |
+| BaseAI.m_idleSound | sfx_blob_idle |
+| MonsterAI.m_wakeupEffects | - |
+| MonsterAI.m_sleepEffects | - |
+
+Renderers and materials:
+
+| Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visual/blob/Cube | SkinnedMeshRenderer | Cube (120 v) | blobaspect | Custom/Blob | _MainTex=blob_d (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB), _BumpMap=blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm), _FlowTexture=blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB), _FlowMaskTex=blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB) | _NORMALMAP | True | 2000 |
+
+Material values `blobaspect` (renderer Visual/blob/Cube, shader `Custom/Blob`). Active keywords: [_NORMALMAP].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex | Texture | blob_d (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (3.00, 3.00), offset (0.00, 0.00) |
+| _Glossiness | Range | 0.753 (range 0..1) |
+| _Metallic | Range | 0 (range 0..1) |
+| _BumpScale | Float | 0.84 |
+| _BumpMap | Texture | blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedAll | Float | -8 |
+| _FlowMaskTex | Texture | blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedY | Float | -10 |
+| _FlowTexture | Texture | blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowColor | Color | RGBA(0, 0.679, 1, 1) |
+| _EmissiveColor | Color | RGBA(0.246, 0.448, 0.736, 0.475) |
+| _SSS | Color | RGBA(0.035, 0.48, 0.588, 0.412) |
+
+### BlobElite
+
+Components: CapsuleCollider, Rigidbody, Humanoid, CharacterDrop, ZNetView, ZSyncTransform, ZSyncAnimation, MonsterAI, FootStep
+
+Attacks (Humanoid items):
+
+| Source | Item | Type | Damages | AttackType | Anim | Range | Height | Angle | RayWidth | AI range | AI interval | Force | Projectile | Hit effects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default | blobelite_attack_aoe | OneHandedWeapon | poison 115 | Area | attack | 0 | 0.5 | 90 | 8 | 3 | 4 | 0 | - | vfx_HitSparks, sfx_greydwarf_attack_hit |
+
+Drops (CharacterDrop):
+
+| Item | Min | Max | Chance | OnePerPlayer | LevelMultiplier | DontScale |
+| --- | --- | --- | --- | --- | --- | --- |
+| Ooze | 2 | 3 | 1 | False | True | False |
+| IronScrap | 1 | 1 | 0.33 | False | True | False |
+| TrophyBlob | 1 | 1 | 0.1 | False | True | False |
+| Blob | 2 | 2 | 1 | False | True | True |
+
+Effects:
+
+| List | Prefabs |
+| --- | --- |
+| m_hitEffects | vfx_blob_hit, sfx_blob_hit |
+| m_critHitEffects | fx_crit |
+| m_backstabHitEffects | fx_backstab |
+| m_deathEffects | vfx_blob_death, sfx_blob_death |
+| BaseAI.m_alertedEffects | sfx_blob_alerted |
+| BaseAI.m_idleSound | sfx_blob_idle |
+| MonsterAI.m_wakeupEffects | - |
+| MonsterAI.m_sleepEffects | - |
+
+Renderers and materials:
+
+| Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visual/blob/Cube | SkinnedMeshRenderer | Cube (120 v) | blob_elite | Custom/Blob | _MainTex=blob_d (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB), _BumpMap=blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm), _FlowTexture=blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB), _FlowMaskTex=blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB) | _NORMALMAP | True | 2000 |
+
+Material values `blob_elite` (renderer Visual/blob/Cube, shader `Custom/Blob`). Active keywords: [_NORMALMAP].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex | Texture | blob_d (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (4.00, 4.00), offset (0.00, 0.00) |
+| _Glossiness | Range | 0.723 (range 0..1) |
+| _Metallic | Range | 0 (range 0..1) |
+| _BumpScale | Float | 0.84 |
+| _BumpMap | Texture | blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedAll | Float | -6 |
+| _FlowMaskTex | Texture | blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedY | Float | -8 |
+| _FlowTexture | Texture | blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowColor | Color | RGBA(1, 0, 0, 1) |
+| _EmissiveColor | Color | RGBA(0.257, 0.069, 0, 1) |
+| _SSS | Color | RGBA(0.485, 0, 0.151, 1) |
+
+### BlobFrost
+
+Components: CapsuleCollider, Rigidbody, Humanoid, CharacterDrop, ZNetView, ZSyncTransform, ZSyncAnimation, MonsterAI, FootStep
+
+Attacks (Humanoid items):
+
+| Source | Item | Type | Damages | AttackType | Anim | Range | Height | Angle | RayWidth | AI range | AI interval | Force | Projectile | Hit effects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default | blob_frost_attack_aoe | OneHandedWeapon | frost 100 | Area | attack | 0 | 0.5 | 90 | 4 | 2 | 2 | 0 | - | vfx_HitSparks, sfx_greydwarf_attack_hit |
+
+Drops (CharacterDrop):
+
+| Item | Min | Max | Chance | OnePerPlayer | LevelMultiplier | DontScale |
+| --- | --- | --- | --- | --- | --- | --- |
+| Crystal | 1 | 2 | 1 | False | True | False |
+| TrophyBlob_Frost | 1 | 1 | 0.1 | False | True | False |
+
+Effects:
+
+| List | Prefabs |
+| --- | --- |
+| m_hitEffects | vfx_blob_frost_hit, sfx_blob_hit |
+| m_critHitEffects | fx_crit |
+| m_backstabHitEffects | fx_backstab |
+| m_deathEffects | vfx_blob_frost_death, sfx_blob_death |
+| BaseAI.m_alertedEffects | sfx_blob_alerted |
+| BaseAI.m_idleSound | sfx_blob_idle |
+| MonsterAI.m_wakeupEffects | - |
+| MonsterAI.m_sleepEffects | - |
+
+Renderers and materials:
+
+| Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visual/blob/Cube | SkinnedMeshRenderer | Cube (120 v) | crystal_window | Standard | _BumpMap=crystal_window_n (32x32, filter Point, wrap Repeat, aniso 1, mips 6, format RGBA_DXT5_UNorm) | _ALPHABLEND_ON _NORMALMAP _ADDRAIN_ON | True | 3000 |
+
+Material values `crystal_window` (renderer Visual/blob/Cube, shader `Standard`). Active keywords: [_ALPHABLEND_ON _NORMALMAP _ADDRAIN_ON].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _Color | Color | RGBA(1, 1, 1, 0.376) |
+| _MainTex | Texture | none; scale (6.00, 6.00), offset (0.00, 0.00) |
+| _Cutoff | Range | 1 (range 0..1) |
+| _Glossiness | Range | 0.9 (range 0..1) |
+| _GlossMapScale | Range | 0.5 (range 0..1) |
+| _SmoothnessTextureChannel | Float | 0 |
+| _Metallic | Range | 1 (range 0..1) |
+| _MetallicGlossMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _SpecularHighlights | Float | 1 |
+| _GlossyReflections | Float | 1 |
+| _BumpScale | Float | 1.2 |
+| _BumpMap | Texture | crystal_window_n (32x32, filter Point, wrap Repeat, aniso 1, mips 6, format RGBA_DXT5_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Parallax | Range | 0.02 (range 0.005..0.08) |
+| _ParallaxMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _OcclusionStrength | Range | 1 (range 0..1) |
+| _OcclusionMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(0.669, 0.796, 1, 0.639) |
+| _EmissionMap | Texture | none; scale (6.00, 6.00), offset (0.00, 0.00) |
+| _DetailMask | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _DetailAlbedoMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _DetailNormalMapScale | Float | 1 |
+| _DetailNormalMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _UVSec | Float | 0 |
+| _Mode | Float | 2 |
+| _SrcBlend | Float | 5 |
+| _DstBlend | Float | 10 |
+| _ZWrite | Float | 0 |
+
+### BlobLava
+
+Components: CapsuleCollider, Rigidbody, Humanoid, CharacterDrop, ZNetView, ZSyncTransform, ZSyncAnimation, MonsterAI, FootStep
+
+Attacks (Humanoid items):
+
+| Source | Item | Type | Damages | AttackType | Anim | Range | Height | Angle | RayWidth | AI range | AI interval | Force | Projectile | Hit effects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default | blobLava_attack_aoe | OneHandedWeapon | none | Area | AttackBlowUp | 0 | 0.5 | 90 | 4 | 6 | 10 | 0 | - | vfx_HitSparks, sfx_greydwarf_attack_hit |
+
+Drops (CharacterDrop):
+
+| Item | Min | Max | Chance | OnePerPlayer | LevelMultiplier | DontScale |
+| --- | --- | --- | --- | --- | --- | --- |
+| ProustitePowder | 1 | 2 | 1 | False | True | False |
+| SulfurStone | 1 | 2 | 1 | False | True | False |
+| TrophyBlob_Lava | 1 | 1 | 0.1 | False | True | False |
+
+Effects:
+
+| List | Prefabs |
+| --- | --- |
+| m_hitEffects | sfx_blob_hit |
+| m_critHitEffects | fx_crit |
+| m_backstabHitEffects | fx_backstab |
+| m_deathEffects | sfx_bloblava_death, BlobLava_explosion, fx_blobLava_explosion |
+| BaseAI.m_alertedEffects | sfx_bloblava_alert |
+| BaseAI.m_idleSound | sfx_bloblava_idle |
+| MonsterAI.m_wakeupEffects | - |
+| MonsterAI.m_sleepEffects | - |
+
+Renderers and materials:
+
+| Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visual/blob/Cube.004 | SkinnedMeshRenderer | Cube.004 (354 v) | LavaBlob_mat | Custom/FlowOpaque | _MainTex=Unstable_d 1 (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB), _BumpMap=Unstable_n 1 (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT5_UNorm), _FoamTex=Unstable_d 1 (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB) |  | True | 2000 |
+| Visual/blob/Cube.004 | SkinnedMeshRenderer | Cube.004 (354 v) | BlobCrust_Mat | Custom/FlowOpaque | _MainTex=Crust_d (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_DXT1_SRGB), _BumpMap=Crust_n (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_DXT5_UNorm), _FoamTex=Crust_d (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_DXT1_SRGB), _EmissionMap=Unstable_d 1 (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB) |  | True | 2000 |
+
+Material values `LavaBlob_mat` (renderer Visual/blob/Cube.004, shader `Custom/FlowOpaque`). Active keywords: [].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _Color | Color | RGBA(1, 0.408, 0, 1) |
+| _MainTex | Texture | Unstable_d 1 (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB); scale (0.50, 0.50), offset (0.00, 0.00) |
+| _FoamTex | Texture | Unstable_d 1 (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB); scale (0.50, 0.50), offset (0.00, 0.00) |
+| _FoamColor | Color | RGBA(1, 0.36, 0, 1) |
+| _Glossiness | Range | 0.694 (range 0..1) |
+| _Metallic | Range | 0 (range 0..1) |
+| _SpeedX | Float | 0 |
+| _SpeedY | Float | 0.13 |
+| _FoamSpeed | Float | 1.09 |
+| _BumpMap | Texture | Unstable_n 1 (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT5_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _BumpScale | Float | 1 |
+| _EmissionMap | Texture | none; scale (0.50, 0.50), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(1.498, 0.071, 0, 1) |
+| _Cull | Float | 2 |
+
+Material values `BlobCrust_Mat` (renderer Visual/blob/Cube.004, shader `Custom/FlowOpaque`). Active keywords: [].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _Color | Color | RGBA(1, 0.408, 0, 1) |
+| _MainTex | Texture | Crust_d (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_DXT1_SRGB); scale (0.50, 0.50), offset (0.00, 0.00) |
+| _FoamTex | Texture | Crust_d (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_DXT1_SRGB); scale (0.50, 0.50), offset (0.00, 0.00) |
+| _FoamColor | Color | RGBA(1, 0.361, 0, 1) |
+| _Glossiness | Range | 0.48 (range 0..1) |
+| _Metallic | Range | 0 (range 0..1) |
+| _SpeedX | Float | 0 |
+| _SpeedY | Float | 0.56 |
+| _FoamSpeed | Float | 1.09 |
+| _BumpMap | Texture | Crust_n (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_DXT5_UNorm); scale (2.00, 2.00), offset (0.00, 0.00) |
+| _BumpScale | Float | 1 |
+| _EmissionMap | Texture | Unstable_d 1 (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB); scale (0.50, 0.50), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(2.039, 0.166, 0, 1) |
+| _Cull | Float | 2 |
+
+### BlobMork
+
+Components: CapsuleCollider, Rigidbody, Humanoid, CharacterDrop, ZNetView, ZSyncTransform, ZSyncAnimation, MonsterAI, FootStep
+
+Attacks (Humanoid items):
+
+| Source | Item | Type | Damages | AttackType | Anim | Range | Height | Angle | RayWidth | AI range | AI interval | Force | Projectile | Hit effects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default | blobmork_attack_aoe | OneHandedWeapon | blunt 20, poison 110 | Area | attack | 0 | 0.5 | 90 | 4 | 2 | 2 | 0 | - | vfx_HitSparks, sfx_greydwarf_attack_hit |
+
+Drops (CharacterDrop):
+
+| Item | Min | Max | Chance | OnePerPlayer | LevelMultiplier | DontScale |
+| --- | --- | --- | --- | --- | --- | --- |
+| TrophyBlob_Morkhalla | 1 | 1 | 0.1 | False | False | False |
+| BlobMorkMini | 1 | 2 | 1 | False | True | False |
+| OozeMork | 1 | 1 | 0.5 | False | True | False |
+
+Effects:
+
+| List | Prefabs |
+| --- | --- |
+| m_hitEffects | vfx_blobmork_hit, sfx_blob_hit |
+| m_critHitEffects | fx_crit |
+| m_backstabHitEffects | fx_backstab |
+| m_deathEffects | vfx_blobmork_death, sfx_blob_death |
+| BaseAI.m_alertedEffects | sfx_blob_alerted |
+| BaseAI.m_idleSound | sfx_blob_idle |
+| MonsterAI.m_wakeupEffects | - |
+| MonsterAI.m_sleepEffects | - |
+
+Renderers and materials:
+
+| Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visual/blob/Cube | SkinnedMeshRenderer | Cube (120 v) | blob_morkhalla | Custom/Blob | _MainTex=blob_d (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB), _BumpMap=blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm), _FlowTexture=blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB), _FlowMaskTex=blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB) | _NORMALMAP | True | 2000 |
+
+Material values `blob_morkhalla` (renderer Visual/blob/Cube, shader `Custom/Blob`). Active keywords: [_NORMALMAP].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex | Texture | blob_d (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (3.00, 3.00), offset (0.00, 0.00) |
+| _Glossiness | Range | 0.753 (range 0..1) |
+| _Metallic | Range | 0 (range 0..1) |
+| _BumpScale | Float | 0.84 |
+| _BumpMap | Texture | blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedAll | Float | -8 |
+| _FlowMaskTex | Texture | blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedY | Float | -10 |
+| _FlowTexture | Texture | blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowColor | Color | RGBA(0, 1, 0.741, 1) |
+| _EmissiveColor | Color | RGBA(0.094, 0.396, 0.39, 1) |
+| _SSS | Color | RGBA(0.031, 0.588, 0.355, 1) |
+
+### BlobMorkMini
+
+Components: CapsuleCollider, Rigidbody, Humanoid, CharacterDrop, ZNetView, ZSyncTransform, ZSyncAnimation, MonsterAI, FootStep
+
+Attacks (Humanoid items):
+
+| Source | Item | Type | Damages | AttackType | Anim | Range | Height | Angle | RayWidth | AI range | AI interval | Force | Projectile | Hit effects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| _(none)_ | | | | | | | | | | | | | | |
+
+Drops (CharacterDrop):
+
+| Item | Min | Max | Chance | OnePerPlayer | LevelMultiplier | DontScale |
+| --- | --- | --- | --- | --- | --- | --- |
+| OozeMork | 1 | 1 | 0.25 | False | True | False |
+
+Effects:
+
+| List | Prefabs |
+| --- | --- |
+| m_hitEffects | vfx_blobmork_hit, sfx_blob_hit |
+| m_critHitEffects | fx_crit |
+| m_backstabHitEffects | fx_backstab |
+| m_deathEffects | vfx_blobmork_hit, sfx_blob_death |
+| BaseAI.m_alertedEffects | sfx_blob_alerted |
+| BaseAI.m_idleSound | sfx_blob_idle |
+| MonsterAI.m_wakeupEffects | - |
+| MonsterAI.m_sleepEffects | - |
+
+Renderers and materials:
+
+| Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visual/blob/Cube | SkinnedMeshRenderer | Cube (120 v) | blob_morkhalla | Custom/Blob | _MainTex=blob_d (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB), _BumpMap=blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm), _FlowTexture=blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB), _FlowMaskTex=blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB) | _NORMALMAP | True | 2000 |
+
+Material values `blob_morkhalla` (renderer Visual/blob/Cube, shader `Custom/Blob`). Active keywords: [_NORMALMAP].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex | Texture | blob_d (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (3.00, 3.00), offset (0.00, 0.00) |
+| _Glossiness | Range | 0.753 (range 0..1) |
+| _Metallic | Range | 0 (range 0..1) |
+| _BumpScale | Float | 0.84 |
+| _BumpMap | Texture | blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedAll | Float | -8 |
+| _FlowMaskTex | Texture | blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedY | Float | -10 |
+| _FlowTexture | Texture | blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowColor | Color | RGBA(0, 1, 0.741, 1) |
+| _EmissiveColor | Color | RGBA(0.094, 0.396, 0.39, 1) |
+| _SSS | Color | RGBA(0.031, 0.588, 0.355, 1) |
+
+### BlobTar
+
+Components: CapsuleCollider, Rigidbody, Humanoid, CharacterDrop, ZNetView, ZSyncTransform, ZSyncAnimation, MonsterAI, FootStep
+
+Attacks (Humanoid items):
+
+| Source | Item | Type | Damages | AttackType | Anim | Range | Height | Angle | RayWidth | AI range | AI interval | Force | Projectile | Hit effects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default | blobtar_attack | OneHandedWeapon | blunt 45, poison 50 | Projectile | attack_shoot | 1.6 | 0.8 | 90 | 0 | 15 | 8 | 80 | blobtar_projectile_tarball | vfx_HitSparks, sfx_greydwarf_attack_hit |
+
+Drops (CharacterDrop):
+
+| Item | Min | Max | Chance | OnePerPlayer | LevelMultiplier | DontScale |
+| --- | --- | --- | --- | --- | --- | --- |
+| TrophyGrowth | 1 | 1 | 0.1 | False | True | False |
+| Tar | 1 | 1 | 1 | False | True | False |
+
+Effects:
+
+| List | Prefabs |
+| --- | --- |
+| m_hitEffects | vfx_blobtar_hit, sfx_blob_hit |
+| m_critHitEffects | fx_crit |
+| m_backstabHitEffects | fx_backstab |
+| m_deathEffects | vfx_blobtar_death, sfx_blob_death |
+| BaseAI.m_alertedEffects | sfx_blob_alerted |
+| BaseAI.m_idleSound | sfx_blobtar_idle |
+| MonsterAI.m_wakeupEffects | - |
+| MonsterAI.m_sleepEffects | - |
+
+Renderers and materials:
+
+| Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visual/blob/Cube | SkinnedMeshRenderer | Cube (120 v) | blob_tar | Custom/Blob | _BumpMap=blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm), _FlowTexture=blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB), _FlowMaskTex=blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB) | _NORMALMAP | True | 2000 |
+
+Material values `blob_tar` (renderer Visual/blob/Cube, shader `Custom/Blob`). Active keywords: [_NORMALMAP].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _Color | Color | RGBA(0, 0, 0, 1) |
+| _MainTex | Texture | none; scale (3.00, 3.00), offset (0.00, 0.00) |
+| _Glossiness | Range | 0.925 (range 0..1) |
+| _Metallic | Range | 0 (range 0..1) |
+| _BumpScale | Float | 0.84 |
+| _BumpMap | Texture | blob_n (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedAll | Float | -4 |
+| _FlowMaskTex | Texture | blob_flowmask (128x128, filter Point, wrap Repeat, aniso 1, mips 1, format RGBA_BC7_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowSpeedY | Float | -7 |
+| _FlowTexture | Texture | blob_flow_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _FlowColor | Color | RGBA(1, 0.89, 0, 1) |
+| _EmissiveColor | Color | RGBA(0, 0, 0, 1) |
+| _SSS | Color | RGBA(0, 0, 0, 1) |
+
+### Leech
+
+Components: CapsuleCollider, Rigidbody, Humanoid, ZNetView, ZSyncTransform, ZSyncAnimation, MonsterAI, CharacterDrop
+
+Attacks (Humanoid items):
+
+| Source | Item | Type | Damages | AttackType | Anim | Range | Height | Angle | RayWidth | AI range | AI interval | Force | Projectile | Hit effects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default | Leech_BiteAttack | OneHandedWeapon | pierce 20, poison 70 | Horizontal | attack | 1.5 | 0.51 | 48.5 | 0.45 | 1.5 | 2 | 30 | - | vfx_HitSparks, sfx_leech_attack_hit |
+
+Drops (CharacterDrop):
+
+| Item | Min | Max | Chance | OnePerPlayer | LevelMultiplier | DontScale |
+| --- | --- | --- | --- | --- | --- | --- |
+| TrophyLeech | 1 | 1 | 0.1 | False | True | False |
+| Bloodbag | 1 | 1 | 1 | False | True | False |
+
+Effects:
+
+| List | Prefabs |
+| --- | --- |
+| m_hitEffects | sfx_leech_hit, vfx_leech_hit |
+| m_critHitEffects | fx_crit |
+| m_backstabHitEffects | fx_backstab |
+| m_deathEffects | vfx_leech_death, sfx_leech_death |
+| BaseAI.m_alertedEffects | sfx_leech_alerted |
+| BaseAI.m_idleSound | sfx_leech_idle |
+| MonsterAI.m_wakeupEffects | - |
+| MonsterAI.m_sleepEffects | - |
+
+Renderers and materials:
+
+| Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visual/Cube | SkinnedMeshRenderer | Cube (218 v) | swampfish | Custom/Creature | _MainTex=swampfish_d (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_DXT5_SRGB), _BumpMap=swampfish_n (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_BC7_UNorm) | _NORMALMAP | False | 2000 |
+
+Material values `swampfish` (renderer Visual/Cube, shader `Custom/Creature`). Active keywords: [_NORMALMAP].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _ColorFoldout | Float | 0 |
+| _MainTex | Texture | swampfish_d (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_DXT5_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex_ST | Vector | RGBA(1, 1, 0, 0) |
+| _HSVHeader | Float | 0 |
+| _Hue | Range | 0 (range -0.5..0.5) |
+| _Saturation | Range | 0 (range -1..1) |
+| _Value | Range | 0 (range -1..1) |
+| _EmissionSpacer | Float | 0 |
+| _EmissionMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(0, 0, 0, 1) |
+| _SmoothnessFoldout | Float | 0 |
+| _MetallicGlossMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Metallic | Range | 0 (range 0..1) |
+| _MetalColor | Color | RGBA(1, 1, 1, 1) |
+| _UseGlossmap | Float | 0 |
+| _Glossiness | Range | 0.54 (range 0..1) |
+| _MetalGloss | Range | 0 (range 0..1) |
+| _NormalFoldout | Float | 0 |
+| _BumpMap | Texture | swampfish_n (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_BC7_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _BumpScale | Range | 1 (range 0..10) |
+| _TwoSidedNormals | Float | 0 |
+| _MiscFoldout | Float | 0 |
+| _Cull | Float | 2 |
+| _Cutoff | Range | 0.5 (range 0..1) |
+| _AddRain | Float | 0 |
+| _NoiseGlowEnabled | Float | 0 |
+| _UseStyles | Float | 0 |
+| _SnowCover | Range | 0 (range 0..1) |
+| _StylesFoldout | Float | 0 |
+| _StyleTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Style | Float | 0 |
+| _NoiseGlowFoldout | Float | 0 |
+| _SnapNoiseToPixel | Float | 1 |
+| _NoiseGlowTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _NoiseGlowSize | Float | 3 |
+| _NoiseGlowColor | Color | RGBA(1, 1, 1, 1) |
+| _NoiseGlowEdge | Range | 0 (range 0..1) |
+
+### Leech_cave
+
+Components: CapsuleCollider, Rigidbody, Humanoid, ZNetView, ZSyncTransform, ZSyncAnimation, MonsterAI, CharacterDrop
+
+Attacks (Humanoid items):
+
+| Source | Item | Type | Damages | AttackType | Anim | Range | Height | Angle | RayWidth | AI range | AI interval | Force | Projectile | Hit effects |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| default | Leech_BiteAttack | OneHandedWeapon | pierce 20, poison 70 | Horizontal | attack | 1.5 | 0.51 | 48.5 | 0.45 | 1.5 | 2 | 30 | - | vfx_HitSparks, sfx_leech_attack_hit |
+
+Drops (CharacterDrop):
+
+| Item | Min | Max | Chance | OnePerPlayer | LevelMultiplier | DontScale |
+| --- | --- | --- | --- | --- | --- | --- |
+| TrophyLeech | 1 | 1 | 0.1 | False | False | False |
+| Bloodbag | 1 | 1 | 1 | False | True | False |
+
+Effects:
+
+| List | Prefabs |
+| --- | --- |
+| m_hitEffects | sfx_leech_hit, vfx_leech_hit |
+| m_critHitEffects | fx_crit |
+| m_backstabHitEffects | fx_backstab |
+| m_deathEffects | vfx_leech_death, sfx_leech_death |
+| BaseAI.m_alertedEffects | sfx_leech_alerted |
+| BaseAI.m_idleSound | sfx_leech_idle |
+| MonsterAI.m_wakeupEffects | - |
+| MonsterAI.m_sleepEffects | - |
+
+Renderers and materials:
+
+| Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Visual/Cube | SkinnedMeshRenderer | Cube (218 v) | swampfish_cave | Custom/Creature | _MainTex=swampfish_d (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_DXT5_SRGB), _BumpMap=swampfish_n (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_BC7_UNorm) | _NORMALMAP | False | 2000 |
+
+Material values `swampfish_cave` (renderer Visual/Cube, shader `Custom/Creature`). Active keywords: [_NORMALMAP].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _ColorFoldout | Float | 0 |
+| _MainTex | Texture | swampfish_d (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_DXT5_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex_ST | Vector | RGBA(1, 1, 0, 0) |
+| _HSVHeader | Float | 0 |
+| _Hue | Range | 0 (range -0.5..0.5) |
+| _Saturation | Range | -0.75 (range -1..1) |
+| _Value | Range | 0.5 (range -1..1) |
+| _EmissionSpacer | Float | 0 |
+| _EmissionMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(0, 0, 0, 1) |
+| _SmoothnessFoldout | Float | 0 |
+| _MetallicGlossMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Metallic | Range | 0 (range 0..1) |
+| _MetalColor | Color | RGBA(1, 1, 1, 1) |
+| _UseGlossmap | Float | 0 |
+| _Glossiness | Range | 0.54 (range 0..1) |
+| _MetalGloss | Range | 0 (range 0..1) |
+| _NormalFoldout | Float | 0 |
+| _BumpMap | Texture | swampfish_n (128x128, filter Point, wrap Repeat, aniso 1, mips 8, format RGBA_BC7_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _BumpScale | Range | 1 (range 0..10) |
+| _TwoSidedNormals | Float | 0 |
+| _MiscFoldout | Float | 0 |
+| _Cull | Float | 2 |
+| _Cutoff | Range | 0.5 (range 0..1) |
+| _AddRain | Float | 0 |
+| _NoiseGlowEnabled | Float | 0 |
+| _UseStyles | Float | 0 |
+| _SnowCover | Range | 0 (range 0..1) |
+| _StylesFoldout | Float | 0 |
+| _StyleTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Style | Float | 0 |
+| _NoiseGlowFoldout | Float | 0 |
+| _SnapNoiseToPixel | Float | 1 |
+| _NoiseGlowTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _NoiseGlowSize | Float | 3 |
+| _NoiseGlowColor | Color | RGBA(1, 1, 1, 1) |
+| _NoiseGlowEdge | Range | 0 (range 0..1) |
 
 ### Seeker
 
@@ -131,7 +856,50 @@ Renderers and materials:
 
 | Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Visual/Plane.004 | SkinnedMeshRenderer | Plane.004 (4259 v) | seeker | Custom/Creature | _MainTex=seeker_d (256x256), _BumpMap=seeker_n (256x256), _EmissionMap=blood (128x128) | _SNAPNOISETOPIXEL_ON _TWOSIDEDNORMALS_ON | True | 2000 |
+| Visual/Plane.004 | SkinnedMeshRenderer | Plane.004 (4259 v) | seeker | Custom/Creature | _MainTex=seeker_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT5_SRGB), _BumpMap=seeker_n (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT5_UNorm), _EmissionMap=blood (128x128, filter Bilinear, wrap Repeat, aniso 1, mips 8, format RGBA_DXT5_SRGB) | _SNAPNOISETOPIXEL_ON _TWOSIDEDNORMALS_ON | True | 2000 |
+
+Material values `seeker` (renderer Visual/Plane.004, shader `Custom/Creature`). Active keywords: [_SNAPNOISETOPIXEL_ON _TWOSIDEDNORMALS_ON].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _ColorFoldout | Float | 0 |
+| _MainTex | Texture | seeker_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT5_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex_ST | Vector | RGBA(1, 1, 0, 0) |
+| _HSVHeader | Float | 0 |
+| _Hue | Range | 0 (range -0.5..0.5) |
+| _Saturation | Range | 0 (range -1..1) |
+| _Value | Range | 0 (range -1..1) |
+| _EmissionSpacer | Float | 0 |
+| _EmissionMap | Texture | blood (128x128, filter Bilinear, wrap Repeat, aniso 1, mips 8, format RGBA_DXT5_SRGB); scale (0.00, 1.00), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(0, 0, 0, 1) |
+| _SmoothnessFoldout | Float | 0 |
+| _MetallicGlossMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Metallic | Range | 0 (range 0..1) |
+| _MetalColor | Color | RGBA(1, 0.222, 0.222, 1) |
+| _UseGlossmap | Float | 0 |
+| _Glossiness | Range | 0.55 (range 0..1) |
+| _MetalGloss | Range | 0 (range 0..1) |
+| _NormalFoldout | Float | 0 |
+| _BumpMap | Texture | seeker_n (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT5_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _BumpScale | Range | 1 (range 0..10) |
+| _TwoSidedNormals | Float | 1 |
+| _MiscFoldout | Float | 0 |
+| _Cull | Float | 0 |
+| _Cutoff | Range | 0.779 (range 0..1) |
+| _AddRain | Float | 0 |
+| _NoiseGlowEnabled | Float | 0 |
+| _UseStyles | Float | 0 |
+| _SnowCover | Range | 0 (range 0..1) |
+| _StylesFoldout | Float | 0 |
+| _StyleTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Style | Float | 0 |
+| _NoiseGlowFoldout | Float | 0 |
+| _SnapNoiseToPixel | Float | 1 |
+| _NoiseGlowTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _NoiseGlowSize | Float | 3 |
+| _NoiseGlowColor | Color | RGBA(1, 1, 1, 1) |
+| _NoiseGlowEdge | Range | 0 (range 0..1) |
 
 ### SeekerBrood
 
@@ -166,7 +934,50 @@ Renderers and materials:
 
 | Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Visual/Plane.004 | SkinnedMeshRenderer | Plane.004 (4259 v) | babyseeker | Custom/Creature | _MainTex=babyseeker_d (64x64), _BumpMap=babyseeker_n (64x64), _EmissionMap=babyseeker_d (64x64) | _TWOSIDEDNORMALS_ON _USEGLOSSMAP_ON | True | 2000 |
+| Visual/Plane.004 | SkinnedMeshRenderer | Plane.004 (4259 v) | babyseeker | Custom/Creature | _MainTex=babyseeker_d (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_SRGB), _BumpMap=babyseeker_n (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_UNorm), _EmissionMap=babyseeker_d (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_SRGB) | _TWOSIDEDNORMALS_ON _USEGLOSSMAP_ON | True | 2000 |
+
+Material values `babyseeker` (renderer Visual/Plane.004, shader `Custom/Creature`). Active keywords: [_TWOSIDEDNORMALS_ON _USEGLOSSMAP_ON].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _ColorFoldout | Float | 0 |
+| _MainTex | Texture | babyseeker_d (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_SRGB); scale (4.00, 4.00), offset (0.00, 0.00) |
+| _Color | Color | RGBA(1, 0.915, 0.552, 1) |
+| _MainTex_ST | Vector | RGBA(4, 4, 0, 0) |
+| _HSVHeader | Float | 0 |
+| _Hue | Range | 0 (range -0.5..0.5) |
+| _Saturation | Range | 0 (range -1..1) |
+| _Value | Range | 0 (range -1..1) |
+| _EmissionSpacer | Float | 0 |
+| _EmissionMap | Texture | babyseeker_d (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_SRGB); scale (0.00, 1.00), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(0.156, 0.031, 0.016, 1) |
+| _SmoothnessFoldout | Float | 0 |
+| _MetallicGlossMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Metallic | Range | 0 (range 0..1) |
+| _MetalColor | Color | RGBA(1, 0.222, 0.222, 1) |
+| _UseGlossmap | Float | 1 |
+| _Glossiness | Range | 0.76 (range 0..1) |
+| _MetalGloss | Range | 0 (range 0..1) |
+| _NormalFoldout | Float | 0 |
+| _BumpMap | Texture | babyseeker_n (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _BumpScale | Range | 1 (range 0..10) |
+| _TwoSidedNormals | Float | 1 |
+| _MiscFoldout | Float | 0 |
+| _Cull | Float | 0 |
+| _Cutoff | Range | 0.779 (range 0..1) |
+| _AddRain | Float | 0 |
+| _NoiseGlowEnabled | Float | 0 |
+| _UseStyles | Float | 0 |
+| _SnowCover | Range | 0 (range 0..1) |
+| _StylesFoldout | Float | 0 |
+| _StyleTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Style | Float | 0 |
+| _NoiseGlowFoldout | Float | 0 |
+| _SnapNoiseToPixel | Float | 1 |
+| _NoiseGlowTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _NoiseGlowSize | Float | 3 |
+| _NoiseGlowColor | Color | RGBA(1, 1, 1, 1) |
+| _NoiseGlowEdge | Range | 0 (range 0..1) |
 
 ### SeekerBrute
 
@@ -207,7 +1018,50 @@ Renderers and materials:
 
 | Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Visual/SeekerBrute | SkinnedMeshRenderer | SeekerBrute (4042 v) | seeker_Brute_mat | Custom/Creature | _MainTex=seekerBrute_d (256x256), _BumpMap=seekerBrute_n (256x256), _EmissionMap=seekerBrute_e (256x256) | _TWOSIDEDNORMALS_ON | True | 2000 |
+| Visual/SeekerBrute | SkinnedMeshRenderer | SeekerBrute (4042 v) | seeker_Brute_mat | Custom/Creature | _MainTex=seekerBrute_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT5_SRGB), _BumpMap=seekerBrute_n (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT5_UNorm), _EmissionMap=seekerBrute_e (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB) | _TWOSIDEDNORMALS_ON | True | 2000 |
+
+Material values `seeker_Brute_mat` (renderer Visual/SeekerBrute, shader `Custom/Creature`). Active keywords: [_TWOSIDEDNORMALS_ON].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _ColorFoldout | Float | 0 |
+| _MainTex | Texture | seekerBrute_d (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT5_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex_ST | Vector | RGBA(1, 1, 0, 0) |
+| _HSVHeader | Float | 0 |
+| _Hue | Range | 0 (range -0.5..0.5) |
+| _Saturation | Range | 0 (range -1..1) |
+| _Value | Range | 0 (range -1..1) |
+| _EmissionSpacer | Float | 0 |
+| _EmissionMap | Texture | seekerBrute_e (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT1_SRGB); scale (0.00, 1.00), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(0.326, 0, 0.034, 1) |
+| _SmoothnessFoldout | Float | 0 |
+| _MetallicGlossMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Metallic | Range | 0 (range 0..1) |
+| _MetalColor | Color | RGBA(1, 0.099, 0.099, 1) |
+| _UseGlossmap | Float | 0 |
+| _Glossiness | Range | 0.55 (range 0..1) |
+| _MetalGloss | Range | 0 (range 0..1) |
+| _NormalFoldout | Float | 0 |
+| _BumpMap | Texture | seekerBrute_n (256x256, filter Point, wrap Repeat, aniso 1, mips 9, format RGBA_DXT5_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _BumpScale | Range | 1 (range 0..10) |
+| _TwoSidedNormals | Float | 1 |
+| _MiscFoldout | Float | 0 |
+| _Cull | Float | 0 |
+| _Cutoff | Range | 0.779 (range 0..1) |
+| _AddRain | Float | 0 |
+| _NoiseGlowEnabled | Float | 0 |
+| _UseStyles | Float | 0 |
+| _SnowCover | Range | 0 (range 0..1) |
+| _StylesFoldout | Float | 0 |
+| _StyleTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Style | Float | 0 |
+| _NoiseGlowFoldout | Float | 0 |
+| _SnapNoiseToPixel | Float | 1 |
+| _NoiseGlowTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _NoiseGlowSize | Float | 3 |
+| _NoiseGlowColor | Color | RGBA(1, 1, 1, 1) |
+| _NoiseGlowEdge | Range | 0 (range 0..1) |
 
 ### SeekerQueen
 
@@ -249,8 +1103,51 @@ Renderers and materials:
 
 | Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Visual/Cube | SkinnedMeshRenderer | Cube (7308 v) | seeker_queen | Custom/Creature | _MainTex=SeekerQueen_d (512x512), _BumpMap=SeekerQueen_n (512x512) | _TWOSIDEDNORMALS_ON | True | 2000 |
-| Visual/Plane | SkinnedMeshRenderer | Plane (1032 v) | seeker_queen | Custom/Creature | _MainTex=SeekerQueen_d (512x512), _BumpMap=SeekerQueen_n (512x512) | _TWOSIDEDNORMALS_ON | True | 2000 |
+| Visual/Cube | SkinnedMeshRenderer | Cube (7308 v) | seeker_queen | Custom/Creature | _MainTex=SeekerQueen_d (512x512, filter Point, wrap Repeat, aniso 1, mips 10, format RGBA_DXT5_SRGB), _BumpMap=SeekerQueen_n (512x512, filter Point, wrap Repeat, aniso 1, mips 10, format RGBA_DXT5_UNorm) | _TWOSIDEDNORMALS_ON | True | 2000 |
+| Visual/Plane | SkinnedMeshRenderer | Plane (1032 v) | seeker_queen | Custom/Creature | _MainTex=SeekerQueen_d (512x512, filter Point, wrap Repeat, aniso 1, mips 10, format RGBA_DXT5_SRGB), _BumpMap=SeekerQueen_n (512x512, filter Point, wrap Repeat, aniso 1, mips 10, format RGBA_DXT5_UNorm) | _TWOSIDEDNORMALS_ON | True | 2000 |
+
+Material values `seeker_queen` (renderer Visual/Cube, shader `Custom/Creature`). Active keywords: [_TWOSIDEDNORMALS_ON].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _ColorFoldout | Float | 0 |
+| _MainTex | Texture | SeekerQueen_d (512x512, filter Point, wrap Repeat, aniso 1, mips 10, format RGBA_DXT5_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Color | Color | RGBA(1, 1, 1, 1) |
+| _MainTex_ST | Vector | RGBA(1, 1, 0, 0) |
+| _HSVHeader | Float | 0 |
+| _Hue | Range | 0 (range -0.5..0.5) |
+| _Saturation | Range | 0 (range -1..1) |
+| _Value | Range | 0 (range -1..1) |
+| _EmissionSpacer | Float | 0 |
+| _EmissionMap | Texture | none; scale (0.00, 1.00), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(0, 0, 0, 1) |
+| _SmoothnessFoldout | Float | 0 |
+| _MetallicGlossMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Metallic | Range | 0 (range 0..1) |
+| _MetalColor | Color | RGBA(1, 0.099, 0.099, 1) |
+| _UseGlossmap | Float | 0 |
+| _Glossiness | Range | 0.364 (range 0..1) |
+| _MetalGloss | Range | 0 (range 0..1) |
+| _NormalFoldout | Float | 0 |
+| _BumpMap | Texture | SeekerQueen_n (512x512, filter Point, wrap Repeat, aniso 1, mips 10, format RGBA_DXT5_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _BumpScale | Range | 1 (range 0..10) |
+| _TwoSidedNormals | Float | 1 |
+| _MiscFoldout | Float | 0 |
+| _Cull | Float | 0 |
+| _Cutoff | Range | 0.3 (range 0..1) |
+| _AddRain | Float | 0 |
+| _NoiseGlowEnabled | Float | 0 |
+| _UseStyles | Float | 0 |
+| _SnowCover | Range | 0 (range 0..1) |
+| _StylesFoldout | Float | 0 |
+| _StyleTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Style | Float | 0 |
+| _NoiseGlowFoldout | Float | 0 |
+| _SnapNoiseToPixel | Float | 1 |
+| _NoiseGlowTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _NoiseGlowSize | Float | 3 |
+| _NoiseGlowColor | Color | RGBA(1, 1, 1, 1) |
+| _NoiseGlowEdge | Range | 0 (range 0..1) |
 
 ### Tick
 
@@ -286,12 +1183,70 @@ Renderers and materials:
 
 | Renderer | Type | Mesh | Material | Shader | Textures | Keywords | Instancing | Queue |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Visual/FeastingMesh | SkinnedMeshRenderer | FeastingMesh (1960 v) | Feasting_mat | Custom/Creature | _MainTex=Feasting_d (64x64), _BumpMap=Feasting_n (64x64), _MetallicGlossMap=Feasting_m (64x64) |  | True | 2000 |
+| Visual/FeastingMesh | SkinnedMeshRenderer | FeastingMesh (1960 v) | Feasting_mat | Custom/Creature | _MainTex=Feasting_d (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_SRGB), _BumpMap=Feasting_n (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_UNorm), _MetallicGlossMap=Feasting_m (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_SRGB) |  | True | 2000 |
 
-### Other prefabs matching Seeker / Tick
+Material values `Feasting_mat` (renderer Visual/FeastingMesh, shader `Custom/Creature`). Active keywords: [].
+
+| Property | Type | Value |
+| --- | --- | --- |
+| _ColorFoldout | Float | 0 |
+| _MainTex | Texture | Feasting_d (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Color | Color | RGBA(1, 0.675, 0.675, 1) |
+| _MainTex_ST | Vector | RGBA(1, 1, 0, 0) |
+| _HSVHeader | Float | 0 |
+| _Hue | Range | 0 (range -0.5..0.5) |
+| _Saturation | Range | 0 (range -1..1) |
+| _Value | Range | 0 (range -1..1) |
+| _EmissionSpacer | Float | 0 |
+| _EmissionMap | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _EmissionColor | Color | RGBA(0, 0, 0, 1) |
+| _SmoothnessFoldout | Float | 0 |
+| _MetallicGlossMap | Texture | Feasting_m (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_SRGB); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Metallic | Range | 0 (range 0..1) |
+| _MetalColor | Color | RGBA(1, 1, 1, 1) |
+| _UseGlossmap | Float | 0 |
+| _Glossiness | Range | 0.422 (range 0..1) |
+| _MetalGloss | Range | 0 (range 0..1) |
+| _NormalFoldout | Float | 0 |
+| _BumpMap | Texture | Feasting_n (64x64, filter Point, wrap Repeat, aniso 1, mips 7, format RGBA_DXT5_UNorm); scale (1.00, 1.00), offset (0.00, 0.00) |
+| _BumpScale | Range | 1 (range 0..10) |
+| _TwoSidedNormals | Float | 0 |
+| _MiscFoldout | Float | 0 |
+| _Cull | Float | 2 |
+| _Cutoff | Range | 0.466 (range 0..1) |
+| _AddRain | Float | 0 |
+| _NoiseGlowEnabled | Float | 0 |
+| _UseStyles | Float | 0 |
+| _SnowCover | Range | 0 (range 0..1) |
+| _StylesFoldout | Float | 0 |
+| _StyleTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _Style | Float | 0 |
+| _NoiseGlowFoldout | Float | 0 |
+| _SnapNoiseToPixel | Float | 1 |
+| _NoiseGlowTex | Texture | none; scale (1.00, 1.00), offset (0.00, 0.00) |
+| _NoiseGlowSize | Float | 3 |
+| _NoiseGlowColor | Color | RGBA(1, 1, 1, 1) |
+| _NoiseGlowEdge | Range | 0 (range 0..1) |
+
+### Other prefabs matching Seeker / Tick / Leech / Blob
 
 | Prefab | Components |
 | --- | --- |
+| BlobLava_explosion | Aoe, ZNetView, ZSyncTransform |
+| BlobMorkBig | LODGroup, ZNetView, Destructible, SpawnArea, HoverText, StaticPhysics, DropOnDestroyed |
+| BlobVial | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| BombBlob_Frost | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| BombBlob_Frost_projectile | Projectile, ZNetView, ZSyncTransform |
+| BombBlob_Lava | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| BombBlob_Lava_projectile | Projectile, ZNetView, ZSyncTransform |
+| BombBlob_Morkhalla | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| BombBlob_Morkhalla_projectile | Projectile, ZNetView, ZSyncTransform |
+| BombBlob_Poison | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| BombBlob_PoisonElite | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| BombBlob_PoisonElite_projectile | Projectile, ZNetView, ZSyncTransform |
+| BombBlob_Poison_projectile | Projectile, ZNetView, ZSyncTransform |
+| BombBlob_Tar | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| BombBlob_Tar_projectile | Projectile, ZNetView, ZSyncTransform |
 | SeekerAspic | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, Piece, WearNTear |
 | SeekerBrute_Taunt | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
 | SeekerEgg | LODGroup, ZNetView, Destructible, DropOnDestroyed, EggHatch |
@@ -301,6 +1256,11 @@ Renderers and materials:
 | SeekerQueen_projectile_spit | Projectile, ZNetView, ZSyncTransform |
 | SeekerQueen_projectile_teleport | ZNetView, TeleportAbility |
 | SeekerQueen_spithit | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction |
+| Spawner_Blob | ZNetView, CreatureSpawner |
+| Spawner_BlobElite | ZNetView, CreatureSpawner |
+| Spawner_BlobTar | ZNetView, CreatureSpawner |
+| Spawner_BlobTar_respawn_30 | ZNetView, CreatureSpawner |
+| Spawner_Leech_cave | ZNetView, CreatureSpawner |
 | Spawner_Seeker | ZNetView, CreatureSpawner |
 | Spawner_SeekerBrute | ZNetView, CreatureSpawner |
 | Spawner_SeekerBrute_respawn_240 | ZNetView, CreatureSpawner |
@@ -309,6 +1269,11 @@ Renderers and materials:
 | Spawner_Tick_stared | ZNetView, CreatureSpawner |
 | Spawner_Tick_stared_respawn_240 | ZNetView, CreatureSpawner |
 | TriggerSpawner_Seeker | ZNetView, TriggerSpawner, LODGroup |
+| TrophyBlob | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| TrophyBlob_Frost | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| TrophyBlob_Lava | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| TrophyBlob_Morkhalla | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
+| TrophyLeech | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
 | TrophySeeker | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
 | TrophySeekerBrute | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem |
 | TrophySeekerQueen | Rigidbody, ZNetView, ZSyncTransform, ItemDrop, ParticleSystemRenderer, ParticleSystem, Floating |
@@ -316,12 +1281,25 @@ Renderers and materials:
 | aspect_SeekerQueen_projectile_spit | Projectile, ZNetView, ZSyncTransform |
 | fx_TickBloodHit | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction |
 | prop_itemstand_TrophySeekerBrute | ZNetView, LODGroup, Destructible, DropOnDestroyed |
+| vfx_BigBlob_destroyed | Gibber, ZNetView |
+| vfx_BombBlob_explode_frost | ZNetView, TimedDestruction |
+| vfx_BombBlob_explode_lava | ZNetView, TimedDestruction |
+| vfx_BombBlob_explode_morkhalla | ZNetView, TimedDestruction |
+| vfx_BombBlob_explode_poison | ZNetView, TimedDestruction |
+| vfx_BombBlob_explode_poisonelite | ZNetView, TimedDestruction |
+| vfx_BombBlob_explode_tar | ZNetView, TimedDestruction |
 
 ### Shader properties (creature materials)
 
 `Custom/Distortion` (9 properties): `_Color` Color, `_MainTex` Texture, `_NormalTex` Texture, `_Glossiness` Range, `_Metallic` Range, `_NormalScale` Float, `_RefractionIntensity` Float, `_WaveVel` Float, `_DepthFade` Float
 
 `Custom/Creature` (38 properties): `_ColorFoldout` Float, `_MainTex` Texture, `_Color` Color, `_MainTex_ST` Vector, `_HSVHeader` Float, `_Hue` Range, `_Saturation` Range, `_Value` Range, `_EmissionSpacer` Float, `_EmissionMap` Texture, `_EmissionColor` Color, `_SmoothnessFoldout` Float, `_MetallicGlossMap` Texture, `_Metallic` Range, `_MetalColor` Color, `_UseGlossmap` Float, `_Glossiness` Range, `_MetalGloss` Range, `_NormalFoldout` Float, `_BumpMap` Texture, `_BumpScale` Range, `_TwoSidedNormals` Float, `_MiscFoldout` Float, `_Cull` Float, `_Cutoff` Range, `_AddRain` Float, `_NoiseGlowEnabled` Float, `_UseStyles` Float, `_SnowCover` Range, `_StylesFoldout` Float, `_StyleTex` Texture, `_Style` Float, `_NoiseGlowFoldout` Float, `_SnapNoiseToPixel` Float, `_NoiseGlowTex` Texture, `_NoiseGlowSize` Float, `_NoiseGlowColor` Color, `_NoiseGlowEdge` Range
+
+`Custom/Blob` (13 properties): `_Color` Color, `_MainTex` Texture, `_Glossiness` Range, `_Metallic` Range, `_BumpScale` Float, `_BumpMap` Texture, `_FlowSpeedAll` Float, `_FlowMaskTex` Texture, `_FlowSpeedY` Float, `_FlowTexture` Texture, `_FlowColor` Color, `_EmissiveColor` Color, `_SSS` Color
+
+`Standard` (27 properties): `_Color` Color, `_MainTex` Texture, `_Cutoff` Range, `_Glossiness` Range, `_GlossMapScale` Range, `_SmoothnessTextureChannel` Float, `_Metallic` Range, `_MetallicGlossMap` Texture, `_SpecularHighlights` Float, `_GlossyReflections` Float, `_BumpScale` Float, `_BumpMap` Texture, `_Parallax` Range, `_ParallaxMap` Texture, `_OcclusionStrength` Range, `_OcclusionMap` Texture, `_EmissionColor` Color, `_EmissionMap` Texture, `_DetailMask` Texture, `_DetailAlbedoMap` Texture, `_DetailNormalMapScale` Float, `_DetailNormalMap` Texture, `_UVSec` Float, `_Mode` Float, `_SrcBlend` Float, `_DstBlend` Float, `_ZWrite` Float
+
+`Custom/FlowOpaque` (14 properties): `_Color` Color, `_MainTex` Texture, `_FoamTex` Texture, `_FoamColor` Color, `_Glossiness` Range, `_Metallic` Range, `_SpeedX` Float, `_SpeedY` Float, `_FoamSpeed` Float, `_BumpMap` Texture, `_BumpScale` Float, `_EmissionMap` Texture, `_EmissionColor` Color, `_Cull` Float
 
 ## 1b. World-space sizes
 
@@ -415,71 +1393,173 @@ Root localScale 1 x 1 x 1, lossyScale 1 x 1 x 1; 1 LODGroup (LOD0 only, 0 LOD1+ 
 | vfx_ | 487 |
 | fx_ | 281 |
 
-Keyword filter: tick, seeker, brood, egg, bug, insect, crawl, squish, death, blood.
+Keyword filter: tick, seeker, brood, egg, bug, insect, crawl, squish, death, blood, hit, hurt, leech, blob, boar, ooze, goo, slime, green, puke, guck, poison.
 
 | Prefab | List | Details |
 | --- | --- | --- |
+| fx_Abomination_attack_hit | net | 4 ParticleSystem; TimedDestruction |
+| fx_BonemawSerpent_Spit_Hit | net | 4 ParticleSystem; TimedDestruction |
+| fx_BonemawSerpent_poisonbreath | net | ZSFX clips [FlameThrower_ShotLoop4, FlameThrower_ShotLoop5] pitch 0.9-1.1 vol 1-1; 3 ParticleSystem; TimedDestruction |
+| fx_Cinder_hit | net | 3 ParticleSystem; TimedDestruction |
+| fx_Cinder_storm_hit | net | ZSFX clips [Amb_Ashlands_OneShot_Burn_01] pitch 1.3-0.8 vol 1.2-1; 3 ParticleSystem; TimedDestruction |
+| fx_DvergerMage_Fire_hit | net | ZSFX clips [Enemy_Dverger_Fireball_Impact_01, Enemy_Dverger_Fireball_Impact_02, Enemy_Dverger_Fireball_Impact_03, Enemy_Dverger_Fireball_Impact_04] pitch 0.85-1.1 vol 1-1; 6 ParticleSystem; TimedDestruction |
+| fx_DvergerMage_Ice_hit | net | ZSFX clips [Enemy_Dverger_Ice_Projectile_Impact_01, Enemy_Dverger_Ice_Projectile_Impact_02, Enemy_Dverger_Ice_Projectile_Impact_03, Enemy_Dverger_Ice_Projectile_Impact_04, Enemy_Dverger_Ice_Projectile_Impact_05, Enemy_Dverger_Ice_Projectile_Impact_06, Enemy_Dverger_Ice_Projectile_Impact_07] pitch 0.9-1 vol 0.6-0.7; 4 ParticleSystem; TimedDestruction |
+| fx_DvergerMage_Support_hit | net | ZSFX clips [Enemy_Dverger_Ring_Impact_01, Enemy_Dverger_Ring_Impact_02, Enemy_Dverger_Ring_Impact_03] pitch 0.9-1.1 vol 1-1; ZSFX clips [ElecEnergy_Impact_Shock] pitch 0.9-1 vol 1-1; 4 ParticleSystem; TimedDestruction |
 | fx_Dverger_death | net | ZSFX clips [Enemy_Dverger_VO_Death_01, Enemy_Dverger_VO_Death_02, Enemy_Dverger_VO_Death_03, Enemy_Dverger_VO_Death_04, Enemy_Dverger_VO_Death_05, Enemy_Dverger_VO_Death_06, Enemy_Dverger_VO_Death_07, Enemy_Dverger_VO_Death_08, Enemy_Dverger_VO_Death_09, Enemy_Dverger_VO_Death_10, Enemy_Dverger_VO_Death_11] pitch 1-1.1 vol 1-1; 6 ParticleSystem; TimedDestruction |
+| fx_Dverger_hit | net | ZSFX clips [Male_LS_D_HurtGrunt01, Male_LS_D_HurtGrunt02, Male_LS_D_HurtGrunt03, Male_LS_D_HurtGrunt04, Male_LS_D_HurtGrunt05, Male_LS_D_HurtGrunt06, Male_LS_D_HurtGrunt07, Male_LS_D_HurtGrunt08, Male_LS_D_HurtGrunt09] pitch 1.2-1.3 vol 0.5-0.5; 6 ParticleSystem; TimedDestruction |
+| fx_Eat_Green | net | 4 ParticleSystem; TimedDestruction |
+| fx_Fader_Roar_Projectile_Hit | net | ZSFX clips [Enemy_Father_CharredSummon_Impact_01, Enemy_Father_CharredSummon_Impact_02, Enemy_Father_CharredSummon_Impact_03, Enemy_Father_CharredSummon_Impact_04, Enemy_Father_CharredSummon_Impact_05, Enemy_Father_CharredSummon_Impact_06] pitch 0.9-1.1 vol 2.2-2.2; 5 ParticleSystem; TimedDestruction |
+| fx_GoblinShieldHit | net | ZSFX clips [Scifi_Forcefield_Impact2, Scifi_Forcefield_Impact3] pitch 0.9-1 vol 1-1; 2 ParticleSystem; TimedDestruction |
 | fx_JotunWitch_Death | net | 5 ParticleSystem; TimedDestruction |
+| fx_Puke | net | ZSFX clips [] pitch 0.9-1 vol 1-1; 5 ParticleSystem |
 | fx_Queen_Death | net | ZSFX clips [HogMonster_DeathRoar5, HogMonster_DeathRoar6] pitch 0.9-1 vol 1-1; 18 ParticleSystem; TimedDestruction |
+| fx_StaffShield_Hit | net | ZSFX clips [Weapons_Protector_Shield_Impact_01, Weapons_Protector_Shield_Impact_02, Weapons_Protector_Shield_Impact_03, Weapons_Protector_Shield_Impact_04, Weapons_Protector_Shield_Impact_05] pitch 0.9-1.1 vol 1-1; 3 ParticleSystem; TimedDestruction |
 | fx_TickBloodHit | net | 5 ParticleSystem; TimedDestruction |
 | fx_aspect_death | net | ZSFX clips [Enemy_FrozenKing_Spirit_Death_01, Enemy_FrozenKing_Spirit_Death_02, Enemy_FrozenKing_Spirit_Death_03] pitch 0.9-1.1 vol 1.5-1.5; 16 ParticleSystem; TimedDestruction |
 | fx_babyseeker_death | net | ZSFX clips [Enemy_BabySeeker_Fx_Death_01, Enemy_BabySeeker_Fx_Death_02, Enemy_BabySeeker_Fx_Death_03, Enemy_BabySeeker_Fx_Death_04] pitch 0.9-1 vol 1-1; 8 ParticleSystem; TimedDestruction |
 | fx_babyseeker_hurt | net | 6 ParticleSystem; TimedDestruction |
 | fx_bat_death | net | ZSFX clips [Blood_Splat_Gib08, Blood_Splat_Gib09, Blood_Splat_Gib11, Blood_Splat_Gib12] pitch 1.2-1.3 vol 0.5-0.5; ZSFX clips [SmallCreature3_Hurt1, SmallCreature3_Hurt2] pitch 1-1.1 vol 1-1; 8 ParticleSystem; TimedDestruction |
+| fx_bat_hit | net | ZSFX clips [Blood_Splat_Gib02, Blood_Splat_Gib17] pitch 1-1.1 vol 0.8-0.8; ZSFX clips [SmallCreature3_Roar1, SmallCreature3_Roar2, SmallCreature3_Roar3] pitch 1.1-1.2 vol 0.6-0.6; 4 ParticleSystem; TimedDestruction |
 | fx_bjorn_death | net | ZSFX clips [PlantMonster_DeathRoar1, PlantMonster_DeathRoar2, PlantMonster_DeathRoar3] pitch 0.9-1.1 vol 1-1; 5 ParticleSystem; TimedDestruction |
+| fx_bjorn_hit | net | ZSFX clips [Hit_SlimeSplat4, Hit_SlimeSplat8] pitch 0.9-1 vol 0.5-0.5; 6 ParticleSystem; TimedDestruction |
+| fx_blobLava_explosion | net | 7 ParticleSystem; TimedDestruction |
+| fx_blobtar_tarball_hit | net | ZSFX clips [Blood_Splat_Gib02, Blood_Splat_Gib11, Blood_Splat_Gib12, Blood_Splat_Gib13, Blood_Splat_Gib16] pitch 0.8-1 vol 1-1; 6 ParticleSystem; TimedDestruction |
 | fx_bloodweapon_hit | net | 5 ParticleSystem; TimedDestruction |
+| fx_boar_pet | net | ZSFX clips [HogMonster_Breath1, HogMonster_Breath2] pitch 0.9-1.1 vol 0.7-0.7; 1 ParticleSystem; TimedDestruction |
+| fx_chainlightning_hit | net | ZSFX clips [Explo_Medium_Electricity1] pitch 1-1 vol 1-1; 6 ParticleSystem; TimedDestruction |
 | fx_charred_death | net | 7 ParticleSystem; TimedDestruction |
+| fx_charred_hit | net | 3 ParticleSystem; TimedDestruction |
 | fx_charred_summoned_death | net | 7 ParticleSystem; TimedDestruction |
 | fx_chicken_death | net | ZSFX clips [Wildlife_Chick_Hurt_01, Wildlife_Chick_Hurt_02, Wildlife_Chick_Hurt_03, Wildlife_Chick_Hurt_04, Wildlife_Chick_Hurt_05, Wildlife_Chick_Hurt_06, Wildlife_Chick_Hurt_07, Wildlife_Chick_Hurt_08, Wildlife_Chick_Hurt_09, Wildlife_Chick_Hurt_10, Wildlife_Chick_Hurt_11, Wildlife_Chick_Hurt_12, Wildlife_Chick_Hurt_13] pitch 0.9-1 vol 1-1; 6 ParticleSystem; TimedDestruction |
 | fx_chicken_lay_egg | net | ZSFX clips [Grass Step 04, Grass Step_03] pitch 1.2-1.3 vol 1-1; 1 ParticleSystem; TimedDestruction |
+| fx_clusterbombstaff_hit | net | ZSFX clips [Player_Weapons_GrenadeStaff_ImpactBig_01, Player_Weapons_GrenadeStaff_ImpactBig_02, Player_Weapons_GrenadeStaff_ImpactBig_03, Player_Weapons_GrenadeStaff_ImpactBig_04] pitch 0.8-1.2 vol 2.5-2.5; 4 ParticleSystem; TimedDestruction |
+| fx_clusterbombstaff_splinter_hit | net | ZSFX clips [Player_Weapons_GrenadeStaff_ImpactSmall_01, Player_Weapons_GrenadeStaff_ImpactSmall_02, Player_Weapons_GrenadeStaff_ImpactSmall_03, Player_Weapons_GrenadeStaff_ImpactSmall_04, Player_Weapons_GrenadeStaff_ImpactSmall_05] pitch 0.7-1.3 vol 2.7-2.7; 4 ParticleSystem; TimedDestruction |
 | fx_deathsquito_hit | net | ZSFX clips [Blood_Splat_Gib02, Blood_Splat_Gib17] pitch 1-1.1 vol 0.8-0.8; 4 ParticleSystem; TimedDestruction |
 | fx_deatsquito_death | net | ZSFX clips [Blood_Splat_Gib08, Blood_Splat_Gib09, Blood_Splat_Gib11, Blood_Splat_Gib12] pitch 1.1-1.2 vol 0.7-0.7; 12 ParticleSystem; TimedDestruction |
 | fx_egg_splash | net | ZSFX clips [Enemy_Tick_Death_01, Enemy_Tick_Death_02, Enemy_Tick_Death_03, Enemy_Tick_Death_04, Enemy_Tick_Death_05] pitch 0.8-0.8 vol 1-1; 9 ParticleSystem; TimedDestruction |
+| fx_fader_meteor_hit | net | ZSFX clips [Enemy_Father_MeteorCall_Impact_01, Enemy_Father_MeteorCall_Impact_02, Enemy_Father_MeteorCall_Impact_03, Enemy_Father_MeteorCall_Impact_04, Enemy_Father_MeteorCall_Impact_05, Enemy_Father_MeteorCall_Impact_06] pitch 0.9-1.1 vol 1.6-1.8; 6 ParticleSystem; TimedDestruction |
 | fx_fallenvalkyrie_death | net | ZSFX clips [Blood_Splat_Gib08, Blood_Splat_Gib09, Blood_Splat_Gib11, Blood_Splat_Gib12] pitch 1.2-1.3 vol 0.5-0.5; 7 ParticleSystem; TimedDestruction |
+| fx_fallenvalkyrie_poisonbreath | net | ZSFX clips [FlameThrower_ShotLoop4, FlameThrower_ShotLoop5] pitch 0.9-1.1 vol 1-1; 2 ParticleSystem; TimedDestruction |
+| fx_fimbulvinter_meteor_hit | net | ZSFX clips [Smash_HugeRockRip2] pitch 0.9-1.1 vol 1-1; ZSFX clips [Explo_Medium_10] pitch 0.9-1.1 vol 1-1; 5 ParticleSystem; TimedDestruction |
+| fx_float_hitwater | net | ZSFX clips [Fishing_BaitSplash1, Fishing_BaitSplash2, Fishing_BaitSplash3, Fishing_BaitSplash4] pitch 0.8-0.9 vol 1-1; 4 ParticleSystem; TimedDestruction |
+| fx_frozenking_spikerain_hit | net | ZSFX clips [Enemy_FrozenKing_SpikeRain_Projectile_Explosion_01, Enemy_FrozenKing_SpikeRain_Projectile_Explosion_02, Enemy_FrozenKing_SpikeRain_Projectile_Explosion_03, Enemy_FrozenKing_SpikeRain_Projectile_Explosion_04] pitch 0.85-1.15 vol 1.2-1.45; 6 ParticleSystem; TimedDestruction |
 | fx_gjall_death | net | ZSFX clips [Enemy_Gjall_Death_FX_01, Enemy_Gjall_Death_FX_02, Enemy_Gjall_Death_FX_03] pitch 0.9-1 vol 1-1; 18 ParticleSystem; TimedDestruction |
 | fx_gjall_egg_splat | net | ZSFX clips [Enemy_Gjall_TickDrop_FX_01, Enemy_Gjall_TickDrop_FX_02, Enemy_Gjall_TickDrop_FX_03] pitch 0.9-1 vol 1-1; 5 ParticleSystem; TimedDestruction |
+| fx_goblinking_beam_hit | net | ZSFX clips [Explo_EnergyFireball01] pitch 0.9-1.1 vol 1-1; 3 ParticleSystem; TimedDestruction |
 | fx_goblinking_death | net | ZSFX clips [Explo_Large_13] pitch 1-1 vol 1-1; ZSFX clips [Blood_Splat_Gib11] pitch 0.9-0.9 vol 1-1; 10 ParticleSystem; TimedDestruction |
+| fx_goblinking_hit | net | ZSFX clips [Hit_SlimeSplat4, Hit_SlimeSplat8] pitch 0.9-1 vol 0.5-0.5; 3 ParticleSystem; TimedDestruction |
+| fx_goblinking_meteor_hit | net | ZSFX clips [Smash_HugeRockRip2] pitch 0.9-1.1 vol 1-1; ZSFX clips [Explo_Medium_10] pitch 0.9-1.1 vol 1-1; 5 ParticleSystem; TimedDestruction |
+| fx_greenroots_projectile_hit | net | 4 ParticleSystem; TimedDestruction |
 | fx_hare_death | net | 5 ParticleSystem; TimedDestruction |
 | fx_hen_death | net | ZSFX clips [seagull1, seagull4, seagull5, seagull6] pitch 0.9-1 vol 1-1; 5 ParticleSystem; TimedDestruction |
+| fx_himminafl_hit | net | ZSFX clips [Explo_Medium_Electricity1] pitch 1-1 vol 1-1; 6 ParticleSystem; TimedDestruction |
+| fx_iceshard_hit | net | ZSFX clips [Weapons_IceStaff_Impact_01, Weapons_IceStaff_Impact_02, Weapons_IceStaff_Impact_03, Weapons_IceStaff_Impact_04, Weapons_IceStaff_Impact_05, Weapons_IceStaff_Impact_06, Weapons_IceStaff_Impact_07] pitch 1-1.1 vol 0.6-0.8; 4 ParticleSystem; TimedDestruction |
+| fx_jotunbane_hit | net | 5 ParticleSystem; TimedDestruction |
+| fx_lightningstaffprojectile_hit | net | ZSFX clips [Explo_Medium_Electricity1] pitch 1-1 vol 1-1; 3 ParticleSystem; TimedDestruction |
+| fx_lightningweapon_hit | net | ZSFX clips [magic_spell_electro_22, magic_spell_electro_23, magic_spell_electro_24, magic_spell_electro_25] pitch 0.9-1.1 vol 0.75-0.6; 4 ParticleSystem; TimedDestruction |
 | fx_lox_death | net | ZSFX clips [PlantMonster_DeathRoar1, PlantMonster_DeathRoar2, PlantMonster_DeathRoar3] pitch 0.9-1.1 vol 1-1; 5 ParticleSystem; TimedDestruction |
+| fx_lox_hit | net | ZSFX clips [Hit_SlimeSplat4, Hit_SlimeSplat8] pitch 0.9-1 vol 0.5-0.5; 6 ParticleSystem; TimedDestruction |
 | fx_loxcalf_death | net | ZSFX clips [PlantMonster_DeathRoar1, PlantMonster_DeathRoar2, PlantMonster_DeathRoar3] pitch 1.5-2 vol 1-1; 5 ParticleSystem; TimedDestruction |
 | fx_moose_death | net | ZSFX clips [Enemy_Moose_DeathExplode_01, Enemy_Moose_DeathExplode_02, Enemy_Moose_DeathExplode_03, Enemy_Moose_DeathExplode_04, Enemy_Moose_DeathExplode_05] pitch 1-1 vol 0.3-0.45; 5 ParticleSystem; TimedDestruction |
+| fx_moose_hit | net | ZSFX clips [Hit_SlimeSplat4, Hit_SlimeSplat8] pitch 0.9-1 vol 0.5-0.5; 6 ParticleSystem; TimedDestruction |
 | fx_morgen_death | net | 6 ParticleSystem; TimedDestruction |
+| fx_morgen_hit | net | 2 ParticleSystem; TimedDestruction |
+| fx_natureweapon_hit | net | 1 ParticleSystem; TimedDestruction |
+| fx_radiation_hit | net | ZSFX clips [Eiter_Impact_01, Eiter_Impact_02, Eiter_Impact_03, Eiter_Impact_04, Eiter_Impact_05, Eiter_Impact_06, Eiter_Impact_07, Eiter_Impact_08] pitch 0.8-1.4 vol 0.4-0.8; 1 ParticleSystem; TimedDestruction |
 | fx_seeker_death | net | ZSFX clips [Enemy_Seeker_FX_Death_01, Enemy_Seeker_FX_Death_02, Enemy_Seeker_FX_Death_03, Enemy_Seeker_FX_Death_04, Enemy_Seeker_FX_Death_05] pitch 0.9-1 vol 1-1; 8 ParticleSystem; TimedDestruction |
 | fx_seeker_hurt | net | 6 ParticleSystem; TimedDestruction |
 | fx_seeker_melee_hit | net | ZSFX clips [Enemy_Seeker_Attack_VO_01, Enemy_Seeker_Attack_VO_02, Enemy_Seeker_Attack_VO_03, Enemy_Seeker_Attack_VO_04, Enemy_Seeker_Attack_VO_05, Enemy_Seeker_Attack_VO_06, Enemy_Seeker_Attack_VO_07] pitch 0.7-0.8 vol 0.6-0.8; TimedDestruction |
 | fx_seeker_spawn | net | ZSFX clips [Hit_SlimeSplat3, Hit_SlimeSplat4, Hit_WaterSplash_JumpOnBody] pitch 0.9-0.6 vol 1-1; 4 ParticleSystem; TimedDestruction |
 | fx_seekerbrute_death | net | ZSFX clips [Enemy_Gjall_TickDrop_FX_01, Enemy_Gjall_TickDrop_FX_02, Enemy_Gjall_TickDrop_FX_03] pitch 0.8-0.9 vol 1-1; 12 ParticleSystem; TimedDestruction |
+| fx_shieldgenerator_domehit | net | 3 ParticleSystem; TimedDestruction |
+| fx_sledge_demolisher_hit | net | ZSFX clips [Player_Movement_SledgeHit_M_01, Player_Movement_SledgeHit_M_02, Player_Movement_SledgeHit_M_03] pitch 0.85-1 vol 0.7-0.8; ZSFX clips [Weapons_Sledge_Demolisher_Impact_01, Weapons_Sledge_Demolisher_Impact_02, Weapons_Sledge_Demolisher_Impact_03, Weapons_Sledge_Demolisher_Impact_04, Weapons_Sledge_Demolisher_Impact_05] pitch 0.9-1 vol 0.7-0.8; 9 ParticleSystem; TimedDestruction |
 | fx_tendril_death | net | ZSFX clips [Enemy_FrozenKing_Tendril_Death_01, Enemy_FrozenKing_Tendril_Death_02, Enemy_FrozenKing_Tendril_Death_03, Enemy_FrozenKing_Tendril_Death_04, Enemy_FrozenKing_Tendril_Death_05, Enemy_FrozenKing_Tendril_Death_06] pitch 0.85-1.2 vol 0.55-0.85; 8 ParticleSystem; TimedDestruction |
 | fx_tentaroot_death | net | ZSFX clips [Blood_Splat_Gib11, Blood_Splat_Gib12, Blood_Splat_Gib13] pitch 1.1-1.2 vol 1-1; 8 ParticleSystem; TimedDestruction |
 | fx_tick_death | net | ZSFX clips [Enemy_Tick_Death_01, Enemy_Tick_Death_02, Enemy_Tick_Death_03, Enemy_Tick_Death_04, Enemy_Tick_Death_05] pitch 0.9-1 vol 1-1; 6 ParticleSystem; TimedDestruction |
 | fx_unbjorn_death | net | ZSFX clips [PlantMonster_DeathRoar1, PlantMonster_DeathRoar2, PlantMonster_DeathRoar3] pitch 0.9-1.1 vol 1-1; 5 ParticleSystem; TimedDestruction |
+| fx_unbjorn_hit | net | ZSFX clips [Hit_SlimeSplat4, Hit_SlimeSplat8] pitch 0.9-1 vol 0.5-0.5; 6 ParticleSystem; TimedDestruction |
+| fx_vinegreen_destruction | net | 3 ParticleSystem; TimedDestruction |
+| fx_vines_hit | net | ZSFX clips [Hit_Leaves01] pitch 1.1-0.9 vol 1-1; 1 ParticleSystem; TimedDestruction |
+| sfx_Bonemass_Hit | net | ZSFX clips [Hit_SlimeSplat5, Hit_SlimeSplat4, Hit_SlimeSplat3] pitch 0.9-1.1 vol 0.6-0.6; TimedDestruction |
 | sfx_Bonemass_death | net | ZSFX clips [RockMonster_DeathRoar2] pitch 1-1 vol 1-1; ZSFX clips [TreeMonster_HurtRoar3] pitch 0.9-1.1 vol 1-1; TimedDestruction |
 | sfx_GoblinShaman_death | net | ZSFX clips [Male_LS_D_Laugh06, Male_LS_D_Laugh07, Male_LS_D_MadScream01, Male_LS_D_MadScream02, Male_LS_D_MadScream03, Male_LS_D_MadScream04] pitch 1-1.2 vol 1-1; TimedDestruction |
+| sfx_GoblinShaman_hurt | net | ZSFX clips [Male_LS_D_PainScream04, Male_LS_D_PainScream05, Male_LS_D_PainScream06, Male_LS_D_PainScream10] pitch 0.9-1 vol 1-1; TimedDestruction |
+| sfx_GuckSackDestroyed | net | ZSFX clips [Hit_WaterSplash_JumpOnBody] pitch 0.9-1.1 vol 1-1; TimedDestruction |
+| sfx_GuckSackHit | net | ZSFX clips [Hit_SlimeSplat5, Hit_SlimeSplat4, Hit_SlimeSplat3] pitch 0.9-1.1 vol 0.6-0.6; TimedDestruction |
+| sfx_MudHit | net | ZSFX clips [Hit_SlimeSplat5, Hit_SlimeSplat4, Hit_SlimeSplat3] pitch 0.9-1.1 vol 0.6-0.6; TimedDestruction |
+| sfx_Poison_Start | net | ZSFX clips [IcePlant_ExpelGas4] pitch 0.9-1 vol 1-1; TimedDestruction |
+| sfx_ProjectileHit | net | ZSFX clips [Hit_SlimeSplat5, Hit_SlimeSplat4, Hit_SlimeSplat3] pitch 0.9-1.1 vol 1-1; TimedDestruction |
+| sfx_Puke_female | net | ZSFX clips [UI_Vomit_Female_M_01, UI_Vomit_Female_M_02, UI_Vomit_Female_M_03] pitch 0.95-1 vol 1-1 |
+| sfx_Puke_male | net | ZSFX clips [UI_Vomit_Male_M_01, UI_Vomit_Male_M_02, UI_Vomit_Male_M_03] pitch 0.95-1 vol 1-1 |
+| sfx_archery_target_hit | net | ZSFX clips [Player_Weapons_Archery_Target_Arrow_Hit_01, Player_Weapons_Archery_Target_Arrow_Hit_02, Player_Weapons_Archery_Target_Arrow_Hit_03, Player_Weapons_Archery_Target_Arrow_Hit_04, Player_Weapons_Archery_Target_Arrow_Hit_05] pitch 0.9-1 vol 0.6-0.5; TimedDestruction |
+| sfx_arrow_hit | net | ZSFX clips [Weapons_Arrow_Hit_M_01, Weapons_Arrow_Hit_M_02, Weapons_Arrow_Hit_M_03] pitch 0.9-1 vol 0.5-0.7; TimedDestruction |
 | sfx_asksvin_death | net | ZSFX clips [Enemy_Asksvin_Death_01, Enemy_Asksvin_Death_02, Enemy_Asksvin_Death_03, Enemy_Asksvin_Death_04, Enemy_Asksvin_Death_05] pitch 1-1 vol 0.4-0.6; TimedDestruction |
+| sfx_axe_flint_hit | net | ZSFX clips [Player_Movement_Axe_Flint_Hit_M_01, Player_Movement_Axe_Flint_Hit_M_02, Player_Movement_Axe_Flint_Hit_M_03, Player_Movement_Axe_Flint_Hit_M_04] pitch 0.9-1.1 vol 0.7-0.9; TimedDestruction |
+| sfx_axe_hit | net | ZSFX clips [Player_Movement_Axe_Hit_M_01, Player_Movement_Axe_Hit_M_02, Player_Movement_Axe_Hit_M_03, Player_Movement_Axe_Hit_M_04, Player_Movement_Axe_Hit_M_05] pitch 0.95-1 vol 0.4-0.45; TimedDestruction |
+| sfx_barley_hit | net | ZSFX clips [Hit_Leaves02] pitch 1.1-0.9 vol 1-1; TimedDestruction |
+| sfx_battleaxe_hit | net | ZSFX clips [Player_Movement_Axe_Hit_M_01, Player_Movement_Axe_Hit_M_02, Player_Movement_Axe_Hit_M_03, Player_Movement_Axe_Hit_M_04, Player_Movement_Axe_Hit_M_05] pitch 0.9-1 vol 0.4-0.5; TimedDestruction |
 | sfx_bear_death | net | ZSFX clips [Enemy_Bear_Death_01, Enemy_Bear_Death_02, Enemy_Bear_Death_03, Enemy_Bear_Death_04, Enemy_Bear_Death_05, Enemy_Bear_Death_06, Enemy_Bear_Death_07] pitch 1-1 vol 0.3-0.45; TimedDestruction |
+| sfx_bear_hurt | net | ZSFX clips [Enemy_Bear_Hurt_01, Enemy_Bear_Hurt_02, Enemy_Bear_Hurt_03, Enemy_Bear_Hurt_04, Enemy_Bear_Hurt_05, Enemy_Bear_Hurt_06, Enemy_Bear_Hurt_07, Enemy_Bear_Hurt_08, Enemy_Bear_Hurt_09] pitch 1-1 vol 0.3-0.45; TimedDestruction |
+| sfx_beehive_hit | net | ZSFX clips [Smash_TorchBreak1] pitch 1.1-0.9 vol 1-1; TimedDestruction |
+| sfx_blobLava_explosion | net | ZSFX clips [DarkMagic_SoulSteal2] pitch 0.9-1.1 vol 1-1; TimedDestruction |
+| sfx_blob_alerted | net | ZSFX clips [FatMonster_Growl2] pitch 0.9-1.1 vol 0.4-0.5; TimedDestruction |
+| sfx_blob_attack | net | ZSFX clips [FatMonster_Growl1] pitch 1.1-1.3 vol 0.8-0.8; TimedDestruction |
 | sfx_blob_death | net | ZSFX clips [FishMonster_DeathRoar1, FishMonster_DeathRoar2, FishMonster_DeathRoar3] pitch 0.9-1.1 vol 1-1; TimedDestruction |
+| sfx_blob_hit | net | ZSFX clips [Hit_SlimeSplat5, Hit_SlimeSplat4, Hit_SlimeSplat3] pitch 0.9-1.1 vol 0.6-0.6; TimedDestruction |
+| sfx_blob_idle | net | ZSFX clips [FatMonster_Growl3] pitch 0.9-1.1 vol 0.4-0.5; TimedDestruction |
+| sfx_blob_jump | net | ZSFX clips [MudMonster_AttackSplat1] pitch 0.8-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_bloblava_alert | net | ZSFX clips [Enemy_LavaBlob_Alert_01, Enemy_LavaBlob_Alert_02, Enemy_LavaBlob_Alert_03] pitch 1-1 vol 1.6-1.8; TimedDestruction |
 | sfx_bloblava_death | net | ZSFX clips [Enemy_LavaBlob_DeathBurst_01, Enemy_LavaBlob_DeathBurst_02, Enemy_LavaBlob_DeathBurst_03, Enemy_LavaBlob_DeathBurst_04, Enemy_LavaBlob_DeathBurst_05, Enemy_LavaBlob_DeathBurst_06, Enemy_LavaBlob_DeathBurst_07, Enemy_LavaBlob_DeathBurst_08] pitch 0.9-1.1 vol 2.2-2.4; TimedDestruction |
+| sfx_bloblava_grow | net | ZSFX clips [Enemy_LavaBlob_Grow_01, Enemy_LavaBlob_Grow_02, Enemy_LavaBlob_Grow_03, Enemy_LavaBlob_Grow_04] pitch 1-1 vol 1.5-1.8; TimedDestruction |
+| sfx_bloblava_idle | net | ZSFX clips [Enemy_LavaBlob_Idle_01, Enemy_LavaBlob_Idle_02, Enemy_LavaBlob_Idle_03, Enemy_LavaBlob_Idle_04, Enemy_LavaBlob_Idle_05, Enemy_LavaBlob_Idle_06] pitch 1-1 vol 2-2.2; TimedDestruction |
+| sfx_bloblava_jump | net | ZSFX clips [Enemy_LavaBlob_Jump_01, Enemy_LavaBlob_Jump_02, Enemy_LavaBlob_Jump_03, Enemy_LavaBlob_Jump_04] pitch 1-1 vol 1-1; TimedDestruction |
+| sfx_blobtar_attack_spit | net | ZSFX clips [Blood_Splat_Gib14, Blood_Splat_Gib17] pitch 0.9-1 vol 0.8-0.8; TimedDestruction |
+| sfx_blobtar_idle | net | ZSFX clips [Squish_Wet_FleshBlood01, Squish_Wet_FleshBlood03, Squish_Wet_FleshBlood04, Squish_Wet_FleshBlood05, Squish_Wet_FleshBlood06, Squish_Wet_FleshBlood07] pitch 0.9-1.1 vol 1-1; TimedDestruction |
+| sfx_boar_alerted | net | ZSFX clips [HogMonster_DeathRoar4, HogMonster_DeathRoar2] pitch 0.9-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_boar_attack | net | ZSFX clips [Zombie06_SwipeAttack5, Zombie06_SwipeAttack6] pitch 1-1.2 vol 0.8-0.8; TimedDestruction |
+| sfx_boar_birth | net | ZSFX clips [HogMonster_DeathRoar5] pitch 1.2-1.3 vol 1-1; TimedDestruction |
 | sfx_boar_death | net | ZSFX clips [HogMonster_DeathRoar5, HogMonster_DeathRoar6] pitch 0.9-1 vol 1-1; TimedDestruction |
+| sfx_boar_hit | net | ZSFX clips [HogMonster_HurtGrowl1, HogMonster_HurtGrowl2, HogMonster_HurtGrowl3] pitch 1.1-1.2 vol 1-1; TimedDestruction |
+| sfx_boar_idle | net | ZSFX clips [HogMonster_Breath1, HogMonster_Breath2, HogMonster_Breath3, HogMonster_Breath4, HogMonster_Breath5, HogMonster_Breath6, HogMonster_GrowlScrape] pitch 1.3-1.5 vol 0.8-0.8; TimedDestruction |
+| sfx_boar_love | net | ZSFX clips [HogMonster_Breath1, HogMonster_Breath2, HogMonster_Breath3, HogMonster_Breath4] pitch 0.9-1.1 vol 1-1; TimedDestruction |
 | sfx_bonemaw_serpent_death | net | ZSFX clips [Enemy_Bonemaw_Death_01, Enemy_Bonemaw_Death_02, Enemy_Bonemaw_Death_03, Enemy_Bonemaw_Death_04] pitch 0.7-1.3 vol 1.6-1.7; TimedDestruction |
+| sfx_bonemaw_serpent_spit_hit | net | ZSFX clips [Enemy_Bonemaw_Attack_Spit_Proj_Hit_01, Enemy_Bonemaw_Attack_Spit_Proj_Hit_02, Enemy_Bonemaw_Attack_Spit_Proj_Hit_03, Enemy_Bonemaw_Attack_Spit_Proj_Hit_04, Enemy_Bonemaw_Attack_Spit_Proj_Hit_05] pitch 0.7-1.3 vol 1.4-1.5; TimedDestruction |
+| sfx_branch_hit | net | ZSFX clips [Branch_Hit_01, Branch_Hit_02, Branch_Hit_03, Branch_Hit_04] pitch 0.85-1.1 vol 0.95-1.3; TimedDestruction |
+| sfx_bush_hit | net | ZSFX clips [Hit_Leaves01] pitch 1.1-0.9 vol 1-1; TimedDestruction |
+| sfx_cart_hit | net | ZSFX clips [Hit_LargeWoodImpact1] pitch 0.8-1.2 vol 0.5-0.5; TimedDestruction |
 | sfx_charred_death | net | ZSFX clips [Enemy_CharredMelee_Death_01, Enemy_CharredMelee_Death_02, Enemy_CharredMelee_Death_03, Enemy_CharredMelee_Death_04, Enemy_CharredMelee_Death_05, Enemy_CharredMelee_Death_06, Enemy_CharredMelee_Death_07, Enemy_CharredMelee_Death_08, Enemy_CharredMelee_Death_09, Enemy_CharredMelee_Death_10] pitch 1-1 vol 0.4-0.6; TimedDestruction |
+| sfx_charred_hurt | net | ZSFX clips [Enemy_CharredMelee_Hurt_01, Enemy_CharredMelee_Hurt_02, Enemy_CharredMelee_Hurt_03, Enemy_CharredMelee_Hurt_04, Enemy_CharredMelee_Hurt_05, Enemy_CharredMelee_Hurt_06, Enemy_CharredMelee_Hurt_07, Enemy_CharredMelee_Hurt_08, Enemy_CharredMelee_Hurt_09, Enemy_CharredMelee_Hurt_10, Enemy_CharredMelee_Hurt_11, Enemy_CharredMelee_Hurt_12, Enemy_CharredMelee_Hurt_13, Enemy_CharredMelee_Hurt_14, Enemy_CharredMelee_Hurt_15] pitch 1-1 vol 0.4-0.6; TimedDestruction |
 | sfx_charred_twitcher_death | net | ZSFX clips [Enemy_Twitcher_Death_01, Enemy_Twitcher_Death_02, Enemy_Twitcher_Death_03, Enemy_Twitcher_Death_04, Enemy_Twitcher_Death_05] pitch 1.2-0.8 vol 0.8-1; TimedDestruction |
+| sfx_charred_twitcher_hurt | net | ZSFX clips [Enemy_Twitcher_Hurt_01, Enemy_Twitcher_Hurt_02, Enemy_Twitcher_Hurt_03, Enemy_Twitcher_Hurt_04, Enemy_Twitcher_Hurt_05, Enemy_Twitcher_Hurt_06, Enemy_Twitcher_Hurt_07, Enemy_Twitcher_Hurt_08] pitch 0.7-1.3 vol 1.5-1.8; TimedDestruction |
+| sfx_chick_hurt | net | ZSFX clips [Wildlife_Chick_Hurt_01, Wildlife_Chick_Hurt_02, Wildlife_Chick_Hurt_03, Wildlife_Chick_Hurt_04, Wildlife_Chick_Hurt_05, Wildlife_Chick_Hurt_06, Wildlife_Chick_Hurt_07, Wildlife_Chick_Hurt_08, Wildlife_Chick_Hurt_09, Wildlife_Chick_Hurt_10, Wildlife_Chick_Hurt_11, Wildlife_Chick_Hurt_12, Wildlife_Chick_Hurt_13] pitch 0.9-1.1 vol 0.6-0.8; TimedDestruction |
 | sfx_chicken_death | net | ZSFX clips [Wildlife_Chicken_Death_01, Wildlife_Chicken_Death_02, Wildlife_Chicken_Death_03, Wildlife_Chicken_Death_04, Wildlife_Chicken_Death_05] pitch 1-1 vol 0.4-0.6; TimedDestruction |
+| sfx_chicken_hurt | net | ZSFX clips [Wildlife_Chicken_Hurt_01, Wildlife_Chicken_Hurt_02, Wildlife_Chicken_Hurt_03, Wildlife_Chicken_Hurt_04, Wildlife_Chicken_Hurt_05] pitch 1-1 vol 0.4-0.6; TimedDestruction |
+| sfx_cinder_rain_hit | net | ZSFX clips [World_Cinder_Burn_Hit_01, World_Cinder_Burn_Hit_02, World_Cinder_Burn_Hit_03, World_Cinder_Burn_Hit_04, World_Cinder_Burn_Hit_05, World_Cinder_Burn_Hit_06] pitch 0.8-1.2 vol 0.2-0.4; TimedDestruction |
+| sfx_club_hit | net | ZSFX clips [sWeaponHit02] pitch 0.7-1.1 vol 0.4-0.4; TimedDestruction |
 | sfx_crow_death | net | ZSFX clips [crow_splatt] pitch 1.1-0.9 vol 0.8-0.8; TimedDestruction |
 | sfx_deathsquito_attack | net | ZSFX clips [sScorpionTailAttack01, sScorpionTailAttack02] pitch 0.9-1.1 vol 0.8-0.8; TimedDestruction |
 | sfx_deer_death | net | ZSFX clips [Rhinosaur_HurtGrowl1, Rhinosaur_HurtGrowl2, Rhinosaur_HurtGrowl3] pitch 1.6-1.8 vol 1-1; TimedDestruction |
 | sfx_dragon_death | net | ZSFX clips [Dragon_DeathRoar4] pitch 1-1 vol 1-1; TimedDestruction |
+| sfx_dragon_hurt | net | ZSFX clips [Blood_Splat_Gib04, Blood_Splat_Gib03] pitch 0.9-1 vol 0.7-0.7; TimedDestruction |
+| sfx_dragon_melee_hit | net | ZSFX clips [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] pitch 0.8-0.9 vol 1-1; TimedDestruction |
 | sfx_dragonegg_destroy | net | ZSFX clips [Blood_Splat_Gib08, Blood_Splat_Gib09, Blood_Splat_Gib10] pitch 1-1.1 vol 1-1; TimedDestruction |
 | sfx_draugr_death | net | ZSFX clips [Zombie09_Death1, Zombie09_Death2, Zombie09_Death3, Zombie09_Death4, Zombie09_Death5] pitch 1-1.1 vol 0.7-0.7; TimedDestruction |
+| sfx_draugr_hit | net | ZSFX clips [Zombie06_Hurt_Grunt1, Zombie06_Hurt_Grunt2, Zombie06_Hurt_Grunt3, Zombie06_Hurt_Grunt4, Zombie06_Hurt_Grunt5] pitch 1.1-1.2 vol 0.5-0.5; TimedDestruction |
+| sfx_draugrpile_hit | net | ZSFX clips [Hit_SlimeSplat5, Hit_SlimeSplat4, Hit_SlimeSplat3] pitch 0.9-1.1 vol 0.6-0.6; TimedDestruction |
 | sfx_dverger_vo_death | net | ZSFX clips [Enemy_Dverger_VO_Death_01, Enemy_Dverger_VO_Death_02, Enemy_Dverger_VO_Death_03, Enemy_Dverger_VO_Death_04, Enemy_Dverger_VO_Death_05, Enemy_Dverger_VO_Death_06, Enemy_Dverger_VO_Death_07, Enemy_Dverger_VO_Death_08, Enemy_Dverger_VO_Death_09, Enemy_Dverger_VO_Death_10, Enemy_Dverger_VO_Death_11] pitch 1-1.1 vol 0.9-1; TimedDestruction |
+| sfx_dverger_vo_hurt | net | ZSFX clips [Enemy_Dverger_VO_Hurt_01, Enemy_Dverger_VO_Hurt_02, Enemy_Dverger_VO_Hurt_03, Enemy_Dverger_VO_Hurt_04, Enemy_Dverger_VO_Hurt_05, Enemy_Dverger_VO_Hurt_06, Enemy_Dverger_VO_Hurt_07, Enemy_Dverger_VO_Hurt_08, Enemy_Dverger_VO_Hurt_09, Enemy_Dverger_VO_Hurt_10, Enemy_Dverger_VO_Hurt_11, Enemy_Dverger_VO_Hurt_12] pitch 0.95-1.1 vol 0.9-1; TimedDestruction |
 | sfx_eikthyr_death | net | ZSFX clips [Rhinosaur_DeathGrowl2, Rhinosaur_DeathGrowl1] pitch 1.1-1.2 vol 1-1; TimedDestruction |
+| sfx_eikthyr_hit | net | ZSFX clips [Rhinosaur_HurtGrowl1, Rhinosaur_HurtGrowl2, Rhinosaur_HurtGrowl3, Rhinosaur_HurtGrowl4, Rhinosaur_HurtGrowl5] pitch 1.1-1.2 vol 0.6-0.6; TimedDestruction |
 | sfx_elaking_death | net | ZSFX clips [Enemy_Elaking_Death_01, Enemy_Elaking_Death_02, Enemy_Elaking_Death_03, Enemy_Elaking_Death_04] pitch 1-1 vol 0.25-0.35; TimedDestruction |
 | sfx_elaking_death_old | net | ZSFX clips [Male_LS_D_Death01, Male_LS_D_Death02, Male_LS_D_Death03, Male_LS_D_Death04] pitch 2-2.6 vol 1-1; TimedDestruction |
+| sfx_elaking_hit | net | ZSFX clips [Enemy_Elaking_Hurt_01, Enemy_Elaking_Hurt_02, Enemy_Elaking_Hurt_03, Enemy_Elaking_Hurt_04] pitch 1-1 vol 0.3-0.45; TimedDestruction |
+| sfx_elaking_hit_old | net | ZSFX clips [Env_Wood_Break_Snow_01, Env_Wood_Break_Snow_02, Env_Wood_Break_Snow_03, Env_Wood_Break_Snow_04, Env_Wood_Break_Snow_05, Env_Wood_Break_Snow_06, Env_Wood_Break_Snow_07, Env_Wood_Break_Snow_08] pitch 0.85-1.1 vol 0.75-0.95; 7 ParticleSystem; TimedDestruction |
 | sfx_fader_death_explosion | net | ZSFX clips [Enemy_Father_Death_Explosion] pitch 1-1 vol 6-2; TimedDestruction |
 | sfx_fader_death_start | net | ZSFX clips [Enemy_Father_Death_Start] pitch 1-1 vol 1.4-1.6; TimedDestruction |
 | sfx_fallenvalkyrie_death | net | ZSFX clips [Enemy_FallenValkyrie_Death_01, Enemy_FallenValkyrie_Death_02, Enemy_FallenValkyrie_Death_03, Enemy_FallenValkyrie_Death_04, Enemy_FallenValkyrie_Death_05, Enemy_FallenValkyrie_Death_06, Enemy_FallenValkyrie_Death_07, Enemy_FallenValkyrie_Death_08] pitch 1-1 vol 0.8-1; TimedDestruction |
 | sfx_fallenwarrior_death | net | ZSFX clips [Enemy_FallenWarrior_Death_01, Enemy_FallenWarrior_Death_02, Enemy_FallenWarrior_Death_03, Enemy_FallenWarrior_Death_04, Enemy_FallenWarrior_Death_05] pitch 0.9-1.05 vol 0.3-0.45; TimedDestruction |
+| sfx_fallenwarrior_hurt | net | ZSFX clips [Enemy_FallenWarrior_Hurt_01, Enemy_FallenWarrior_Hurt_02, Enemy_FallenWarrior_Hurt_03, Enemy_FallenWarrior_Hurt_04, Enemy_FallenWarrior_Hurt_05] pitch 1-1 vol 0.3-0.45; TimedDestruction |
+| sfx_fenring_claw_hit | net | ZSFX clips [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] pitch 0.8-1 vol 0.5-0.5; TimedDestruction |
 | sfx_fenring_death | net | ZSFX clips [Zombie09_Death4, Zombie09_Death5] pitch 1-1.1 vol 0.6-0.6; TimedDestruction |
 | sfx_frozenking_death_crystal_break | net | ZSFX clips [Enemy_FrozenKing_Death_Crystal_Break_01] pitch 1-1 vol 0.85-0.85; TimedDestruction |
 | sfx_frozenking_death_crystal_sequence | net | ZSFX clips [Enemy_FrozenKing_Death_Crystal_Sequence_01] pitch 1-1 vol 0.85-0.85; TimedDestruction |
@@ -487,110 +1567,261 @@ Keyword filter: tick, seeker, brood, egg, bug, insect, crawl, squish, death, blo
 | sfx_frozenking_spirit_death | net | ZSFX clips [Enemy_FrozenKing_Spirit_Death_01, Enemy_FrozenKing_Spirit_Death_02, Enemy_FrozenKing_Spirit_Death_03] pitch 0.9-1.1 vol 1.5-1.5; TimedDestruction |
 | sfx_frozenking_tendril_death | net | ZSFX clips [Enemy_FrozenKing_Tendril_Death_01, Enemy_FrozenKing_Tendril_Death_02, Enemy_FrozenKing_Tendril_Death_03, Enemy_FrozenKing_Tendril_Death_04, Enemy_FrozenKing_Tendril_Death_05, Enemy_FrozenKing_Tendril_Death_06] pitch 0.85-1.2 vol 0.55-0.85; TimedDestruction |
 | sfx_gameltroll_death | net | ZSFX clips [Enemy_Gameltroll_Death_01, Enemy_Gameltroll_Death_02, Enemy_Gameltroll_Death_03, Enemy_Gameltroll_Death_04, Enemy_Gameltroll_Death_05] pitch 0.95-1.05 vol 0.35-0.5; TimedDestruction |
+| sfx_gameltroll_hurt | net | ZSFX clips [Enemy_Gameltroll_Hurt_01, Enemy_Gameltroll_Hurt_02, Enemy_Gameltroll_Hurt_03, Enemy_Gameltroll_Hurt_04, Enemy_Gameltroll_Hurt_05] pitch 0.95-1.05 vol 0.3-0.45; TimedDestruction |
 | sfx_gameltroll_stoneturn_death | net | ZSFX clips [Enemy_Gameltroll_Death_StoneTurn_01, Enemy_Gameltroll_Death_StoneTurn_02, Enemy_Gameltroll_Death_StoneTurn_03, Enemy_Gameltroll_Death_StoneTurn_04, Enemy_Gameltroll_Death_StoneTurn_05] pitch 0.92-1.05 vol 0.45-0.55; TimedDestruction |
 | sfx_gdking_death | net | ZSFX clips [TreeMonster_DeathRoar2] pitch 0.9-1.1 vol 1-1; ZSFX clips [TreeMonster_HurtRoar3] pitch 0.9-1.1 vol 1-1; TimedDestruction |
+| sfx_ghost_attack_hit | net | ZSFX clips [EvilGhost_EnergyHit1, EvilGhost_EnergyHit2] pitch 0.8-0.9 vol 0.8-0.8; TimedDestruction |
 | sfx_ghost_death | net | ZSFX clips [EvilGhost_SpecterDeath2] pitch 0.9-1.1 vol 1-1; TimedDestruction |
+| sfx_ghost_hurt | net | ZSFX clips [EvilGhost_Death5] pitch 0.9-1.1 vol 1-1; TimedDestruction |
 | sfx_ghosts_death | net | ZSFX clips [Enemy_Ghost_Death_01, Enemy_Ghost_Death_02, Enemy_Ghost_Death_03, Enemy_Ghost_Death_04, Enemy_Ghost_Death_05, Enemy_Ghost_Death_06] pitch 1-1 vol 0.4-0.5; TimedDestruction |
+| sfx_ghosts_hurt | net | ZSFX clips [Enemy_Ghost_Hurt_01, Enemy_Ghost_Hurt_02, Enemy_Ghost_Hurt_03, Enemy_Ghost_Hurt_04, Enemy_Ghost_Hurt_05, Enemy_Ghost_Hurt_06, Enemy_Ghost_Hurt_07] pitch 1-1 vol 0.3-0.45; TimedDestruction |
 | sfx_gjall_attack_tick_drop | net | ZSFX clips [Enemy_Gjall_Attack_TickDrop_01, Enemy_Gjall_Attack_TickDrop_02, Enemy_Gjall_Attack_TickDrop_03] pitch 1-1 vol 1-1; TimedDestruction |
 | sfx_gjall_death | net | ZSFX clips [Enemy_Gjall_Death_FX_01, Enemy_Gjall_Death_FX_02, Enemy_Gjall_Death_FX_03] pitch 1-1 vol 1-1; TimedDestruction |
 | sfx_gjall_tick_drop | net | ZSFX clips [Enemy_Gjall_TickDrop_FX_01, Enemy_Gjall_TickDrop_FX_02, Enemy_Gjall_TickDrop_FX_03] pitch 0.9-1 vol 1-1; TimedDestruction |
 | sfx_goblin_death | net | ZSFX clips [Male_LS_D_Death01, Male_LS_D_Death02, Male_LS_D_Death03, Male_LS_D_Death04] pitch 1-1.1 vol 1-1; TimedDestruction |
+| sfx_goblin_hit | net | ZSFX clips [Male_LS_D_HurtGrunt01, Male_LS_D_HurtGrunt02, Male_LS_D_HurtGrunt03, Male_LS_D_HurtGrunt04, Male_LS_D_HurtGrunt05, Male_LS_D_HurtGrunt06, Male_LS_D_HurtGrunt07, Male_LS_D_HurtGrunt08, Male_LS_D_HurtGrunt09] pitch 1.2-1.3 vol 0.5-0.5; TimedDestruction |
+| sfx_goblinbrute_clubhit | net | ZSFX clips [sWeaponHit08] pitch 0.7-0.9 vol 1-1; TimedDestruction |
 | sfx_goblinbrute_death | net | ZSFX clips [Male_LS_D_Death01, Male_LS_D_Death02, Male_LS_D_Death03, Male_LS_D_Death04] pitch 0.5-0.6 vol 1-1; TimedDestruction |
+| sfx_goblinbrute_hit | net | ZSFX clips [Male_LS_D_HurtGrunt01, Male_LS_D_HurtGrunt02, Male_LS_D_HurtGrunt03, Male_LS_D_HurtGrunt04, Male_LS_D_HurtGrunt05, Male_LS_D_HurtGrunt06, Male_LS_D_HurtGrunt07, Male_LS_D_HurtGrunt08, Male_LS_D_HurtGrunt09] pitch 0.6-0.7 vol 0.8-0.8; TimedDestruction |
+| sfx_grapplinghook_hit | net | ZSFX clips [Player_Weapons_GrapplingHook_Hit_01, Player_Weapons_GrapplingHook_Hit_02, Player_Weapons_GrapplingHook_Hit_03, Player_Weapons_GrapplingHook_Hit_04, Player_Weapons_GrapplingHook_Hit_05] pitch 0.9-1 vol 0.6-0.5; TimedDestruction |
+| sfx_greydwarf_attack_hit | net | ZSFX clips [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] pitch 0.8-0.9 vol 0.5-0.5; TimedDestruction |
 | sfx_greydwarf_death | net | ZSFX clips [ScalyCreature_DeathRoar13] pitch 1.1-1.2 vol 1-1; TimedDestruction |
 | sfx_greydwarf_deepnorth_death | net | ZSFX clips [Enemy_Greydwarf_DeepNorth_Death_01, Enemy_Greydwarf_DeepNorth_Death_02, Enemy_Greydwarf_DeepNorth_Death_03] pitch 1.1-1.2 vol 1-1; TimedDestruction |
 | sfx_greydwarf_elite_death | net | ZSFX clips [ScalyCreature_DeathRoar13] pitch 0.9-1 vol 1-1; TimedDestruction |
+| sfx_greydwarf_hit | net | ZSFX clips [ScalyCreature_HurtGrowl1, ScalyCreature_HurtGrowl2, ScalyCreature_HurtGrowl3] pitch 1.1-1.2 vol 0.5-0.5; TimedDestruction |
+| sfx_greydwarf_stone_hit | net | ZSFX clips [sWeaponHit01] pitch 1.2-1.3 vol 0.4-0.4; TimedDestruction |
+| sfx_greydwarfnest_hit | net | ZSFX clips [Smash_WoodBreak06] pitch 0.8-1.1 vol 0.5-0.5; TimedDestruction |
 | sfx_greyling_death | net | ZSFX clips [ScalyCreature_DeathRoar13] pitch 1.8-2 vol 1-1; TimedDestruction |
+| sfx_greyling_hit | net | ZSFX clips [ScalyCreature_HurtGrowl1, ScalyCreature_HurtGrowl2, ScalyCreature_HurtGrowl3] pitch 1.8-2 vol 0.5-0.5; TimedDestruction |
 | sfx_hare_death_vocal | net | ZSFX clips [Hare_Death_Vocal_01, Hare_Death_Vocal_02, Hare_Death_Vocal_03, Hare_Death_Vocal_04, Hare_Death_Vocal_05] pitch 0.95-1 vol 0.8-1; TimedDestruction |
 | sfx_hatchling_death | net | ZSFX clips [Dragon_DeathRoar1] pitch 0.9-1 vol 1-1; ZSFX clips [Dragon_FlameBurst] pitch 0.9-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_hatcling_hurt | net | ZSFX clips [Dragon_HurtRoar2, Dragon_HurtRoar4] pitch 1.2-1.3 vol 0.7-0.7; TimedDestruction |
+| sfx_hit | net | ZSFX clips [UI_Damage_Self_S_01, UI_Damage_Self_S_02, UI_Damage_Self_S_03, UI_Damage_Self_S_04, UI_Damage_Self_S_05] pitch 0.8-1 vol 0.5-0.5; TimedDestruction |
+| sfx_hit_vibration_only | net | ZSFX clips [UI_Damage_Self_S_01_amplified_vibration, UI_Damage_Self_S_02_amplified_vibration, UI_Damage_Self_S_03_amplified_vibration, UI_Damage_Self_S_04_amplified_vibration, UI_Damage_Self_S_05_amplified_vibration] pitch 0.8-1 vol 1-1; TimedDestruction |
+| sfx_ice_hit | net | ZSFX clips [Player_Weapons_Ice_Hit_01, Player_Weapons_Ice_Hit_02, Player_Weapons_Ice_Hit_03, Player_Weapons_Ice_Hit_04, Player_Weapons_Ice_Hit_05] pitch 0.9-1.1 vol 0.7-0.75; TimedDestruction |
 | sfx_imp_death | net | ZSFX clips [GiantAnt_Death1, GiantAnt_Death2, GiantAnt_Death3] pitch 0.9-1.1 vol 1-1; ZSFX clips [Dragon_BreathFire1, Dragon_BreathFire2] pitch 0.9-1.1 vol 1-1; TimedDestruction |
+| sfx_imp_hit | net | ZSFX clips [GiantAnt_Hurt1, GiantAnt_Hurt2, GiantAnt_Hurt3] pitch 0.9-1.1 vol 0.5-0.5; TimedDestruction |
 | sfx_jotunwarrior_death | net | ZSFX clips [Enemy_JotunWarrior_Death_01, Enemy_JotunWarrior_Death_02, Enemy_JotunWarrior_Death_03, Enemy_JotunWarrior_Death_04, Enemy_JotunWarrior_Death_05] pitch 1-1 vol 0.3-0.45; TimedDestruction |
+| sfx_jotunwarrior_hurt | net | ZSFX clips [Enemy_JotunWarrior_Hurt_01, Enemy_JotunWarrior_Hurt_02, Enemy_JotunWarrior_Hurt_03, Enemy_JotunWarrior_Hurt_04, Enemy_JotunWarrior_Hurt_05] pitch 1-1 vol 0.3-0.45; TimedDestruction |
 | sfx_jotunwitch_death | net | ZSFX clips [Enemy_JotunWitch_Death_01, Enemy_JotunWitch_Death_02, Enemy_JotunWitch_Death_03, Enemy_JotunWitch_Death_04, Enemy_JotunWitch_Death_05] pitch 1-1 vol 0.3-0.45; TimedDestruction |
+| sfx_jotunwitch_hurt | net | ZSFX clips [Enemy_JotunWitch_Hurt_01, Enemy_JotunWitch_Hurt_02, Enemy_JotunWitch_Hurt_03, Enemy_JotunWitch_Hurt_04, Enemy_JotunWitch_Hurt_05] pitch 1-1 vol 0.45-0.65; TimedDestruction |
 | sfx_kvastur_death | net | ZSFX clips [EvilGhost_SpecterDeath2] pitch 2-3 vol 1-1; ZSFX clips [Dragon_BreathFire1, Dragon_BreathFire2] pitch 0.9-1.1 vol 1-1; TimedDestruction |
+| sfx_leech_alerted | net | ZSFX clips [Splash_WaterEmerge01, Splash_WaterEmerge02, Splash_WaterEmerge03, Splash_WaterEmerge04, Splash_WaterEmerge05, Splash_WaterEmerge06, Splash_WaterEmerge07, Splash_WaterEmerge08, Splash_WaterEmerge09] pitch 1-1.1 vol 1-1; TimedDestruction |
+| sfx_leech_attack | net | ZSFX clips [LizardMan_AttackHiss1, LizardMan_AttackHiss2] pitch 0.9-1.1 vol 0.7-0.7; TimedDestruction |
+| sfx_leech_attack_hit | net | ZSFX clips [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] pitch 0.8-0.9 vol 0.5-0.5; TimedDestruction |
 | sfx_leech_death | net | ZSFX clips [Blood_Splat_Gib05, Blood_Splat_Gib06, Blood_Splat_Gib07] pitch 1-1.1 vol 1-1; TimedDestruction |
+| sfx_leech_hit | net | ZSFX clips [Blood_Splat_Gib01, Blood_Splat_Gib02, Blood_Splat_Gib03] pitch 0.9-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_leech_idle | net | ZSFX clips [Splash_WaterEmerge01, Splash_WaterEmerge02, Splash_WaterEmerge03, Splash_WaterEmerge04, Splash_WaterEmerge05, Splash_WaterEmerge06, Splash_WaterEmerge07, Splash_WaterEmerge08, Splash_WaterEmerge09] pitch 0.9-1 vol 0.8-0.9; TimedDestruction |
+| sfx_metalbars_hit | net | ZSFX clips [Env_Metal_Bars_Hit_01, Env_Metal_Bars_Hit_02, Env_Metal_Bars_Hit_03, Env_Metal_Bars_Hit_04, Env_Metal_Bars_Hit_05, Env_Metal_Bars_Hit_06] pitch 0.85-1.1 vol 0.85-1; TimedDestruction |
 | sfx_moleman_death | net | ZSFX clips [Enemy_Moleman_Death_01, Enemy_Moleman_Death_02, Enemy_Moleman_Death_03, Enemy_Moleman_Death_04, Enemy_Moleman_Death_05] pitch 1-1 vol 0.5-0.65; TimedDestruction |
+| sfx_moleman_hurt | net | ZSFX clips [Enemy_Moleman_Hurt_01, Enemy_Moleman_Hurt_02, Enemy_Moleman_Hurt_03, Enemy_Moleman_Hurt_04, Enemy_Moleman_Hurt_05] pitch 1-1 vol 0.4-0.6; TimedDestruction |
+| sfx_moose_attack_melee_hit | net | ZSFX clips [Enemy_Moose_AttackMeleeImpact_01, Enemy_Moose_AttackMeleeImpact_02, Enemy_Moose_AttackMeleeImpact_03, Enemy_Moose_AttackMeleeImpact_04, Enemy_Moose_AttackMeleeImpact_05] pitch 1-1 vol 0.3-0.45; TimedDestruction |
 | sfx_moose_death | net | ZSFX clips [Enemy_Moose_Death_01, Enemy_Moose_Death_02, Enemy_Moose_Death_03, Enemy_Moose_Death_04, Enemy_Moose_Death_05] pitch 1-1 vol 0.3-0.45; TimedDestruction |
 | sfx_moose_death_explode | net | ZSFX clips [Enemy_Moose_DeathExplode_01, Enemy_Moose_DeathExplode_02, Enemy_Moose_DeathExplode_03, Enemy_Moose_DeathExplode_04, Enemy_Moose_DeathExplode_05] pitch 1-1 vol 0.3-0.45; TimedDestruction |
+| sfx_moose_hurt | net | ZSFX clips [Enemy_Moose_Alert_01, Enemy_Moose_Alert_02, Enemy_Moose_Alert_03, Enemy_Moose_Alert_04, Enemy_Moose_Alert_05] pitch 1-1 vol 0.3-0.45; TimedDestruction |
 | sfx_morgen_death | net | ZSFX clips [Enemy_Morgen_Death_01, Enemy_Morgen_Death_02, Enemy_Morgen_Death_03, Enemy_Morgen_Death_04, Enemy_Morgen_Death_05] pitch 1-1 vol 1.4-1.6; TimedDestruction |
+| sfx_neck_attack_hit | net | ZSFX clips [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] pitch 0.8-0.9 vol 0.5-0.5; TimedDestruction |
 | sfx_neck_death | net | ZSFX clips [Hit_LargeInsectSplat1, Hit_LargeInsectSplat2] pitch 0.7-0.8 vol 0.7-0.7; TimedDestruction |
+| sfx_neck_hit | net | ZSFX clips [GiantBeetle_Spit1] pitch 0.9-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_oozebomb_explode | net | ZSFX clips [Player_Weapon_OozeBomb_Impact_S_01, Player_Weapon_OozeBomb_Impact_S_02, Player_Weapon_OozeBomb_Impact_S_03] pitch 0.95-1 vol 1.1-1.3; TimedDestruction |
+| sfx_pickaxe_hit | net | ZSFX clips [Hit_Metal_HighPitch1, Hit_Metal_HighPitch7, Hit_Metal_HighPitch5, Hit_Metal_HighPitch3, Hit_Metal_HighPitch2, Hit_Metal_HighPitch4, Hit_Metal_HighPitch6] pitch 0.9-1.1 vol 0.4-0.4; TimedDestruction |
+| sfx_pickaxe_hit_vibration_only | net | ZSFX clips [Hit_Metal_HighPitch1_amplified_vibration, Hit_Metal_HighPitch7_amplified_vibration, Hit_Metal_HighPitch5_amplified_vibration, Hit_Metal_HighPitch3_amplified_vibration, Hit_Metal_HighPitch2_amplified_vibration, Hit_Metal_HighPitch4_amplified_vibration, Hit_Metal_HighPitch6_amplified_vibration] pitch 0.9-1.1 vol 0.9-1; TimedDestruction |
+| sfx_rock_hit | net | ZSFX clips [Hit_HammerSmashRock2, Hit_HammerSmashRock1] pitch 0.9-1.1 vol 0.6-0.6; TimedDestruction |
 | sfx_seal_death | net | ZSFX clips [Enemy_Seal_Death_01, Enemy_Seal_Death_02, Enemy_Seal_Death_03, Enemy_Seal_Death_04, Enemy_Seal_Death_05, Enemy_Seal_Death_07, Enemy_Seal_Death_06] pitch 1-1 vol 0.45-0.55; TimedDestruction |
+| sfx_serpent_attack_hit | net | ZSFX clips [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] pitch 0.8-0.9 vol 0.8-0.8; TimedDestruction |
 | sfx_serpent_death | net | ZSFX clips [Blood_Splat_Gib05, Blood_Splat_Gib06, Blood_Splat_Gib07] pitch 1-1.1 vol 1-1; TimedDestruction |
+| sfx_serpent_hurt | net | ZSFX clips [Blood_Splat_Gib01, Blood_Splat_Gib02, Blood_Splat_Gib03] pitch 0.9-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_shieldgenerator_hit | net | ZSFX clips [Shield_Generator_Hit_01, Shield_Generator_Hit_02, Shield_Generator_Hit_03, Shield_Generator_Hit_04, Shield_Generator_Hit_05, Shield_Generator_Hit_06] pitch 1-1 vol 1.3-1.5; TimedDestruction |
+| sfx_silvermace_hit | net | ZSFX clips [Hit_BigMetalPunch] pitch 1-1.2 vol 0.9-0.9; ZSFX clips [MagicSpell_IceBallShoot] pitch 0.9-1 vol 1-1; TimedDestruction |
 | sfx_skeleton_basic_death | net | ZSFX clips [Enemy_Skeleton_Basic_Death_01, Enemy_Skeleton_Basic_Death_02, Enemy_Skeleton_Basic_Death_03] pitch 0.95-1.1 vol 0.8-0.8; TimedDestruction |
 | sfx_skeleton_big_death | net | ZSFX clips [Skeleton_Death_BoneShatter1, Skeleton_Hit_Shatter2, Skeleton_Hit_Shatter1] pitch 0.9-1.1 vol 1-1; ZSFX clips [Zombie08_Death1] pitch 0.9-1 vol 1-1; TimedDestruction |
 | sfx_skeleton_death | net | ZSFX clips [Skeleton_Death_BoneShatter1, Skeleton_Hit_Shatter2, Skeleton_Hit_Shatter1] pitch 0.9-1.1 vol 1-1; TimedDestruction |
 | sfx_skeleton_frozen_death | net | ZSFX clips [Enemy_Skeleton_DeepNorth_Death_01, Enemy_Skeleton_DeepNorth_Death_02, Enemy_Skeleton_DeepNorth_Death_03] pitch 0.95-1.1 vol 0.8-0.8; TimedDestruction |
 | sfx_skeleton_hildir_death | net | ZSFX clips [Enemy_Skeleton_Hildir_Death_01, Enemy_Skeleton_Hildir_Death_02, Enemy_Skeleton_Hildir_Death_03] pitch 0.95-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_skeleton_hit | net | ZSFX clips [Skeleton_Death_BoneHit1, Skeleton_Death_BoneHit2, Skeleton_Death_BoneHit3, Skeleton_Hit_Bone1] pitch 0.9-1.1 vol 0.5-0.5; TimedDestruction |
+| sfx_skeleton_mace_hit | net | ZSFX clips [DarkMagic_SpellImpact18] pitch 1-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_skeleton_poison_attack_melee | net | ZSFX clips [Enemy_Skeleton_Poison_Attack_Melee_01, Enemy_Skeleton_Poison_Attack_Melee_02, Enemy_Skeleton_Poison_Attack_Melee_03] pitch 0.95-1.1 vol 0.8-0.8; TimedDestruction |
 | sfx_skeleton_poison_death | net | ZSFX clips [Enemy_Skeleton_Poison_Death_01, Enemy_Skeleton_Poison_Death_02, Enemy_Skeleton_Poison_Death_03] pitch 0.95-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_skeleton_poison_verse_attack | net | ZSFX clips [Enemy_Skeleton_Poison_Verse_Attack_01, Enemy_Skeleton_Poison_Verse_Attack_02, Enemy_Skeleton_Poison_Verse_Attack_03, Enemy_Skeleton_Poison_Verse_Attack_04, Enemy_Skeleton_Poison_Verse_Attack_05, Enemy_Skeleton_Poison_Verse_Attack_06, Enemy_Skeleton_Poison_Verse_Attack_07] pitch 0.95-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_skeleton_poison_verse_idle | net | ZSFX clips [Enemy_Skeleton_Poison_Verse_Idle_01, Enemy_Skeleton_Poison_Verse_Idle_02, Enemy_Skeleton_Poison_Verse_Idle_03, Enemy_Skeleton_Poison_Verse_Idle_04, Enemy_Skeleton_Poison_Verse_Idle_05, Enemy_Skeleton_Poison_Verse_Idle_06] pitch 0.95-1.1 vol 0.8-0.8; TimedDestruction |
 | sfx_skeleton_swamp_death | net | ZSFX clips [Enemy_Skeleton_Swamp_Death_01, Enemy_Skeleton_Swamp_Death_02, Enemy_Skeleton_Swamp_Death_03] pitch 0.95-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_sledge_hit | net | ZSFX clips [Player_Movement_SledgeHit_M_01, Player_Movement_SledgeHit_M_02, Player_Movement_SledgeHit_M_03] pitch 0.85-1 vol 0.8-0.9; TimedDestruction |
+| sfx_sledge_iron_hit | net | ZSFX clips [Player_Movement_SledgeHit_M_01, Player_Movement_SledgeHit_M_02, Player_Movement_SledgeHit_M_03] pitch 0.85-1 vol 0.7-0.8; ZSFX clips [Weapons_IronSledge_Impact_S_01, Weapons_IronSledge_Impact_S_02, Weapons_IronSledge_Impact_S_03] pitch 0.85-1 vol 1.2-1.4; TimedDestruction |
+| sfx_snow_hit_debris | net | ZSFX clips [Snow_Hit_Debris_01, Snow_Hit_Debris_02, Snow_Hit_Debris_03, Snow_Hit_Debris_04, Snow_Hit_Debris_05] pitch 0.8-1.1 vol 1-1; TimedDestruction |
+| sfx_snow_hit_transient | net | ZSFX clips [Snow_Hit_Transient_01, Snow_Hit_Transient_02, Snow_Hit_Transient_03, Snow_Hit_Transient_04, Snow_Hit_Transient_05] pitch 0.8-1 vol 1.5-1.5; TimedDestruction |
+| sfx_spear_flint_hit | net | ZSFX clips [Player_Movement_Spear_Flint_Hit_M_01, Player_Movement_Spear_Flint_Hit_M_02, Player_Movement_Spear_Flint_Hit_M_03, Player_Movement_Spear_Flint_Hit_M_04] pitch 0.8-1 vol 1-1.2; TimedDestruction |
+| sfx_spear_hit | net | ZSFX clips [Player_Movement_Spear_Hit_M_01, Player_Movement_Spear_Hit_M_02, Player_Movement_Spear_Hit_M_03, Player_Movement_Spear_Hit_M_04, Player_Movement_Spear_Hit_M_05] pitch 0.8-1 vol 1-1.2; TimedDestruction |
+| sfx_staff_elder_root_hit | net | ZSFX clips [Player_Weapons_ElderStaff_RootHit_01, Player_Weapons_ElderStaff_RootHit_02, Player_Weapons_ElderStaff_RootHit_03, Player_Weapons_ElderStaff_RootHit_04, Player_Weapons_ElderStaff_RootHit_05] pitch 1-1 vol 2.4-2.4; TimedDestruction |
 | sfx_staffthunderblood_cast | net | ZSFX clips [Weapons_StaffThunderBlood_Cast_01, Weapons_StaffThunderBlood_Cast_02, Weapons_StaffThunderBlood_Cast_03, Weapons_StaffThunderBlood_Cast_04] pitch 0.85-1.15 vol 1.2-1.45; TimedDestruction |
 | sfx_staffthunderblood_thunder | net | ZSFX clips [Weapons_StaffThunderBlood_Thunder_01, Weapons_StaffThunderBlood_Thunder_02, Weapons_StaffThunderBlood_Thunder_03, Weapons_StaffThunderBlood_Thunder_04] pitch 0.85-1.15 vol 1.1-1.3; TimedDestruction |
+| sfx_stonegolem_attack_hit | net | ZSFX clips [Smash_RockShatter] pitch 0.8-1 vol 0.8-0.8; TimedDestruction |
 | sfx_stonegolem_death | net | ZSFX clips [Smash_HugeRockImpact3] pitch 0.9-1.1 vol 1-1; ZSFX clips [EvilMonster_Breath] pitch 0.9-1 vol 1-1; TimedDestruction |
+| sfx_stonegolem_hurt | net | ZSFX clips [Smash_Gravestone3, Smash_Gravestone4, Smash_Gravestone5] pitch 0.8-1 vol 0.8-0.8; TimedDestruction |
+| sfx_sword_hit | net | ZSFX clips [Player_Movement_Sword_Hit_M_01, Player_Movement_Sword_Hit_M_02, Player_Movement_Sword_Hit_M_03, Player_Movement_Sword_Hit_M_04, Player_Movement_Sword_Hit_M_05] pitch 0.75-0.95 vol 0.5-0.5; ZSFX clips [Player_Movement_Sword_Hit_Overlay_M_01, Player_Movement_Sword_Hit_Overlay_M_02, Player_Movement_Sword_Hit_Overlay_M_03, Player_Movement_Sword_Hit_Overlay_M_04, Player_Movement_Sword_Hit_Overlay_M_05] pitch 0.8-1.1 vol 0.7-1; TimedDestruction |
 | sfx_tick_alerted | net | ZSFX clips [Enemy_Tick_Alerted_01, Enemy_Tick_Alerted_02, Enemy_Tick_Alerted_03, Enemy_Tick_Alerted_04, Enemy_Tick_Alerted_05, Enemy_Tick_Alerted_06] pitch 0.9-1.1 vol 1-1; TimedDestruction |
 | sfx_tick_attack_drain | net | ZSFX clips [Enemy_Tick_Drain_01, Enemy_Tick_Drain_02, Enemy_Tick_Drain_03, Enemy_Tick_Drain_04, Enemy_Tick_Drain_05, Enemy_Tick_Drain_06, Enemy_Tick_Drain_07, Enemy_Tick_Drain_08] pitch 0.9-1.1 vol 1-1; TimedDestruction |
 | sfx_tick_attack_jump | net | ZSFX clips [Enemy_Tick_DrainAttack_01, Enemy_Tick_DrainAttack_02, Enemy_Tick_DrainAttack_03, Enemy_Tick_DrainAttack_04, Enemy_Tick_DrainAttack_05, Enemy_Tick_DrainAttack_06] pitch 0.9-1.1 vol 1-1; TimedDestruction |
 | sfx_tick_hurt | net | ZSFX clips [Enemy_Tick_Hurt_01, Enemy_Tick_Hurt_02, Enemy_Tick_Hurt_03, Enemy_Tick_Hurt_04, Enemy_Tick_Hurt_05, Enemy_Tick_Hurt_06] pitch 0.9-1.1 vol 1-1; TimedDestruction |
 | sfx_tick_idle | net | ZSFX clips [Enemy_Tick_Idle_01, Enemy_Tick_Idle_02, Enemy_Tick_Idle_03, Enemy_Tick_Idle_04, Enemy_Tick_Idle_05, Enemy_Tick_Idle_06, Enemy_Tick_Idle_07, Enemy_Tick_Idle_08, Enemy_Tick_Idle_09, Enemy_Tick_Idle_10] pitch 0.9-1.1 vol 0.5-0.8; TimedDestruction |
+| sfx_tree_fall_hit | net | ZSFX clips [Objects_Tree_Fall_Hit_01, Objects_Tree_Fall_Hit_02, Objects_Tree_Fall_Hit_03, Objects_Tree_Fall_Hit_04, Objects_Tree_Fall_Hit_05, Objects_Tree_Fall_Hit_06] pitch 0.8-1 vol 0.35-0.4; TimedDestruction |
+| sfx_tree_hit | net | ZSFX clips [Env_Tree_Hit_S_01, Env_Tree_Hit_S_02, Env_Tree_Hit_S_03, Env_Tree_Hit_S_04, Env_Tree_Hit_S_05, Env_Tree_Hit_S_06, Env_Tree_Hit_S_07] pitch 0.8-1.1 vol 0.4-0.6; TimedDestruction |
+| sfx_tree_hit_abomination | net | ZSFX clips [Env_Tree_Hit_S_01, Env_Tree_Hit_S_02, Env_Tree_Hit_S_03, Env_Tree_Hit_S_04, Env_Tree_Hit_S_05, Env_Tree_Hit_S_06, Env_Tree_Hit_S_07] pitch 0.8-1.1 vol 0.4-0.6; TimedDestruction |
+| sfx_troll_attack_hit | net | ZSFX clips [Hit_DeepHugeChestThump1] pitch 0.9-1.1 vol 1-1; TimedDestruction |
 | sfx_troll_death | net | ZSFX clips [RockMonster_DeathRoar1] pitch 0.9-1.1 vol 1-1; TimedDestruction |
+| sfx_troll_hit | net | ZSFX clips [Hit_SlimeSplat4, Hit_SlimeSplat8] pitch 0.9-1 vol 0.5-0.5; TimedDestruction |
 | sfx_trollfire_death | net | ZSFX clips [Enemy_Firetroll_Death_01, Enemy_Firetroll_Death_02, Enemy_Firetroll_Death_03] pitch 0.9-1.1 vol 1.6-1.6; TimedDestruction |
 | sfx_ulv_death | net | ZSFX clips [Zombie09_Death4, Zombie09_Death5] pitch 0.9-1 vol 0.6-0.6; TimedDestruction |
+| sfx_unarmed_hit | net | ZSFX clips [Player_Movement_Unarmed_Hit_M_01, Player_Movement_Unarmed_Hit_M_02, Player_Movement_Unarmed_Hit_M_03, Player_Movement_Unarmed_Hit_M_04] pitch 0.8-1.1 vol 0.8-1; TimedDestruction |
 | sfx_unbjorn_death | net | ZSFX clips [Enemy_Unbjorn_Death_01, Enemy_Unbjorn_Death_02, Enemy_Unbjorn_Death_03, Enemy_Unbjorn_Death_04, Enemy_Unbjorn_Death_05, Enemy_Unbjorn_Death_06] pitch 1-1 vol 0.3-0.45; TimedDestruction |
+| sfx_unbjorn_hurt | net | ZSFX clips [Enemy_Unbjorn_Hurt_01, Enemy_Unbjorn_Hurt_02, Enemy_Unbjorn_Hurt_03, Enemy_Unbjorn_Hurt_04, Enemy_Unbjorn_Hurt_05, Enemy_Unbjorn_Hurt_06, Enemy_Unbjorn_Hurt_07, Enemy_Unbjorn_Hurt_08] pitch 1-1 vol 0.3-0.45; TimedDestruction |
 | sfx_vulture_death | net | ZSFX clips [Enemy_Vulture_Death_01, Enemy_Vulture_Death_02, Enemy_Vulture_Death_03, Enemy_Vulture_Death_04] pitch 0.9-1.1 vol 0.9-1; TimedDestruction |
+| sfx_wolf_attack_hit | net | ZSFX clips [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] pitch 0.8-0.9 vol 0.5-0.5; TimedDestruction |
 | sfx_wolf_death | net | ZSFX clips [ZombieDog_Death1, ZombieDog_Death2] pitch 0.9-1 vol 1-1; TimedDestruction |
+| sfx_wolf_hit | net | ZSFX clips [ZombieDog_Hurt1] pitch 0.9-1.1 vol 0.5-0.5; TimedDestruction |
+| sfx_wood_hit | net | ZSFX clips [Crash_WoodBeam5_1] pitch 1-1.2 vol 0.4-0.3; TimedDestruction |
+| sfx_wraith_attack_hit | net | ZSFX clips [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] pitch 0.8-0.9 vol 1-1; TimedDestruction |
 | sfx_wraith_death | net | ZSFX clips [EvilGhost_Death3] pitch 1-1.1 vol 1-1; ZSFX clips [FlameThrower_ShotBurst2, FlameThrower_ShotBurst3, FlameThrower_ShotBurst4, FlameThrower_ShotBurst5] pitch 0.9-1.1 vol 0.8-0.8; TimedDestruction |
+| sfx_wraith_hit | net | ZSFX clips [Ghost05_Hurt_Grunt] pitch 1.1-1.2 vol 0.8-0.8; TimedDestruction |
 | sfx_writhan_death_charge | net | ZSFX clips [Enemy_Writhan_Death_Charge_01, Enemy_Writhan_Death_Charge_02, Enemy_Writhan_Death_Charge_03] pitch 1-1 vol 0.6-0.8; TimedDestruction |
 | sfx_writhan_death_explosion | net | ZSFX clips [Enemy_Writhan_Death_Explosion_01, Enemy_Writhan_Death_Explosion_02, Enemy_Writhan_Death_Explosion_03] pitch 0.95-1.05 vol 0.75-1; TimedDestruction |
 | sfx_writhan_verse_death | net | ZSFX clips [Enemy_Writhan_Verse_Death_01, Enemy_Writhan_Verse_Death_02, Enemy_Writhan_Verse_Death_03, Enemy_Writhan_Verse_Death_04] pitch 1-1 vol 0.6-0.8; TimedDestruction |
+| vfx_ArcheryTarget_hit | net | 2 ParticleSystem; TimedDestruction |
+| vfx_BigBlob_destroyed | net | Gibber, ZNetView |
 | vfx_BloodDeath | net | 5 ParticleSystem; TimedDestruction |
 | vfx_BloodHit | net | 5 ParticleSystem; TimedDestruction |
+| vfx_BombBlob_explode_frost | net | 3 ParticleSystem; TimedDestruction |
+| vfx_BombBlob_explode_lava | net | 5 ParticleSystem; TimedDestruction |
+| vfx_BombBlob_explode_morkhalla | net | 3 ParticleSystem; TimedDestruction |
+| vfx_BombBlob_explode_poison | net | 3 ParticleSystem; TimedDestruction |
+| vfx_BombBlob_explode_poisonelite | net | 3 ParticleSystem; TimedDestruction |
+| vfx_BombBlob_explode_tar | net | 3 ParticleSystem; TimedDestruction |
 | vfx_BonemassDeath | net | 8 ParticleSystem; TimedDestruction |
+| vfx_BonemassHit | net | 6 ParticleSystem; TimedDestruction |
 | vfx_BugRepellent | net | 4 ParticleSystem |
+| vfx_Burning_green | net | ZSFX clips [UI_Player_FireDamage_Ignite_01, UI_Player_FireDamage_Ignite_02, UI_Player_FireDamage_Ignite_03, UI_Player_FireDamage_Ignite_04] pitch 1-1 vol 1-1; ZSFX clips [UI_Player_FireDamage_Burn_Loop] pitch 1-1 vol 1-1; 8 ParticleSystem; TimedDestruction |
+| vfx_CoalHit | net | 2 ParticleSystem; TimedDestruction |
+| vfx_ColdBall_Hit | net | 4 ParticleSystem; TimedDestruction |
 | vfx_FallenWarrior_death | net | 2 ParticleSystem; TimedDestruction |
+| vfx_FallenWarrior_hit | net | 2 ParticleSystem; TimedDestruction |
+| vfx_FireballHit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_Firework_Rocket_Green | net | 4 ParticleSystem; TimedDestruction |
+| vfx_GuckSackDestroyed | net | 4 ParticleSystem; TimedDestruction |
+| vfx_GuckSackHit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_GuckSackSmall_Destroyed | net | 4 ParticleSystem; TimedDestruction |
+| vfx_HitSparks | net | 2 ParticleSystem; TimedDestruction |
 | vfx_ImpDeath | net | 3 ParticleSystem; TimedDestruction |
+| vfx_MarbleHit | net | 2 ParticleSystem; TimedDestruction |
+| vfx_MudHit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_Poison | net | 3 ParticleSystem |
+| vfx_ProjectileHit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_RockHit | net | 2 ParticleSystem; TimedDestruction |
+| vfx_RockHit_Marble | net | 2 ParticleSystem; TimedDestruction |
+| vfx_RockHit_Obsidian | net | 3 ParticleSystem; TimedDestruction |
 | vfx_ShadowPerson_death | net | 2 ParticleSystem; TimedDestruction |
+| vfx_ShadowPerson_hit | net | 2 ParticleSystem; TimedDestruction |
+| vfx_Slimed | net | 1 ParticleSystem |
+| vfx_TrainingDummy_hit | net | 2 ParticleSystem; TimedDestruction |
 | vfx_TrollFrost_Death | net | 2 ParticleSystem; TimedDestruction |
+| vfx_arrowhit | net | 2 ParticleSystem; TimedDestruction |
 | vfx_ashlandsbow_blood_fire | net | 2 ParticleSystem; TimedDestruction |
+| vfx_barnacle_hit | net | 2 ParticleSystem; TimedDestruction |
+| vfx_beehive_hit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_blob_attack | net | 4 ParticleSystem; TimedDestruction |
 | vfx_blob_death | net | 5 ParticleSystem; TimedDestruction |
+| vfx_blob_frost_attack | net | 3 ParticleSystem; TimedDestruction |
 | vfx_blob_frost_death | net | 4 ParticleSystem; TimedDestruction |
+| vfx_blob_frost_hit | net | 2 ParticleSystem; TimedDestruction |
+| vfx_blob_hit | net | 5 ParticleSystem; TimedDestruction |
+| vfx_blobelite_attack | net | 4 ParticleSystem; TimedDestruction |
+| vfx_blobmork_attack | net | 4 ParticleSystem; TimedDestruction |
 | vfx_blobmork_death | net | 5 ParticleSystem; TimedDestruction |
+| vfx_blobmork_hit | net | 5 ParticleSystem; TimedDestruction |
 | vfx_blobtar_death | net | 7 ParticleSystem; TimedDestruction |
+| vfx_blobtar_hit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_boar_birth | net | 2 ParticleSystem; TimedDestruction |
 | vfx_boar_death | net | 5 ParticleSystem; TimedDestruction |
+| vfx_boar_hit | net | 5 ParticleSystem; TimedDestruction |
+| vfx_boar_love | net | 1 ParticleSystem; TimedDestruction |
 | vfx_bonemawserpent_death | net | 7 ParticleSystem; TimedDestruction |
+| vfx_bush2_e_hit | net | 2 ParticleSystem; TimedDestruction |
+| vfx_clubhit | net | 1 ParticleSystem; TimedDestruction |
 | vfx_crossbow_blood_fire | net | 3 ParticleSystem; TimedDestruction |
 | vfx_crow_death | net | 3 ParticleSystem; TimedDestruction |
 | vfx_deer_death | net | 5 ParticleSystem; TimedDestruction |
+| vfx_deer_hit | net | 5 ParticleSystem; TimedDestruction |
 | vfx_dragon_death | net | ZSFX clips [FlameThrower_ShotBurst2, FlameThrower_ShotBurst3, FlameThrower_ShotBurst4, FlameThrower_ShotBurst5] pitch 0.9-1 vol 0.8-0.8; 11 ParticleSystem; TimedDestruction |
+| vfx_dragon_hurt | net | 6 ParticleSystem; TimedDestruction |
+| vfx_dragon_ice_hit | net | 4 ParticleSystem; TimedDestruction |
 | vfx_dragonegg_destroy | net | 5 ParticleSystem; TimedDestruction |
 | vfx_draugr_death | net | 4 ParticleSystem; TimedDestruction |
+| vfx_draugr_hit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_draugrpile_hit | net | 4 ParticleSystem; TimedDestruction |
 | vfx_eikthyr_death | net | 7 ParticleSystem; TimedDestruction |
 | vfx_fenring_cultist_death | net | ZSFX clips [FlameThrower_ShotLoop4, FlameThrower_ShotLoop5] pitch 0.9-1.1 vol 1-1; 8 ParticleSystem; TimedDestruction |
 | vfx_fenring_cultist_hildir_death | net | ZSFX clips [FlameThrower_ShotLoop4, FlameThrower_ShotLoop5] pitch 0.9-1.1 vol 1-1; 8 ParticleSystem; TimedDestruction |
 | vfx_fenring_death | net | 5 ParticleSystem; TimedDestruction |
+| vfx_fenring_hurt | net | 6 ParticleSystem; TimedDestruction |
 | vfx_firetreecut_snow_FrostTrollDeath | net | 3 ParticleSystem; TimedDestruction |
+| vfx_foresttroll_hit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_frostarrow_hit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_frosttroll_hit | net | 4 ParticleSystem; TimedDestruction |
 | vfx_frozenking_death | net | ZSFX clips [Wind_RushingStormLoop] pitch 1-1 vol 1-1; 13 ParticleSystem; TimedDestruction |
 | vfx_frozenking_final_death | net | ZSFX clips [Wind_RushingStormLoop] pitch 1-1 vol 1-1; 51 ParticleSystem; TimedDestruction |
 | vfx_frozenking_final_death_ground | net | 8 ParticleSystem; TimedDestruction |
 | vfx_ghost_death | net | 5 ParticleSystem; TimedDestruction |
+| vfx_ghost_hit | net | 1 ParticleSystem; TimedDestruction |
 | vfx_goblin_death | net | 6 ParticleSystem; TimedDestruction |
 | vfx_goblin_dn_death | net | 6 ParticleSystem; TimedDestruction |
+| vfx_goblin_dn_hit | net | 6 ParticleSystem; TimedDestruction |
+| vfx_goblin_hit | net | 6 ParticleSystem; TimedDestruction |
 | vfx_goblinbrute_death | net | 6 ParticleSystem; TimedDestruction |
 | vfx_goblinbrute_hildir_death | net | 6 ParticleSystem; TimedDestruction |
+| vfx_goblinbrute_hit | net | 6 ParticleSystem; TimedDestruction |
 | vfx_greydwarf_death | net | 8 ParticleSystem; TimedDestruction |
 | vfx_greydwarf_elite_death | net | 8 ParticleSystem; TimedDestruction |
+| vfx_greydwarf_hit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_greydwarfnest_hit | net | 5 ParticleSystem; TimedDestruction |
 | vfx_hatchling_death | net | 13 ParticleSystem; TimedDestruction |
+| vfx_hatchling_hurt | net | 6 ParticleSystem; TimedDestruction |
+| vfx_hjall_spit_hit | net | ZSFX clips [Enemy_Gjall_Spit_Impact_01, Enemy_Gjall_Spit_Impact_02, Enemy_Gjall_Spit_Impact_03, Enemy_Gjall_Spit_Impact_04] pitch 0.9-1 vol 1-1; 10 ParticleSystem; TimedDestruction |
+| vfx_ice_hit | net | 2 ParticleSystem; TimedDestruction |
 | vfx_leech_death | net | 5 ParticleSystem; TimedDestruction |
+| vfx_leech_hit | net | 5 ParticleSystem; TimedDestruction |
 | vfx_neck_death | net | 8 ParticleSystem; TimedDestruction |
+| vfx_neck_hit | net | 4 ParticleSystem; TimedDestruction |
 | vfx_player_death | net | 6 ParticleSystem; TimedDestruction |
+| vfx_player_hit | net | 6 ParticleSystem; TimedDestruction |
+| vfx_poisonarrow_hit | net | 3 ParticleSystem; TimedDestruction |
 | vfx_seagull_death | net | 3 ParticleSystem; TimedDestruction |
+| vfx_seal_hit | net | 6 ParticleSystem; TimedDestruction |
 | vfx_seekerbrute_groundslam | net | 6 ParticleSystem; TimedDestruction |
 | vfx_serpent_death | net | 7 ParticleSystem; TimedDestruction |
+| vfx_serpent_hurt | net | 5 ParticleSystem; TimedDestruction |
+| vfx_shrub_2_hit | net | 1 ParticleSystem; TimedDestruction |
+| vfx_shrub_heath_hit | net | 1 ParticleSystem; TimedDestruction |
+| vfx_silvermace_hit | net | 3 ParticleSystem; TimedDestruction |
 | vfx_skeleton_big_death | net | 4 ParticleSystem; TimedDestruction |
 | vfx_skeleton_death | net | 4 ParticleSystem; TimedDestruction |
 | vfx_skeleton_fire_death | net | 4 ParticleSystem; TimedDestruction |
+| vfx_skeleton_hit | net | 2 ParticleSystem; TimedDestruction |
+| vfx_skeleton_mace_hit | net | 3 ParticleSystem; TimedDestruction |
+| vfx_sledge_hit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_sledge_iron_hit | net | 4 ParticleSystem; TimedDestruction |
+| vfx_stonegolem_attack_hit | net | 4 ParticleSystem; TimedDestruction |
 | vfx_stonegolem_death | net | 5 ParticleSystem; TimedDestruction |
+| vfx_stonegolem_hurt | net | 4 ParticleSystem; TimedDestruction |
+| vfx_torch_hit | net | 3 ParticleSystem; TimedDestruction |
+| vfx_tree_fall_hit | net | 1 ParticleSystem; TimedDestruction |
+| vfx_troll_attack_hit | net | 2 ParticleSystem; TimedDestruction |
 | vfx_troll_death | net | 5 ParticleSystem; TimedDestruction |
+| vfx_troll_log_hitground | net | 3 ParticleSystem; TimedDestruction |
 | vfx_troll_summoned_death | net | 4 ParticleSystem; TimedDestruction |
+| vfx_trollsnow_attack_hit | net | 2 ParticleSystem; TimedDestruction |
 | vfx_ulv_death | net | 5 ParticleSystem; TimedDestruction |
 | vfx_wolf_death | net | 5 ParticleSystem; TimedDestruction |
+| vfx_wolf_hit | net | 6 ParticleSystem; TimedDestruction |
 | vfx_wraith_death | net | 10 ParticleSystem; TimedDestruction |
+| vfx_wraith_hit | net | 1 ParticleSystem; TimedDestruction |
 
 <details><summary>All sfx_* (791)</summary>
 
@@ -787,8 +2018,6 @@ Immediate test: `new Material(shader) { enableInstancing = true }`, read back, t
 
 `Custom/Piece` (33 properties): `_TriplanarFoldout` Float, `_TriplanarMap` Float, `_TriplanarLocalPos` Float, `_TriplanarScale` Float, `_ColorFoldout` Float, `_MainTex` Texture, `_Color` Color, `_MainTex_ST` Vector, `_Cutoff` Range, `_EmissionSpacer` Float, `_EmissionMap` Texture, `_EmissionColor` Color, `_SmoothnessFoldout` Float, `_MetallicTex` Texture, `_Metallic` Range, `_MetalColor` Color, `_Glossiness` Range, `_MetallicAlphaGloss` Range, `_NormalFoldout` Float, `_BumpMap` Texture, `_BumpScale` Float, `_TwoSidedNormals` Float, `_NoiseFoldout` Float, `_NoiseTex` Texture, `_ValueNoise` Float, `_RippleDistance` Float, `_RippleFreq` Float, `_ValueNoiseVertex` Float, `_MiscFoldout` Float, `_Cull` Float, `_AddRain` Float, `_AddSnow` Int, `_MoveableObject` Float
 
-`Standard` (27 properties): `_Color` Color, `_MainTex` Texture, `_Cutoff` Range, `_Glossiness` Range, `_GlossMapScale` Range, `_SmoothnessTextureChannel` Float, `_Metallic` Range, `_MetallicGlossMap` Texture, `_SpecularHighlights` Float, `_GlossyReflections` Float, `_BumpScale` Float, `_BumpMap` Texture, `_Parallax` Range, `_ParallaxMap` Texture, `_OcclusionStrength` Range, `_OcclusionMap` Texture, `_EmissionColor` Color, `_EmissionMap` Texture, `_DetailMask` Texture, `_DetailAlbedoMap` Texture, `_DetailNormalMapScale` Float, `_DetailNormalMap` Texture, `_UVSec` Float, `_Mode` Float, `_SrcBlend` Float, `_DstBlend` Float, `_ZWrite` Float
-
 `Legacy Shaders/Diffuse` (2 properties): `_Color` Color, `_MainTex` Texture
 
 `Custom/Vegetation` (35 properties): `_MainTex` Texture, `_Color` Color, `_Glossiness` Range, `_Metallic` Range, `_Cutoff` Range, `_USEMETALMAP` Float, `_MetalTex` Texture, `_MetalGloss` Range, `_BumpMap` Texture, `_BumpScale` Float, `_TwoSidedNormals` Float, `_SphereNormals` Range, `_SphereOffset` Float, `_EmissiveTex` Texture, `_EmissionColor` Color, `_MossTex` Texture, `_MossAlpha` Range, `_MossBlend` Range, `_MossNormal` Range, `_MossTransition` Float, `_AddSnow` Float, `_SnowSparkleLum` Float, `_AddRain` Float, `_UV2Height` Float, `_Height` Float, `_SwaySpeed` Float, `_SwayDistance` Float, `_RippleSpeed` Float, `_RippleDistance` Float, `_RippleDeadzoneMin` Range, `_RippleDeadzoneMax` Range, `_PushDistance` Float, `_PushClothMode` Float, `_CamCull` Float, `_Cull` Float
@@ -896,6 +2125,10 @@ Static masks are lazily initialised by vanilla (0 until the first attack/project
 | Aoe.m_rayMask (hitProps part) | per instance | 403997697 | 0:Default, 10:piece, 15:static_solid, 18:hitbox, 20:Default_small, 27:character_noenv, 28:vehicle |
 | Aoe.m_rayMask (hitTerrain part) | per instance | 2048 | 11:terrain |
 
+### Worm proxy layer (phase 3)
+
+proxy layer matrix (ignore = no physical collision): hitbox(18){character=ignore character_net=ignore character_ghost=ignore character_noenv=ignore Default=ignore static_solid=ignore terrain=ignore } character_noenv(27){character=COLLIDES character_net=COLLIDES character_ghost=ignore character_noenv=COLLIDES Default=ignore static_solid=ignore terrain=ignore } -> hitbox (clean). `Physics.GetIgnoreLayerCollision` read at runtime; see decisions.md 47.
+
 ### Attack setup of a few vanilla items
 
 | Item | Attack | Type | HitTerrain | Range | RayWidth | Projectile | Projectile setup |
@@ -955,6 +2188,753 @@ Static masks are lazily initialised by vanilla (0 until the first attack/project
 | Render pipeline | built-in |
 | Graphics.RenderMeshInstanced available | True |
 | Dedicated server | False |
+
+## 9. Custom/Creature shader: keywords, defaults, ranges
+
+### Keyword space
+
+27 keywords: `STEREO_INSTANCING_ON`, `UNITY_SINGLE_PASS_STEREO`, `STEREO_MULTIVIEW_ON`, `STEREO_CUBEMAP_RENDER_ON`, `LOD_FADE_CROSSFADE`, `INSTANCING_ON`, `FOG_LINEAR`, `FOG_EXP`, `FOG_EXP2`, `DIRECTIONAL`, `LIGHTPROBE_SH`, `SHADOWS_SHADOWMASK`, `DYNAMICLIGHTMAP_ON`, `LIGHTMAP_ON`, `LIGHTMAP_SHADOW_MIXING`, `DIRLIGHTMAP_COMBINED`, `SHADOWS_SCREEN`, `VERTEXLIGHT_ON`, `NOISEGLOW`, `POINT`, `SPOT`, `POINT_COOKIE`, `DIRECTIONAL_COOKIE`, `UNITY_HDR_ON`, `SHADOWS_DEPTH`, `SHADOWS_CUBE`, `EDITOR_VISUALIZATION`
+
+### Property defaults and range limits
+
+| Property | Type | Default | Range limits |
+| --- | --- | --- | --- |
+| _Cutoff | Range | 0.5 | 0 .. 1 |
+| _Glossiness | Range | 0.5 | 0 .. 1 |
+| _MetalGloss | Range | 0 | 0 .. 1 |
+| _NoiseGlowEdge | Range | 0 | 0 .. 1 |
+| _BumpScale | Range | 1 | 0 .. 10 |
+
+## 10. Particle systems of priority and hit / hurt / blood effects
+
+Detailed: the priority list (19) plus every sfx_/vfx_/fx_ prefab whose name contains blood, hurt or hit (222 prefabs). Missing priority prefabs: none.
+
+| Prefab | Priority | ParticleSystem | Details |
+| --- | --- | --- | --- |
+| fx_Abomination_attack_hit |  | fx_Abomination_attack_hit | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.574, 0.574, 0.574, 1) \| startSize: TwoConstants 0.01 .. 0.05 \| startLifetime: Constant 4 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_Abomination_attack_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.419, 0.419, 0.419, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.02 .. 0.03 \| startLifetime: Constant 4 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| fx_Abomination_attack_hit |  | dust | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: Constant 4 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 0.472) |
+| fx_Abomination_attack_hit |  | twiggs | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: TwoConstants 4 .. 7 \| maxParticles 100 \| simulationSpace World \| renderer: mode Mesh; shader Standard; material branch; _MainTex acacia_trunk01 (256x256); _Color RGBA(1, 0.933, 0.933, 1) |
+| fx_BonemawSerpent_Spit_Hit |  | fx_BonemawSerpent_Spit_Hit | startColor: Color RGBA(0.753, 0.63, 0.024, 1) \| startSize: TwoConstants 0.1 .. 0.4 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_BonemawSerpent_Spit_Hit |  | Slime | startColor: Color RGBA(0.858, 0.715, 0.061, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime; _MainTex slime_splash (64x64); _Color RGBA(0.699, 0.699, 0.699, 1) |
+| fx_BonemawSerpent_Spit_Hit |  | Stretchy Slime | startColor: Color RGBA(0.858, 0.715, 0.061, 1) \| startSize: TwoConstants 0.5 .. 1 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Lux Lit Particles/ Bumped; material slime; _MainTex slime_splash (64x64); _Color RGBA(0.699, 0.699, 0.699, 1) |
+| fx_BonemawSerpent_Spit_Hit |  | Smoke | startColor: Color RGBA(0.632, 0.553, 0.051, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 3 .. 5 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slowwispysmoke; _MainTex slowwispysmokeloop (512x512); _Color RGBA(1, 1, 1, 1) |
+| fx_Cinder_hit |  | Sparks | startColor: Color RGBA(1, 0.182, 0.043, 1) \| startSize: TwoConstants 0.01 .. 0.05 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material fireworks_poof; _MainTex Firework (256x256); _Color RGBA(5.216, 5.216, 5.216, 1) |
+| fx_Cinder_hit |  | Sparks/Big Smoke | startColor: TwoColors RGBA(0, 0, 0, 1) .. RGBA(0.108, 0.113, 0.132, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 3 .. 5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slowwispysmoke_hard; _MainTex slowwispysmokeloop (512x512); _Color RGBA(1, 1, 1, 1) |
+| fx_Cinder_hit |  | Sparks/flames (1) | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Custom/Gradient Mapped Particle (Unlit); material flameball_flipbook_gradient; _MainTex flameball_flipbook (256x256) |
+| fx_Cinder_storm_hit |  | Sparks | startColor: Color RGBA(1, 0.182, 0.043, 1) \| startSize: TwoConstants 0.01 .. 0.05 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material fireworks_poof; _MainTex Firework (256x256); _Color RGBA(5.216, 5.216, 5.216, 1) |
+| fx_Cinder_storm_hit |  | Sparks/Big Smoke | startColor: TwoColors RGBA(0, 0, 0, 1) .. RGBA(0.108, 0.113, 0.132, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 3 .. 5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slowwispysmoke_hard; _MainTex slowwispysmokeloop (512x512); _Color RGBA(1, 1, 1, 1) |
+| fx_Cinder_storm_hit |  | Sparks/flames (1) | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Custom/Gradient Mapped Particle (Unlit); material flameball_flipbook_gradient; _MainTex flameball_flipbook (256x256) |
+| fx_DvergerMage_Fire_hit |  | fx_DvergerMage_Fire_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material gnista; _MainTex crystal (64x64); _Color RGBA(2, 2, 2, 1) |
+| fx_DvergerMage_Fire_hit |  | smoke | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_DvergerMage_Fire_hit |  | fire | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.5 .. 2 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/Gradient Mapped Particle (Unlit); material flameball_flipbook_gradient; _MainTex flameball_flipbook (256x256) |
+| fx_DvergerMage_Fire_hit |  | smoke | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_DvergerMage_Fire_hit |  | fire | startColor: TwoColors RGBA(1, 0.984, 0.934, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: TwoConstants 0.3 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/Gradient Mapped Particle (Unlit); material fireball_large; _MainTex flameball_big_flipbook (512x512) |
+| fx_DvergerMage_Fire_hit |  | vfx_FireballHit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.4 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material gnista; _MainTex crystal (64x64); _Color RGBA(2, 2, 2, 1) |
+| fx_DvergerMage_Ice_hit |  | fx_DvergerMage_Ice_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.05 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material cold_sparcs; _MainTex none; _Color RGBA(0.961, 1.877, 2.42, 1) |
+| fx_DvergerMage_Ice_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.02 .. 0.04 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material coldball; _MainTex iron (64x64); _Color RGBA(0.897, 0.949, 1, 1) |
+| fx_DvergerMage_Ice_hit |  | vfx_ice_hit | startColor: TwoColors RGBA(0.647, 0.956, 1, 0.497) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.04 .. 0.1 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_DvergerMage_Ice_hit |  | smoke | startColor: Color RGBA(0.544, 0.83, 1, 0.216) \| startSize: TwoConstants 2 .. 4 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_DvergerMage_Support_hit |  | shockwave | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 6 \| startLifetime: Constant 0.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode HorizontalBillboard; shader Particles/Standard Unlit2; material shaman_shield; _MainTex rain_cloud (1024x1024); _Color RGBA(0.714, 0.764, 4.001, 0.098) |
+| fx_DvergerMage_Support_hit |  | rising particles | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.2 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material goblinshaman_shield_particles; _MainTex spark 1 (64x64); _Color RGBA(0.162, 0.555, 2.024, 1) |
+| fx_DvergerMage_Support_hit |  | delayed_shockwave | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 12 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Particles/Standard Unlit2; material shaman_shield; _MainTex rain_cloud (1024x1024); _Color RGBA(0.714, 0.764, 4.001, 0.098) |
+| fx_DvergerMage_Support_hit |  | dust | startColor: Color RGBA(0.481, 0.481, 0.481, 0.325) \| startSize: TwoConstants 0.3 .. 0.5 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material goblinshaman_shield_particles; _MainTex spark 1 (64x64); _Color RGBA(0.162, 0.555, 2.024, 1) |
+| fx_Dverger_hit |  | fx_Dverger_hit | startColor: TwoColors RGBA(0.232, 0.772, 0.097, 0.728) .. RGBA(1, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 0.7 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_Dverger_hit |  | wetsplsh | startColor: Color RGBA(0.743, 0, 0, 1) \| startSize: TwoConstants 0.5 .. 0.7 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_Dverger_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_Dverger_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_Dverger_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_Dverger_hit |  | skinflakes | startColor: Color RGBA(0.122, 0.304, 0.62, 1) \| startSize: TwoConstants 0.4 .. 0.6 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_Eat_Green | yes | fx_TickBloodHit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_Eat_Green | yes | fx_TickBloodHit/wetsplsh | startColor: Color RGBA(0.036, 0.179, 0.044, 0.604) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: TwoConstants 0.3 .. 0.7 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material queenslime; _MainTex slime_splash_2 (64x64); _Color RGBA(1, 1, 1, 1) |
+| fx_Eat_Green | yes | fx_TickBloodHit/blood_drops | startColor: TwoColors RGBA(0.575, 0.108, 0.09, 0.491) .. RGBA(0.059, 0.462, 0.11, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_Eat_Green | yes | fx_TickBloodHit/bloodchunks | startColor: Color RGBA(0, 0.557, 0.264, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 0.5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_Fader_Roar_Projectile_Hit |  | Spores | startColor: TwoColors RGBA(0, 1, 0.373, 1) .. RGBA(0, 1, 0.178, 0.482) \| startSize: TwoConstants 0.025 .. 0.1 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material pixel_additive; _MainTex none; _Color RGBA(2, 2, 2, 1) |
+| fx_Fader_Roar_Projectile_Hit |  | Spores/Flame Spikes | startColor: Color RGBA(1, 1, 1, 0.49) \| startSize: TwoConstants 1 .. 4 \| startLifetime: TwoConstants 0.3 .. 0.4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Custom/Gradient Mapped Particle (Unlit); material fireball_large; _MainTex flameball_big_flipbook (512x512) |
+| fx_Fader_Roar_Projectile_Hit |  | Spores/Distortion Shockwave | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 10.3 \| startLifetime: Constant 0.3 \| maxParticles 1 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material shockwave_distortion; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_Fader_Roar_Projectile_Hit |  | Spores/Swirls | startColor: TwoColors RGBA(0.259, 1, 0.522, 1) .. RGBA(0.325, 0.831, 0.345, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: None, no sharedMaterial |
+| fx_Fader_Roar_Projectile_Hit |  | Spores/Swirly Spores | startColor: TwoColors RGBA(0, 1, 0.491, 1) .. RGBA(0.108, 1, 0.22, 0.482) \| startSize: TwoConstants 0.025 .. 0.1 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material pixel_additive; _MainTex none; _Color RGBA(2, 2, 2, 1) |
+| fx_GoblinShieldHit |  | shards | startColor: TwoColors RGBA(1, 0.108, 0.292, 0.684) .. RGBA(0.647, 0.38, 1, 0.753) \| startSize: TwoConstants 0.1 .. 0.4 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Particles/Standard Unlit2; material shaman_shield; _MainTex rain_cloud (1024x1024); _Color RGBA(0.714, 0.764, 4.001, 0.098) |
+| fx_GoblinShieldHit |  | rising particles | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.2 \| startLifetime: TwoConstants 3 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material goblinshaman_shield_particles; _MainTex spark 1 (64x64); _Color RGBA(0.162, 0.555, 2.024, 1) |
+| fx_Puke | yes | tardrop | startColor: TwoColors RGBA(0.613, 0.246, 0.046, 1) .. RGBA(0.282, 0.632, 0.107, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 1.5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material tar_drop; _MainTex blood_drop (32x32); _Color RGBA(1, 1, 1, 1) |
+| fx_Puke | yes | tardrop/blob_splat | startColor: TwoColors RGBA(0.755, 0.244, 0, 1) .. RGBA(0.057, 0.726, 0.027, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: Constant 5 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_Puke | yes | flow_global | startColor: TwoColors RGBA(0.547, 0.175, 0.119, 1) .. RGBA(0.062, 0.292, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Stretch; shader Custom/AlphaParticle; material puke; _MainTex water_foam (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_Puke | yes | flow_global/blob_splat | startColor: TwoColors RGBA(0.2, 0.08, 0.049, 1) .. RGBA(0.06, 0.2, 0.051, 1) \| startSize: TwoConstants 0.5 .. 1.2 \| startLifetime: Constant 3 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/AlphaParticle; material puke; _MainTex water_foam (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_Puke | yes | flow_local | startColor: TwoColors RGBA(0.613, 0.079, 0, 1) .. RGBA(0, 0.774, 0.033, 1) \| startSize: TwoConstants 0.1 .. 0.5 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Custom/AlphaParticle; material puke; _MainTex water_foam (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_StaffShield_Hit |  | shards | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.4 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/Distortion; material staff_shield_shard; _MainTex rain_cloud (1024x1024); _Color RGBA(1, 0, 0, 0.518) |
+| fx_StaffShield_Hit |  | rising particles | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: TwoConstants 3 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material staff_shield_particles; _MainTex spark 1 (64x64); _Color RGBA(1.58, 0, 0.054, 1) |
+| fx_StaffShield_Hit |  | smoke_world (1) | startColor: TwoColors RGBA(1, 0.108, 0.292, 0.831) .. RGBA(0.647, 0.38, 1, 0.788) \| startSize: TwoConstants 0.3 .. 0.8 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material staff_shield; _MainTex water_ring_thin (128x128); _Color RGBA(4.001, 0.733, 0.895, 0.012) |
+| fx_TickBloodHit | yes | fx_TickBloodHit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_TickBloodHit | yes | wetsplsh | startColor: Color RGBA(0.971, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: TwoConstants 0.3 .. 0.7 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_TickBloodHit | yes | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_TickBloodHit | yes | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 0.5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_TickBloodHit | yes | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_babyseeker_death | yes | fx_babyseeker_death | startColor: Color RGBA(0.691, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 1 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Standard; material blood_splat2; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_babyseeker_death | yes | skinflakes | startColor: TwoColors RGBA(1, 0.854, 0.505, 0.566) .. RGBA(0.953, 0.914, 0.643, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: TwoConstants 1 .. 1.2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_babyseeker_death | yes | drops-withdecals | startColor: TwoColors RGBA(0.519, 0.604, 0.225, 0.491) .. RGBA(0.642, 0.792, 0.325, 1) \| startSize: TwoConstants 0.05 .. 0.08 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_babyseeker_death | yes | drops-withdecals/blood_decal | startColor: TwoColors RGBA(0.595, 0.623, 0.173, 1) .. RGBA(0.706, 0.571, 0.243, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: TwoConstants 10 .. 11 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/Decal; material seeker_blood_splat; _MainTex brains (64x64); _Color RGBA(0.557, 0.557, 0.557, 1) |
+| fx_babyseeker_death | yes | wetsplsh | startColor: TwoColors RGBA(0.651, 0.451, 0.052, 1) .. RGBA(0.726, 0.629, 0.051, 1) \| startSize: TwoConstants 0.4 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime; _MainTex slime_splash (64x64); _Color RGBA(0.699, 0.699, 0.699, 1) |
+| fx_babyseeker_death | yes | Legs | startColor: TwoColors RGBA(0.415, 0.343, 0.335, 0.566) .. RGBA(0.16, 0.16, 0.16, 1) \| startSize: TwoConstants 0.3 .. 0.3 \| startLifetime: TwoConstants 5 .. 8 \| maxParticles 10 \| simulationSpace World \| renderer: mode Mesh; shader Custom/Creature; material babyseeker; _MainTex babyseeker_d (64x64); _Color RGBA(1, 0.915, 0.552, 1) |
+| fx_babyseeker_death | yes | Wings | startColor: TwoColors RGBA(0.415, 0.343, 0.335, 0.566) .. RGBA(0.16, 0.16, 0.16, 1) \| startSize: TwoConstants 0.3 .. 0.3 \| startLifetime: TwoConstants 5 .. 8 \| maxParticles 10 \| simulationSpace World \| renderer: mode Mesh; shader Custom/Creature; material babyseeker; _MainTex babyseeker_d (64x64); _Color RGBA(1, 0.915, 0.552, 1) |
+| fx_babyseeker_death | yes | Carapace | startColor: TwoColors RGBA(0.415, 0.343, 0.335, 0.566) .. RGBA(0.16, 0.16, 0.16, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: TwoConstants 3 .. 4 \| maxParticles 100 \| simulationSpace World \| renderer: mode Mesh; shader Custom/Creature; material babyseeker; _MainTex babyseeker_d (64x64); _Color RGBA(1, 0.915, 0.552, 1) |
+| fx_babyseeker_hurt | yes | fx_babyseeker_hurt | startColor: Color RGBA(0, 0.859, 0.218, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_babyseeker_hurt | yes | wetsplsh | startColor: TwoColors RGBA(0.784, 0.625, 0.098, 1) .. RGBA(0.783, 0.777, 0.144, 1) \| startSize: TwoConstants 0.4 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime; _MainTex slime_splash (64x64); _Color RGBA(0.699, 0.699, 0.699, 1) |
+| fx_babyseeker_hurt | yes | blood_drops | startColor: TwoColors RGBA(0.726, 0.629, 0.476, 0.491) .. RGBA(0.802, 0.784, 0.42, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_babyseeker_hurt | yes | drops-withdecals | startColor: TwoColors RGBA(0.557, 0.395, 0, 0.491) .. RGBA(0.604, 0.561, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.08 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_babyseeker_hurt | yes | drops-withdecals/blood_decal | startColor: Color RGBA(0.623, 0.483, 0.05, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/Decal; material seeker_blood_splat; _MainTex brains (64x64); _Color RGBA(0.557, 0.557, 0.557, 1) |
+| fx_babyseeker_hurt | yes | skinflakes | startColor: TwoColors RGBA(0.537, 0.339, 0.275, 1) .. RGBA(1, 0.901, 0.59, 1) \| startSize: TwoConstants 0.2 .. 0.4 \| startLifetime: TwoConstants 2 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Mesh; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_bat_hit |  | fx_bat_hit | startColor: Color RGBA(0.8, 0.088, 0.043, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 0.7 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_bat_hit |  | vfx_BloodHit 1 | startColor: Color RGBA(0.669, 0.167, 0.167, 1) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_bat_hit |  | vfx_BloodHit_decals | startColor: Color RGBA(0.941, 0.083, 0.083, 1) \| startSize: TwoConstants 0.1 .. 0.1 \| startLifetime: Constant 2 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_bat_hit |  | vfx_BloodHit_decals/blob_splat | startColor: Color RGBA(0.824, 0.177, 0.103, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: Constant 5 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_bjorn_hit |  | fx_bjorn_hit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_bjorn_hit |  | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_bjorn_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_bjorn_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_bjorn_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_bjorn_hit |  | skinflakes | startColor: Color RGBA(0.309, 0.168, 0, 1) \| startSize: TwoConstants 0.25 .. 0.8 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Custom/AlphaParticle; material lox_hair_particle; _MainTex hair_big (64x64); _Color RGBA(1, 1, 1, 1) |
+| fx_blobtar_tarball_hit |  | fx_blobtar_tarball_hit | startColor: Color RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material pixel_lit_opaque; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_blobtar_tarball_hit |  | fire | startColor: Color RGBA(0, 0, 0, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 1 .. 1.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime; _MainTex slime_splash (64x64); _Color RGBA(0.699, 0.699, 0.699, 1) |
+| fx_blobtar_tarball_hit |  | Chunks | startColor: Color RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 3 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| fx_blobtar_tarball_hit |  | Chunks/blob_splat (1) | startColor: Color RGBA(0.057, 0.057, 0.057, 1) \| startSize: Constant 2 \| startLifetime: Constant 7 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/AlphaParticle; material puke; _MainTex water_foam (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_blobtar_tarball_hit |  | wetsplsh | startColor: Color RGBA(0, 0, 0, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime; _MainTex slime_splash (64x64); _Color RGBA(0.699, 0.699, 0.699, 1) |
+| fx_blobtar_tarball_hit |  | blobs | startColor: TwoColors RGBA(0.934, 0.764, 0.46, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.02 .. 0.1 \| startLifetime: TwoConstants 3 .. 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/Blob; material blob_tar; _MainTex none; _Color RGBA(0, 0, 0, 1) |
+| fx_bloodweapon_hit | yes | drops | startColor: Color RGBA(0.472, 0.051, 0.079, 1) \| startSize: TwoConstants 0.06 .. 0.1 \| startLifetime: TwoConstants 0.4 .. 2 \| maxParticles 35 \| simulationSpace World \| renderer: mode Stretch; shader Custom/LitParticles; material water_drop_noemissive; _MainTex drop_pixel (32x8); _Color RGBA(0.745, 0.745, 0.745, 1) |
+| fx_bloodweapon_hit | yes | drops/poisonarrow_hit | startColor: TwoColors RGBA(0.66, 0.034, 0.144, 0.255) .. RGBA(0.509, 0.099, 0.156, 0.239) \| startSize: TwoConstants 0.5 .. 1 \| startLifetime: Constant 1 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle_pixel; _MainTex wildfire01_pixel (32x32); _Color RGBA(1, 1, 1, 1) |
+| fx_bloodweapon_hit | yes | drops/vfx_ice_hit | startColor: TwoColors RGBA(0.415, 0.065, 0.078, 0.497) .. RGBA(0.573, 0.044, 0.008, 1) \| startSize: TwoConstants 0.04 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_bloodweapon_hit | yes | drops/smoke | startColor: Color RGBA(0.415, 0.053, 0.066, 0.439) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_bloodweapon_hit | yes | drops/Splash | startColor: Color RGBA(0.377, 0.041, 0.075, 1) \| startSize: Constant 6 \| startLifetime: Constant 0.4 \| maxParticles 1 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material BloodDripSplash; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| fx_chainlightning_hit |  | fx_chainlightning_hit | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.574, 0.574, 0.574, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_chainlightning_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.419, 0.419, 0.419, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| fx_chainlightning_hit |  | poff_ring | startColor: TwoColors RGBA(0.206, 0.159, 0.074, 1) .. RGBA(0.434, 0.382, 0.316, 1) \| startSize: TwoConstants 0.5 .. 1.2 \| startLifetime: TwoConstants 0.6 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_chainlightning_hit |  | shockwave_plane | startColor: Color RGBA(1, 1, 1, 0.518) \| startSize: Constant 35 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode HorizontalBillboard; shader Particles/Standard Unlit2; material block_wave; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_chainlightning_hit |  | shockwave | startColor: Color RGBA(1, 1, 1, 0.098) \| startSize: Constant 22 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Particles/Standard Unlit2; material aoe_shockwave; _MainTex soft_cloud (256x256); _Color RGBA(0, 0, 0, 1) |
+| fx_chainlightning_hit |  | lightning | startColor: TwoColors RGBA(0.478, 0.87, 1, 1) .. RGBA(0, 0.793, 1, 1) \| startSize: Constant 0.03 \| startLifetime: TwoConstants 0.5 .. 1.2 \| maxParticles 100 \| simulationSpace World \| renderer: mode None; shader Unlit/Lighting; material lighting; _MainTex trail (128x128); _Color RGBA(5.992, 5.992, 5.992, 1) |
+| fx_charred_hit |  | fx_charred_hit | startColor: Color RGBA(0.302, 0.229, 0.229, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 1 .. 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 0.472) |
+| fx_charred_hit |  | Bits | startColor: Color RGBA(0.302, 0.229, 0.229, 1) \| startSize: TwoConstants 0.1 .. 0.05 \| startLifetime: TwoConstants 0.5 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material pixel_lit_opaque; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_charred_hit |  | Glow | startColor: Color RGBA(0.925, 0.22, 0.169, 1) \| startSize: TwoConstants 0.3 .. 0.7 \| startLifetime: TwoConstants 0.5 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material fireworks; _MainTex Firework (256x256); _Color RGBA(2.996, 2.996, 2.996, 1) |
+| fx_clusterbombstaff_hit |  | fx_clusterbombstaff_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.025 .. 0.05 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material pixel_unlit_red; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_clusterbombstaff_hit |  | smoke | startColor: Color RGBA(0.057, 0.049, 0.049, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material wispysmoke; _MainTex WispySmoke_Flipbook (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_clusterbombstaff_hit |  | fire | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.4 .. 0.7 \| startLifetime: TwoConstants 0.1 .. 0.4 \| maxParticles 200 \| simulationSpace Local \| renderer: mode Stretch; shader Custom/Gradient Mapped Particle (Unlit); material flameball_flipbook_gradient; _MainTex flameball_flipbook (256x256) |
+| fx_clusterbombstaff_hit |  | Distortion Shockwave | startColor: Color RGBA(1, 1, 1, 0.561) \| startSize: Constant 4 \| startLifetime: Constant 0.2 \| maxParticles 1 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material shockwave_distortion; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_clusterbombstaff_splinter_hit |  | fx_clusterbombstaff_splinter_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.025 .. 0.05 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material pixel_unlit_red; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_clusterbombstaff_splinter_hit |  | smoke | startColor: Color RGBA(0.057, 0.049, 0.049, 1) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material wispysmoke; _MainTex WispySmoke_Flipbook (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_clusterbombstaff_splinter_hit |  | fire | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.2 \| startLifetime: TwoConstants 0.1 .. 0.4 \| maxParticles 200 \| simulationSpace Local \| renderer: mode Stretch; shader Custom/Gradient Mapped Particle (Unlit); material flameball_flipbook_gradient; _MainTex flameball_flipbook (256x256) |
+| fx_clusterbombstaff_splinter_hit |  | Distortion Shockwave | startColor: Color RGBA(1, 0, 0, 0.561) \| startSize: Constant 2 \| startLifetime: Constant 0.2 \| maxParticles 1 \| simulationSpace Local \| renderer: mode Billboard; shader Legacy Shaders/Particles/Alpha Blended; material glow_pulse; _MainTex shockwave (128x128); _TintColor RGBA(1, 1, 1, 0.5) |
+| fx_deathsquito_hit |  | fx_deathsquito_hit | startColor: TwoColors RGBA(0.772, 0.362, 0.097, 0.728) .. RGBA(0.76, 0.801, 0.041, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 0.7 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_deathsquito_hit |  | vfx_BloodHit 1 | startColor: TwoColors RGBA(0.4, 0.728, 0.086, 1) .. RGBA(0.669, 0.167, 0.167, 1) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_deathsquito_hit |  | vfx_BloodHit_decals | startColor: TwoColors RGBA(0.234, 0.485, 0.114, 1) .. RGBA(0.941, 0.083, 0.083, 1) \| startSize: TwoConstants 0.1 .. 0.1 \| startLifetime: Constant 2 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_deathsquito_hit |  | vfx_BloodHit_decals/blob_splat | startColor: TwoColors RGBA(0.838, 0.017, 0, 1) .. RGBA(0.824, 0.177, 0.103, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: Constant 5 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_fader_meteor_hit |  | fx_fader_meteor_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.4 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material blue_cinder; _MainTex spark 1 (64x64); _Color RGBA(4, 4, 4, 1) |
+| fx_fader_meteor_hit |  | smoke | startColor: Color RGBA(0.138, 0.16, 0.152, 1) \| startSize: TwoConstants 4 .. 7 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Lux Lit Particles/ Bumped; material slowwispysmoke; _MainTex slowwispysmokeloop (512x512); _Color RGBA(1, 1, 1, 1) |
+| fx_fader_meteor_hit |  | Boom Spikes | startColor: Color RGBA(1, 1, 1, 0.49) \| startSize: TwoConstants 2 .. 5 \| startLifetime: TwoConstants 0.5 .. 0.6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Custom/Gradient Mapped Particle (Unlit); material flameball_flipbook_gradient; _MainTex flameball_flipbook (256x256) |
+| fx_fader_meteor_hit |  | Sparks | startColor: TwoColors RGBA(0, 1, 0.485, 1) .. RGBA(0.024, 1, 0.325, 0.482) \| startSize: TwoConstants 0.025 .. 0.1 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material pixel_additive; _MainTex none; _Color RGBA(2, 2, 2, 1) |
+| fx_fader_meteor_hit |  | Rocks | startColor: TwoColors RGBA(0.419, 0.419, 0.419, 1) .. RGBA(0.151, 0.148, 0.146, 1) \| startSize: TwoConstants 0.025 .. 0.1 \| startLifetime: TwoConstants 3 .. 5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Mesh; shader Standard (Specular setup); material coal; _MainTex iron (64x64); _Color RGBA(0, 0, 0, 1) |
+| fx_fader_meteor_hit |  | Distortion Shockwave | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 20 \| startLifetime: Constant 0.3 \| maxParticles 1 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material shockwave_distortion; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_fimbulvinter_meteor_hit |  | fx_fimbulvinter_meteor_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.4 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material blue_cinder; _MainTex spark 1 (64x64); _Color RGBA(4, 4, 4, 1) |
+| fx_fimbulvinter_meteor_hit |  | smoke | startColor: Color RGBA(0.203, 0.568, 0.811, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_fimbulvinter_meteor_hit |  | fire | startColor: TwoColors RGBA(0.161, 0.502, 1, 1) .. RGBA(0.094, 0.729, 1, 1) \| startSize: TwoConstants 2 .. 4 \| startLifetime: TwoConstants 0.3 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material flame_large; _MainTex wildfire06 (128x128); _Color RGBA(1.059, 0.488, 0.216, 1) |
+| fx_fimbulvinter_meteor_hit |  | zinder | startColor: TwoColors RGBA(0.267, 0.38, 0.741, 1) .. RGBA(0.094, 0.661, 1, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/Particle (Unlit); material ashrain_cinder; _MainTex spark 1 (64x64) |
+| fx_fimbulvinter_meteor_hit |  | wetsplsh | startColor: TwoColors RGBA(0.185, 0.233, 0.623, 1) .. RGBA(0.165, 0.646, 0.831, 1) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 1.5 .. 3 \| maxParticles 2000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_float_hitwater |  | fx_float_hitwater | startColor: Color RGBA(1, 1, 1, 0.459) \| startSize: TwoConstants 2 .. 3 \| startLifetime: Constant 3 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 0.472) |
+| fx_float_hitwater |  | GameObject | startColor: Color RGBA(1, 1, 1, 0.922) \| startSize: Constant 0.03 \| startLifetime: Constant 3 \| maxParticles 200 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_float_hitwater |  | vfx_water_surface | startColor: Color RGBA(0.566, 0.566, 0.566, 0.215) \| startSize: Constant 4 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode HorizontalBillboard; shader Custom/ShadowBlob; material water_surface; _MainTex water_foam_pix (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_float_hitwater |  | ring | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 8 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode HorizontalBillboard; shader Custom/ShadowBlob; material water_ring_thin; _MainTex water_ring_thin (128x128); _Color RGBA(1, 1, 1, 0.197) |
+| fx_frozenking_spikerain_hit |  | fx_frozenking_spikerain_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.4 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material blue_cinder; _MainTex spark 1 (64x64); _Color RGBA(4, 4, 4, 1) |
+| fx_frozenking_spikerain_hit |  | smoke | startColor: Color RGBA(0.138, 0.16, 0.152, 1) \| startSize: TwoConstants 4 .. 7 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Lux Lit Particles/ Bumped; material slowwispysmoke; _MainTex slowwispysmokeloop (512x512); _Color RGBA(1, 1, 1, 1) |
+| fx_frozenking_spikerain_hit |  | Boom Spikes | startColor: Color RGBA(1, 1, 1, 0.49) \| startSize: TwoConstants 2 .. 5 \| startLifetime: TwoConstants 0.5 .. 0.6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Custom/Gradient Mapped Particle (Unlit); material flameball_flipbook_gradient; _MainTex flameball_flipbook (256x256) |
+| fx_frozenking_spikerain_hit |  | Sparks | startColor: TwoColors RGBA(0, 0.541, 1, 1) .. RGBA(0.024, 1, 0.961, 0.482) \| startSize: TwoConstants 0.025 .. 0.1 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material pixel_additive; _MainTex none; _Color RGBA(2, 2, 2, 1) |
+| fx_frozenking_spikerain_hit |  | Rocks | startColor: TwoColors RGBA(0.419, 0.419, 0.419, 1) .. RGBA(0.151, 0.148, 0.146, 1) \| startSize: TwoConstants 0.025 .. 0.1 \| startLifetime: TwoConstants 3 .. 5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Mesh; shader Standard (Specular setup); material coal; _MainTex iron (64x64); _Color RGBA(0, 0, 0, 1) |
+| fx_frozenking_spikerain_hit |  | Distortion Shockwave | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 20 \| startLifetime: Constant 0.3 \| maxParticles 1 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material shockwave_distortion; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_goblinking_beam_hit |  | smoke | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_goblinking_beam_hit |  | fire | startColor: TwoColors RGBA(1, 0.162, 0.942, 1) .. RGBA(1, 0.096, 0.339, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: TwoConstants 0.3 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material flame_large; _MainTex wildfire06 (128x128); _Color RGBA(1.059, 0.488, 0.216, 1) |
+| fx_goblinking_beam_hit |  | zinder | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/Particle (Unlit); material ashrain_cinder; _MainTex spark 1 (64x64) |
+| fx_goblinking_hit |  | vfx_BloodHit 1 | startColor: TwoColors RGBA(0.581, 0, 0.036, 0.816) .. RGBA(0.779, 0.742, 0.533, 0.884) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_goblinking_hit |  | cunks | startColor: TwoColors RGBA(0.699, 0.454, 0.087, 0.728) .. RGBA(0.853, 0.031, 0.388, 1) \| startSize: TwoConstants 0.5 .. 0.5 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_goblinking_hit |  | cunks/blob_splat | startColor: TwoColors RGBA(0.971, 0.064, 0.496, 1) .. RGBA(0.831, 0.049, 0.68, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_goblinking_meteor_hit |  | fx_goblinking_meteor_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.4 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material blue_cinder; _MainTex spark 1 (64x64); _Color RGBA(4, 4, 4, 1) |
+| fx_goblinking_meteor_hit |  | smoke | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_goblinking_meteor_hit |  | fire | startColor: TwoColors RGBA(1, 0.162, 0.942, 1) .. RGBA(1, 0.676, 0.096, 1) \| startSize: TwoConstants 2 .. 4 \| startLifetime: TwoConstants 0.3 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material flame_large; _MainTex wildfire06 (128x128); _Color RGBA(1.059, 0.488, 0.216, 1) |
+| fx_goblinking_meteor_hit |  | zinder | startColor: TwoColors RGBA(0.743, 0.572, 0.268, 1) .. RGBA(1, 0.096, 0.938, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/Particle (Unlit); material ashrain_cinder; _MainTex spark 1 (64x64) |
+| fx_goblinking_meteor_hit |  | wetsplsh | startColor: TwoColors RGBA(0.864, 0.077, 0.875, 1) .. RGBA(0.831, 0.165, 0.317, 1) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 1.5 .. 3 \| maxParticles 2000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_greenroots_projectile_hit |  | fx_greenroots_projectile_hit | startColor: Color RGBA(0.339, 0.575, 0.417, 1) \| startSize: TwoConstants 4 .. 6 \| startLifetime: TwoConstants 3 .. 7 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slowwispysmoke; _MainTex slowwispysmokeloop (512x512); _Color RGBA(1, 1, 1, 1) |
+| fx_greenroots_projectile_hit |  | Spores | startColor: TwoColors RGBA(1, 1, 1, 1) .. RGBA(1, 1, 1, 0.482) \| startSize: TwoConstants 0.025 .. 0.1 \| startLifetime: TwoConstants 1 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Custom/Gradient Mapped Particle (Unlit); material light_glow_gradient; _MainTex Default-Particle (64x64) |
+| fx_greenroots_projectile_hit |  | Flame Spikes | startColor: Color RGBA(1, 1, 1, 0.49) \| startSize: TwoConstants 1 .. 4 \| startLifetime: TwoConstants 0.3 .. 0.4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Custom/Gradient Mapped Particle (Unlit); material fireball_large; _MainTex flameball_big_flipbook (512x512) |
+| fx_greenroots_projectile_hit |  | Distortion Shockwave | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 10.3 \| startLifetime: Constant 0.3 \| maxParticles 1 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material shockwave_distortion; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_himminafl_hit |  | fx_himminafl_hit | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.574, 0.574, 0.574, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_himminafl_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.419, 0.419, 0.419, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| fx_himminafl_hit |  | poff_ring | startColor: TwoColors RGBA(0.206, 0.159, 0.074, 1) .. RGBA(0.434, 0.382, 0.316, 1) \| startSize: TwoConstants 0.5 .. 1.2 \| startLifetime: TwoConstants 0.6 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_himminafl_hit |  | shockwave_plane | startColor: Color RGBA(1, 1, 1, 0.518) \| startSize: Constant 35 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode HorizontalBillboard; shader Particles/Standard Unlit2; material block_wave; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_himminafl_hit |  | shockwave | startColor: Color RGBA(1, 1, 1, 0.098) \| startSize: Constant 22 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Particles/Standard Unlit2; material aoe_shockwave; _MainTex soft_cloud (256x256); _Color RGBA(0, 0, 0, 1) |
+| fx_himminafl_hit |  | lightning | startColor: TwoColors RGBA(0.478, 0.87, 1, 1) .. RGBA(0, 0.793, 1, 1) \| startSize: Constant 0.03 \| startLifetime: TwoConstants 0.5 .. 1.2 \| maxParticles 100 \| simulationSpace World \| renderer: mode None; shader Unlit/Lighting; material lighting; _MainTex trail (128x128); _Color RGBA(5.992, 5.992, 5.992, 1) |
+| fx_iceshard_hit |  | fx_iceshard_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.05 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Standard; material coldball; _MainTex iron (64x64); _Color RGBA(0.897, 0.949, 1, 1) |
+| fx_iceshard_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.01 .. 0.04 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material coldball; _MainTex iron (64x64); _Color RGBA(0.897, 0.949, 1, 1) |
+| fx_iceshard_hit |  | vfx_ice_hit | startColor: TwoColors RGBA(0.647, 0.956, 1, 0.497) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.04 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_iceshard_hit |  | smoke | startColor: Color RGBA(0.544, 0.83, 1, 0.216) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_jotunbane_hit |  | drops | startColor: Color RGBA(0.877, 0.704, 0.211, 1) \| startSize: TwoConstants 0.06 .. 0.1 \| startLifetime: TwoConstants 0.4 .. 2 \| maxParticles 35 \| simulationSpace World \| renderer: mode Stretch; shader Custom/LitParticles; material water_drop; _MainTex drop_pixel (32x8); _Color RGBA(1, 1, 1, 1) |
+| fx_jotunbane_hit |  | drops/poisonarrow_hit | startColor: TwoColors RGBA(0.531, 0.618, 0.132, 1) .. RGBA(0.963, 0.279, 0.163, 1) \| startSize: TwoConstants 0.5 .. 1 \| startLifetime: Constant 1 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle_pixel; _MainTex wildfire01_pixel (32x32); _Color RGBA(1, 1, 1, 1) |
+| fx_jotunbane_hit |  | drops/vfx_ice_hit | startColor: TwoColors RGBA(0.896, 1, 0.125, 0.497) .. RGBA(0.486, 0.573, 0.008, 1) \| startSize: TwoConstants 0.04 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_jotunbane_hit |  | drops/smoke | startColor: Color RGBA(0.655, 0.906, 0.098, 0.216) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_jotunbane_hit |  | drops/Splash | startColor: Color RGBA(0.655, 0.906, 0.098, 1) \| startSize: Constant 6 \| startLifetime: Constant 0.4 \| maxParticles 1 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material JotunBaneDripSplash; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 0.472) |
+| fx_lightningstaffprojectile_hit |  | fx_lightningstaffprojectile_hit | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.574, 0.574, 0.574, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_lightningstaffprojectile_hit |  | poff_ring | startColor: TwoColors RGBA(0.206, 0.159, 0.074, 1) .. RGBA(0.434, 0.382, 0.316, 1) \| startSize: TwoConstants 0.5 .. 1.2 \| startLifetime: TwoConstants 0.6 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_lightningstaffprojectile_hit |  | lightning | startColor: TwoColors RGBA(1, 0.478, 0.561, 1) .. RGBA(1, 0, 0.01, 1) \| startSize: Constant 0.03 \| startLifetime: TwoConstants 0.1 .. 0.3 \| maxParticles 100 \| simulationSpace World \| renderer: mode None; shader Unlit/Lighting; material lighting; _MainTex trail (128x128); _Color RGBA(5.992, 5.992, 5.992, 1) |
+| fx_lightningweapon_hit |  | fx_lightningweapon_hit | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.574, 0.574, 0.574, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_lightningweapon_hit |  | poff_ring | startColor: TwoColors RGBA(0.557, 0.557, 0.557, 0.271) .. RGBA(0.802, 0.793, 0.783, 0.271) \| startSize: TwoConstants 0.5 .. 1.2 \| startLifetime: TwoConstants 0.6 .. 1.5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material wispysmoke; _MainTex WispySmoke_Flipbook (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_lightningweapon_hit |  | Sparks | startColor: Color RGBA(0.382, 0.908, 1, 1) \| startSize: TwoConstants 0.025 .. 0.05 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material pixel_additive; _MainTex none; _Color RGBA(2, 2, 2, 1) |
+| fx_lightningweapon_hit |  | Lightning | startColor: Color RGBA(0.736, 0.932, 0.981, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 0.25 .. 0.5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Mesh; shader Custom/Mesh Flipbook Particle; material flipbookmesh_mat; _MainTex none |
+| fx_lox_hit |  | fx_lox_hit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_lox_hit |  | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_lox_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_lox_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_lox_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_lox_hit |  | skinflakes | startColor: Color RGBA(0.309, 0.168, 0, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Custom/AlphaParticle; material lox_hair_particle; _MainTex hair_big (64x64); _Color RGBA(1, 1, 1, 1) |
+| fx_moose_hit |  | fx_moose_hit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_moose_hit |  | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_moose_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_moose_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_moose_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_moose_hit |  | skinflakes | startColor: Color RGBA(1, 0.886, 0.75, 1) \| startSize: TwoConstants 0.5 .. 1 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Custom/AlphaParticle; material lox_hair_particle; _MainTex hair_big (64x64); _Color RGBA(1, 1, 1, 1) |
+| fx_morgen_hit |  | fx_morgen_hit | startColor: Color RGBA(0.755, 0.025, 0.025, 1) \| startSize: TwoConstants 0.1 .. 0.4 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_morgen_hit |  | Blood | startColor: Color RGBA(0.755, 0.025, 0.025, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| fx_natureweapon_hit |  | fx_natureweapon_hit | startColor: TwoColors RGBA(0, 1, 0.077, 0.497) .. RGBA(0.203, 1, 0.437, 1) \| startSize: TwoConstants 0.04 .. 0.03 \| startLifetime: TwoConstants 0.5 .. 1.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material radiation_particle; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_radiation_hit |  | fx_radiation_hit | startColor: TwoColors RGBA(0, 1, 0.841, 0.497) .. RGBA(0.203, 1, 0.437, 1) \| startSize: TwoConstants 0.04 .. 0.03 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material radiation_particle; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_death | yes | fx_seeker_death | startColor: Color RGBA(0.691, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 1 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Standard; material blood_splat2; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_death | yes | skinflakes | startColor: TwoColors RGBA(0.292, 0.212, 0.134, 0.566) .. RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: TwoConstants 1 .. 1.2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_death | yes | drops-withdecals | startColor: TwoColors RGBA(0, 0.557, 0.395, 0.491) .. RGBA(0, 0.604, 0.127, 1) \| startSize: TwoConstants 0.05 .. 0.08 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_death | yes | drops-withdecals/blood_decal | startColor: TwoColors RGBA(0, 0.755, 0.339, 1) .. RGBA(0, 0.462, 0.075, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: TwoConstants 10 .. 11 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/Decal; material seeker_blood_splat; _MainTex brains (64x64); _Color RGBA(0.557, 0.557, 0.557, 1) |
+| fx_seeker_death | yes | wetsplsh | startColor: TwoColors RGBA(0.267, 0.741, 0.387, 1) .. RGBA(0, 0.816, 0.639, 1) \| startSize: TwoConstants 0.6 .. 1.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_seeker_death | yes | Legs | startColor: TwoColors RGBA(0.415, 0.343, 0.335, 0.566) .. RGBA(0.16, 0.16, 0.16, 1) \| startSize: TwoConstants 0.3 .. 0.8 \| startLifetime: TwoConstants 5 .. 8 \| maxParticles 10 \| simulationSpace World \| renderer: mode Mesh; shader Custom/Creature; material seeker; _MainTex seeker_d (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_death | yes | Wings | startColor: TwoColors RGBA(0.415, 0.343, 0.335, 0.566) .. RGBA(0.16, 0.16, 0.16, 1) \| startSize: TwoConstants 0.8 .. 0.8 \| startLifetime: TwoConstants 5 .. 8 \| maxParticles 10 \| simulationSpace World \| renderer: mode Mesh; shader Custom/Creature; material seeker; _MainTex seeker_d (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_death | yes | Carapace | startColor: TwoColors RGBA(0.415, 0.343, 0.335, 0.566) .. RGBA(0.16, 0.16, 0.16, 1) \| startSize: TwoConstants 0.5 .. 1 \| startLifetime: TwoConstants 3 .. 4 \| maxParticles 100 \| simulationSpace World \| renderer: mode Mesh; shader Custom/Creature; material seeker; _MainTex seeker_d (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_hurt | yes | fx_seeker_hurt | startColor: Color RGBA(0, 0.859, 0.218, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_hurt | yes | wetsplsh | startColor: TwoColors RGBA(0.1, 0.783, 0.178, 1) .. RGBA(0, 0.808, 0.544, 1) \| startSize: TwoConstants 0.5 .. 0.7 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_seeker_hurt | yes | blood_drops | startColor: TwoColors RGBA(0.015, 0.329, 0, 0.491) .. RGBA(0, 0.545, 0.344, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_hurt | yes | drops-withdecals | startColor: TwoColors RGBA(0, 0.557, 0.395, 0.491) .. RGBA(0, 0.604, 0.127, 0.534) \| startSize: TwoConstants 0.05 .. 0.08 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_hurt | yes | drops-withdecals/blood_decal | startColor: TwoColors RGBA(0, 0.443, 0.202, 1) .. RGBA(0, 0.509, 0.089, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/Decal; material seeker_blood_splat; _MainTex brains (64x64); _Color RGBA(0.557, 0.557, 0.557, 1) |
+| fx_seeker_hurt | yes | skinflakes | startColor: TwoColors RGBA(0.537, 0.339, 0.275, 1) .. RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.4 \| startLifetime: TwoConstants 2 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Mesh; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_seeker_melee_hit |  | - | no ParticleSystem |
+| fx_shieldgenerator_domehit |  | fx_shieldgenerator_domehit | startColor: Color RGBA(0, 0.83, 0.296, 1) \| startSize: TwoConstants 0.1 .. 0.05 \| startLifetime: TwoConstants 1 .. 4 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Unlit2; material pixel_additive; _MainTex none; _Color RGBA(2, 2, 2, 1) |
+| fx_shieldgenerator_domehit |  | shockwave | startColor: Color RGBA(0, 0.831, 0.294, 0.42) \| startSize: Constant 6 \| startLifetime: Constant 0.3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material block_wave; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_shieldgenerator_domehit |  | Distortion Shockwave | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 5.54 \| startLifetime: Constant 0.3 \| maxParticles 1 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material shockwave_distortion; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_sledge_demolisher_hit |  | waves | startColor: Color RGBA(1, 1, 1, 0.666) \| startSize: Constant 30 \| startLifetime: Constant 0.8 \| maxParticles 1000 \| simulationSpace Local \| renderer: HorizontalBillboard, no sharedMaterial |
+| fx_sledge_demolisher_hit |  | bubble wave | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 10 \| startLifetime: Constant 0.8 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Particles/Standard Unlit2; material demolisher_shockwave; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_sledge_demolisher_hit |  | Cloud | startColor: TwoColors RGBA(0.604, 0.385, 0.174, 1) .. RGBA(1, 0.635, 0.061, 1) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_sledge_demolisher_hit |  | vfx_troll_rock_destroyed | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.351, 0.403, 0.434, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_sledge_demolisher_hit |  | vfx_Splosh (1) | startColor: TwoColors RGBA(0.783, 0.456, 0.129, 0.978) .. RGBA(0.717, 0.623, 0.254, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_sledge_demolisher_hit |  | vfx_troll_rock_destroyed (1) | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.351, 0.403, 0.434, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_sledge_demolisher_hit |  | waves (1) | startColor: Color RGBA(1, 1, 1, 0.666) \| startSize: Constant 20 \| startLifetime: Constant 0.8 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode HorizontalBillboard; shader Particles/Standard Unlit2; material block_wave; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| fx_sledge_demolisher_hit |  | waves (2) | startColor: Color RGBA(1, 1, 1, 0.666) \| startSize: Constant 20 \| startLifetime: Constant 0.8 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode HorizontalBillboard; shader Particles/Standard Unlit2; material demolisher_shockwave; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_sledge_demolisher_hit |  | vfx_Splosh (2) | startColor: TwoColors RGBA(0.783, 0.456, 0.129, 0.341) .. RGBA(0.717, 0.623, 0.254, 0.349) \| startSize: TwoConstants 1 .. 3 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| fx_tick_death | yes | fx_tick_death | startColor: Color RGBA(0.691, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 1 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Standard; material blood_splat2; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_tick_death | yes | skinflakes | startColor: TwoColors RGBA(0.604, 0.436, 0.419, 0.566) .. RGBA(1, 0.332, 0.297, 1) \| startSize: TwoConstants 0.3 .. 0.8 \| startLifetime: TwoConstants 1 .. 1.2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material tick_flake; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_tick_death | yes | drops-withdecals | startColor: Color RGBA(0.472, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.08 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_tick_death | yes | drops-withdecals/blood_decal | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_tick_death | yes | wetsplsh | startColor: Color RGBA(0.816, 0, 0, 1) \| startSize: TwoConstants 0.6 .. 1.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_tick_death | yes | Blood Cloud | startColor: Color RGBA(0.575, 0, 0, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: TwoConstants 3 .. 6 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| fx_unbjorn_hit |  | fx_unbjorn_hit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_unbjorn_hit |  | wetsplsh | startColor: Color RGBA(0.33, 0.048, 0.048, 1) \| startSize: TwoConstants 0.2 .. 1 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| fx_unbjorn_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.189, 0.049, 0.049, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| fx_unbjorn_hit |  | bloodchunks | startColor: Color RGBA(0.255, 0.054, 0.054, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_unbjorn_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| fx_unbjorn_hit |  | skinflakes | startColor: Color RGBA(0.264, 0.208, 0.141, 1) \| startSize: TwoConstants 0.25 .. 0.8 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material tick_flake; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| fx_vines_hit |  | fx_vines_hit | startColor: Color RGBA(0.356, 0.764, 0.123, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 3 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Mesh; shader Particles/Standard Surface2; material leaf; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| sfx_Bonemass_Hit |  | - | no ParticleSystem |
+| sfx_GoblinShaman_hurt |  | - | no ParticleSystem |
+| sfx_GuckSackHit |  | - | no ParticleSystem |
+| sfx_MudHit |  | - | no ParticleSystem |
+| sfx_ProjectileHit |  | - | no ParticleSystem |
+| sfx_archery_target_hit |  | - | no ParticleSystem |
+| sfx_arrow_hit |  | - | no ParticleSystem |
+| sfx_axe_flint_hit |  | - | no ParticleSystem |
+| sfx_axe_hit |  | - | no ParticleSystem |
+| sfx_barley_hit |  | - | no ParticleSystem |
+| sfx_battleaxe_hit |  | - | no ParticleSystem |
+| sfx_bear_hurt |  | - | no ParticleSystem |
+| sfx_beehive_hit |  | - | no ParticleSystem |
+| sfx_blob_hit |  | - | no ParticleSystem |
+| sfx_boar_hit |  | - | no ParticleSystem |
+| sfx_bonemaw_serpent_spit_hit |  | - | no ParticleSystem |
+| sfx_branch_hit |  | - | no ParticleSystem |
+| sfx_bush_hit |  | - | no ParticleSystem |
+| sfx_cart_hit |  | - | no ParticleSystem |
+| sfx_charred_hurt |  | - | no ParticleSystem |
+| sfx_charred_twitcher_hurt |  | - | no ParticleSystem |
+| sfx_chick_hurt |  | - | no ParticleSystem |
+| sfx_chicken_hurt |  | - | no ParticleSystem |
+| sfx_cinder_rain_hit |  | - | no ParticleSystem |
+| sfx_club_hit |  | - | no ParticleSystem |
+| sfx_dragon_hurt |  | - | no ParticleSystem |
+| sfx_dragon_melee_hit |  | - | no ParticleSystem |
+| sfx_draugr_hit |  | - | no ParticleSystem |
+| sfx_draugrpile_hit |  | - | no ParticleSystem |
+| sfx_dverger_vo_hurt |  | - | no ParticleSystem |
+| sfx_eikthyr_hit |  | - | no ParticleSystem |
+| sfx_elaking_hit |  | - | no ParticleSystem |
+| sfx_elaking_hit_old |  | fx_wnt_damage_snow | startColor: Color RGBA(1, 1, 1, 0.634) \| startSize: TwoConstants 1.5 .. 2.2 \| startLifetime: Constant 2 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 0.472) |
+| sfx_elaking_hit_old |  | fx_wnt_damage_snow/Snow flakes | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.02 .. 0.06 \| startLifetime: TwoConstants 6 .. 8 \| maxParticles 40 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| sfx_elaking_hit_old |  | fx_wnt_damage_snow/flying lumps | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.02 .. 0.03 \| startLifetime: TwoConstants 6 .. 8 \| maxParticles 25 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material snowlump; _MainTex none; _Color RGBA(0.871, 0.871, 0.871, 1) |
+| sfx_elaking_hit_old |  | fx_wnt_damage_snow/Snow lumps (1) | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 10 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material snowlump; _MainTex none; _Color RGBA(0.871, 0.871, 0.871, 1) |
+| sfx_elaking_hit_old |  | fx_wnt_damage_snow/blob_splat (2) | startColor: Color RGBA(0.132, 0.132, 0.132, 1) \| startSize: TwoConstants 1.5 .. 2 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode HorizontalBillboard; shader Custom/ParticleDecal; material splat_decal_snowstep; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| sfx_elaking_hit_old |  | fx_wnt_damage_snow/bloodchunks | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 1 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| sfx_elaking_hit_old |  | fx_wnt_damage_snow/bloodchunks/blob_splat (1) | startColor: Color RGBA(0, 0, 0, 0.628) \| startSize: TwoConstants 0.8 .. 1.4 \| startLifetime: Constant 6 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_snowstep; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| sfx_fallenwarrior_hurt |  | - | no ParticleSystem |
+| sfx_fenring_claw_hit |  | - | no ParticleSystem |
+| sfx_gameltroll_hurt |  | - | no ParticleSystem |
+| sfx_ghost_attack_hit |  | - | no ParticleSystem |
+| sfx_ghost_hurt |  | - | no ParticleSystem |
+| sfx_ghosts_hurt |  | - | no ParticleSystem |
+| sfx_goblin_hit |  | - | no ParticleSystem |
+| sfx_goblinbrute_clubhit |  | - | no ParticleSystem |
+| sfx_goblinbrute_hit |  | - | no ParticleSystem |
+| sfx_grapplinghook_hit |  | - | no ParticleSystem |
+| sfx_greydwarf_attack_hit |  | - | no ParticleSystem |
+| sfx_greydwarf_hit |  | - | no ParticleSystem |
+| sfx_greydwarf_stone_hit |  | - | no ParticleSystem |
+| sfx_greydwarfnest_hit |  | - | no ParticleSystem |
+| sfx_greyling_hit |  | - | no ParticleSystem |
+| sfx_hatcling_hurt |  | - | no ParticleSystem |
+| sfx_hit |  | - | no ParticleSystem |
+| sfx_hit_vibration_only |  | - | no ParticleSystem |
+| sfx_ice_hit |  | - | no ParticleSystem |
+| sfx_imp_hit |  | - | no ParticleSystem |
+| sfx_jotunwarrior_hurt |  | - | no ParticleSystem |
+| sfx_jotunwitch_hurt |  | - | no ParticleSystem |
+| sfx_leech_attack_hit |  | - | no ParticleSystem |
+| sfx_leech_hit |  | - | no ParticleSystem |
+| sfx_metalbars_hit |  | - | no ParticleSystem |
+| sfx_moleman_hurt |  | - | no ParticleSystem |
+| sfx_moose_attack_melee_hit |  | - | no ParticleSystem |
+| sfx_moose_hurt |  | - | no ParticleSystem |
+| sfx_neck_attack_hit |  | - | no ParticleSystem |
+| sfx_neck_hit |  | - | no ParticleSystem |
+| sfx_pickaxe_hit |  | - | no ParticleSystem |
+| sfx_pickaxe_hit_vibration_only |  | - | no ParticleSystem |
+| sfx_rock_hit |  | - | no ParticleSystem |
+| sfx_serpent_attack_hit |  | - | no ParticleSystem |
+| sfx_serpent_hurt |  | - | no ParticleSystem |
+| sfx_shieldgenerator_hit |  | - | no ParticleSystem |
+| sfx_silvermace_hit |  | - | no ParticleSystem |
+| sfx_skeleton_hit |  | - | no ParticleSystem |
+| sfx_skeleton_mace_hit |  | - | no ParticleSystem |
+| sfx_sledge_hit |  | - | no ParticleSystem |
+| sfx_sledge_iron_hit |  | - | no ParticleSystem |
+| sfx_snow_hit_debris |  | - | no ParticleSystem |
+| sfx_snow_hit_transient |  | - | no ParticleSystem |
+| sfx_spear_flint_hit |  | - | no ParticleSystem |
+| sfx_spear_hit |  | - | no ParticleSystem |
+| sfx_staff_elder_root_hit |  | - | no ParticleSystem |
+| sfx_staffthunderblood_cast |  | - | no ParticleSystem |
+| sfx_staffthunderblood_thunder |  | - | no ParticleSystem |
+| sfx_stonegolem_attack_hit |  | - | no ParticleSystem |
+| sfx_stonegolem_hurt |  | - | no ParticleSystem |
+| sfx_sword_hit |  | - | no ParticleSystem |
+| sfx_tick_hurt |  | - | no ParticleSystem |
+| sfx_tree_fall_hit |  | - | no ParticleSystem |
+| sfx_tree_hit |  | - | no ParticleSystem |
+| sfx_tree_hit_abomination |  | - | no ParticleSystem |
+| sfx_troll_attack_hit |  | - | no ParticleSystem |
+| sfx_troll_hit |  | - | no ParticleSystem |
+| sfx_unarmed_hit |  | - | no ParticleSystem |
+| sfx_unbjorn_hurt |  | - | no ParticleSystem |
+| sfx_wolf_attack_hit |  | - | no ParticleSystem |
+| sfx_wolf_hit |  | - | no ParticleSystem |
+| sfx_wood_hit |  | - | no ParticleSystem |
+| sfx_wraith_attack_hit |  | - | no ParticleSystem |
+| sfx_wraith_hit |  | - | no ParticleSystem |
+| vfx_ArcheryTarget_hit |  | Fibers | startColor: Color RGBA(0.659, 0.569, 0.455, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material feather_white; _MainTex feather_particle_white (32x32); _Color RGBA(1, 1, 1, 1) |
+| vfx_ArcheryTarget_hit |  | Fibers/Dust | startColor: Color RGBA(0.761, 0.724, 0.677, 1) \| startSize: TwoConstants 1 .. 1.5 \| startLifetime: TwoConstants 1 .. 5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slowwispysmoke_hard; _MainTex slowwispysmokeloop (512x512); _Color RGBA(1, 1, 1, 1) |
+| vfx_BloodDeath | yes | vfx_BloodDeath | startColor: Color RGBA(0.691, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 1 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Standard; material blood_splat2; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_BloodDeath | yes | skinflakes | startColor: Color RGBA(0.566, 0.393, 0.2, 1) \| startSize: TwoConstants 0.4 .. 0.6 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_BloodDeath | yes | vfx_BloodHit 1 | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_BloodDeath | yes | vfx_BloodHit 1/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_BloodDeath | yes | wetsplsh | startColor: Color RGBA(0.971, 0, 0, 1) \| startSize: TwoConstants 0.3 .. 0.7 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_BloodHit | yes | vfx_BloodHit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_BloodHit | yes | wetsplsh | startColor: Color RGBA(0.971, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_BloodHit | yes | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_BloodHit | yes | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_BloodHit | yes | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_BonemassHit |  | vfx_BonemassHit | startColor: TwoColors RGBA(0.338, 0.258, 0.114, 1) .. RGBA(0.397, 0.298, 0.12, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_BonemassHit |  | GameObject | startColor: TwoColors RGBA(0.412, 0.302, 0.106, 1) .. RGBA(0.426, 0.311, 0.103, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_BonemassHit |  | bones | startColor: Color RGBA(0.794, 0.547, 0.105, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_BonemassHit |  | wetsplsh | startColor: TwoColors RGBA(0.294, 0.234, 0.125, 1) .. RGBA(0.551, 0.434, 0.223, 1) \| startSize: TwoConstants 0.3 .. 0.7 \| startLifetime: TwoConstants 1 .. 1.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_BonemassHit |  | Chunks | startColor: TwoColors RGBA(0.618, 0.416, 0.054, 1) .. RGBA(0.229, 0.324, 0.102, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 3 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_BonemassHit |  | Chunks/blob_splat | startColor: TwoColors RGBA(0.61, 0.316, 0, 1) .. RGBA(0.316, 0.463, 0.215, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 5 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_CoalHit |  | vfx_CoalHit | startColor: TwoColors RGBA(0.162, 0.162, 0.162, 1) .. RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_CoalHit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.01 .. 0.03 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Standard (Specular setup); material coal; _MainTex iron (64x64); _Color RGBA(0, 0, 0, 1) |
+| vfx_ColdBall_Hit |  | vfx_ColdBall_Hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.05 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material cold_sparcs; _MainTex none; _Color RGBA(0.961, 1.877, 2.42, 1) |
+| vfx_ColdBall_Hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.01 .. 0.04 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material coldball; _MainTex iron (64x64); _Color RGBA(0.897, 0.949, 1, 1) |
+| vfx_ColdBall_Hit |  | vfx_ice_hit | startColor: TwoColors RGBA(0.647, 0.956, 1, 0.497) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.04 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_ColdBall_Hit |  | smoke | startColor: Color RGBA(0.544, 0.83, 1, 0.216) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_FallenWarrior_hit |  | Ethereal Smoke | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.5 .. 1.5 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/Gradient Mapped Particle (Unlit); material slowwispysmoke_gradient; _MainTex slowwispysmokeloop (512x512) |
+| vfx_FallenWarrior_hit |  | Ethereal Smoke/Bits | startColor: Color RGBA(0.269, 0.593, 1, 1) \| startSize: TwoConstants 0.05 .. 0.01 \| startLifetime: TwoConstants 1 .. 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material pixel_additive; _MainTex none; _Color RGBA(2, 2, 2, 1) |
+| vfx_FireballHit |  | vfx_FireballHit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.4 \| startLifetime: TwoConstants 0.2 .. 0.6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Legacy Shaders/Particles/Additive; material flame; _MainTex leaf_low (8x8); _TintColor RGBA(1, 1, 1, 1) |
+| vfx_FireballHit |  | smoke | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_FireballHit |  | fire | startColor: TwoColors RGBA(1, 0.984, 0.934, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 0.3 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material flameball_flipbook; _MainTex flameball_flipbook (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_FireballHit |  | fire (1) | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Legacy Shaders/Particles/Additive; material flame; _MainTex leaf_low (8x8); _TintColor RGBA(1, 1, 1, 1) |
+| vfx_GuckSackHit | yes | vfx_GuckSackHit | startColor: TwoColors RGBA(0.859, 1, 0.503, 1) .. RGBA(0.663, 1, 0.337, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_GuckSackHit | yes | GameObject | startColor: TwoColors RGBA(0.743, 0.572, 0.268, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_GuckSackHit | yes | wetsplsh | startColor: TwoColors RGBA(0.743, 0.572, 0.268, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.3 .. 0.7 \| startLifetime: TwoConstants 1 .. 1.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_GuckSackHit | yes | vfx_RockHit (1) | startColor: TwoColors RGBA(0.493, 0.404, 0.246, 1) .. RGBA(0.676, 0.512, 0.219, 1) \| startSize: TwoConstants 0.01 .. 0.03 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_HitSparks |  | vfx_HitSparks | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.03 .. 0.03 \| startLifetime: TwoConstants 0.3 .. 0.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material gnista; _MainTex crystal (64x64); _Color RGBA(2, 2, 2, 1) |
+| vfx_HitSparks |  | vfx_Splosh (1) | startColor: TwoColors RGBA(1, 0.783, 0.074, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.8 .. 1 \| startLifetime: Constant 0.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_MarbleHit |  | vfx_MarbleHit | startColor: Color RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_MarbleHit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/Piece; material blackmarble_item; _MainTex marble_item_d (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_MudHit |  | vfx_MudHit | startColor: TwoColors RGBA(0.743, 0.572, 0.268, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_MudHit |  | GameObject | startColor: TwoColors RGBA(0.743, 0.572, 0.268, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_MudHit |  | wetsplsh | startColor: TwoColors RGBA(0.382, 0.292, 0.129, 1) .. RGBA(0.537, 0.632, 0.295, 1) \| startSize: TwoConstants 0.5 .. 1.5 \| startLifetime: TwoConstants 1 .. 1.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime; _MainTex slime_splash (64x64); _Color RGBA(0.699, 0.699, 0.699, 1) |
+| vfx_MudHit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.493, 0.404, 0.246, 1) .. RGBA(0.676, 0.512, 0.219, 1) \| startSize: TwoConstants 0.01 .. 0.1 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material mudlump; _MainTex mudpile_d (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_Poison | yes | vfx_Poison | startColor: Color RGBA(1, 0.206, 0.206, 1) \| startSize: TwoConstants 2 .. 2 \| startLifetime: Constant 1 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_Poison | yes | smok_small | startColor: TwoColors RGBA(0.779, 1, 0, 0.684) .. RGBA(0.475, 0.846, 0.056, 0.753) \| startSize: Constant 2 \| startLifetime: TwoConstants 2 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 0.472) |
+| vfx_Poison | yes | smoke_world | startColor: TwoColors RGBA(0.779, 1, 0, 0.684) .. RGBA(0.475, 0.846, 0.056, 0.753) \| startSize: Constant 1 \| startLifetime: TwoConstants 2 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material poison; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 0.472) |
+| vfx_ProjectileHit |  | vfx_ProjectileHit | startColor: TwoColors RGBA(0.743, 0.572, 0.268, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_ProjectileHit |  | GameObject | startColor: TwoColors RGBA(0.743, 0.572, 0.268, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_ProjectileHit |  | wetsplsh | startColor: TwoColors RGBA(0.34, 0.426, 0.141, 1) .. RGBA(0.434, 0.373, 0.121, 1) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 1.5 .. 2 \| maxParticles 2000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_ProjectileHit |  | ooz | startColor: TwoColors RGBA(0.957, 1, 0.559, 0.291) .. RGBA(0.724, 1, 0.5, 0.309) \| startSize: Constant 4 \| startLifetime: TwoConstants 5 .. 6 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_RockHit |  | vfx_RockHit | startColor: TwoColors RGBA(0.162, 0.162, 0.162, 1) .. RGBA(0.559, 0.559, 0.559, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_RockHit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.01 .. 0.03 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_RockHit_Marble |  | vfx_RockHit_Marble | startColor: TwoColors RGBA(0.162, 0.162, 0.162, 1) .. RGBA(0.559, 0.559, 0.559, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/Piece; material blackmarble; _MainTex marble_d (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_RockHit_Marble |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.01 .. 0.03 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_RockHit_Obsidian |  | vfx_RockHit_Obsidian | startColor: TwoColors RGBA(0.162, 0.162, 0.162, 1) .. RGBA(0.559, 0.559, 0.559, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_RockHit_Obsidian |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.01 .. 0.03 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_RockHit_Obsidian |  | vfx_RockHit (2) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material ObsidianRock_mat; _MainTex ObsidanRock_d (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_ShadowPerson_hit |  | Ethereal Smoke | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.5 .. 1.5 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/Gradient Mapped Particle (Unlit); material slowwispysmoke_gradient; _MainTex slowwispysmokeloop (512x512) |
+| vfx_ShadowPerson_hit |  | Ethereal Smoke/Bits | startColor: Color RGBA(0.404, 0.404, 0.404, 1) \| startSize: TwoConstants 0.05 .. 0.01 \| startLifetime: TwoConstants 1 .. 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material pixel_additive; _MainTex none; _Color RGBA(2, 2, 2, 1) |
+| vfx_Slimed | yes | splush | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.5 .. 1 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material queenslime; _MainTex slime_splash_2 (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_TrainingDummy_hit |  | Woodchips | startColor: Color RGBA(0.478, 0.334, 0.215, 1) \| startSize: TwoConstants 0.01 .. 0.04 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Surface2; material pixel_lit_opaque; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_TrainingDummy_hit |  | Woodchips/Smoke | startColor: Color RGBA(0.774, 0.67, 0.586, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slowwispysmoke; _MainTex slowwispysmokeloop (512x512); _Color RGBA(1, 1, 1, 1) |
+| vfx_arrowhit |  | vfx_arrowhit | startColor: TwoColors RGBA(0.603, 0.509, 0.408, 1) .. RGBA(1, 0.937, 0.801, 1) \| startSize: TwoConstants 0.5 .. 0.8 \| startLifetime: Constant 1 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle_pixel; _MainTex wildfire01_pixel (32x32); _Color RGBA(1, 1, 1, 1) |
+| vfx_arrowhit |  | vfx_BloodHit 1 | startColor: Color RGBA(1, 1, 1, 0.778) \| startSize: TwoConstants 0.04 .. 0.04 \| startLifetime: Constant 0.3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material pixel_unlit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_ashlandsbow_blood_fire |  | smoke | startColor: Color RGBA(0.443, 0.136, 0.136, 0.369) \| startSize: TwoConstants 0.3 .. 1.5 \| startLifetime: TwoConstants 2 .. 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slowwispysmoke; _MainTex slowwispysmokeloop (512x512); _Color RGBA(1, 1, 1, 1) |
+| vfx_ashlandsbow_blood_fire |  | smoke/spikes | startColor: Color RGBA(0.321, 0.026, 0.075, 1) \| startSize: TwoConstants 0.05 .. 0.2 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 100 \| simulationSpace World \| renderer: mode Stretch; shader Custom/LitParticles; material water_drop_noemissive; _MainTex drop_pixel (32x8); _Color RGBA(0.745, 0.745, 0.745, 1) |
+| vfx_barnacle_hit |  | flakes | startColor: TwoColors RGBA(0.559, 0.529, 0.407, 1) .. RGBA(0.669, 0.554, 0.305, 1) \| startSize: TwoConstants 0.01 .. 0.01 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/AlphaParticle; material barnacle_piece; _MainTex water_foam (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_barnacle_hit |  | pixels | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.757, 0.705, 0.568, 1) \| startSize: TwoConstants 0.04 .. 0.07 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_beehive_hit |  | vfx_beehive_hit | startColor: Color RGBA(0.301, 0.301, 0.268, 1) \| startSize: TwoConstants 0.3 .. 0.6 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material hive; _MainTex feather_particle_white (32x32); _Color RGBA(1, 1, 1, 1) |
+| vfx_beehive_hit |  | smokepoff | startColor: Color RGBA(0.846, 0.846, 0.846, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: TwoConstants 5 .. 2 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_beehive_hit |  | vfx_beehive_hit | startColor: TwoColors RGBA(0.64, 0.61, 0.583, 1) .. RGBA(0.882, 0.878, 0.72, 1) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material pixel_lit_opaque; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_beehive_hit |  | honney | startColor: Color RGBA(1, 0.69, 0.022, 1) \| startSize: TwoConstants 0.05 .. 0.02 \| startLifetime: Constant 3 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material pixel_lit_opaque; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_blob_death | yes | vfx_blob_death | startColor: TwoColors RGBA(0.743, 0.572, 0.268, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_blob_death | yes | Chunks | startColor: TwoColors RGBA(0.618, 0.416, 0.054, 1) .. RGBA(0.4, 0.581, 0.158, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 3 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_blob_death | yes | Chunks/blob_splat | startColor: TwoColors RGBA(0.61, 0.316, 0, 1) .. RGBA(0.316, 0.463, 0.215, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 5 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_blob_death | yes | bones | startColor: TwoColors RGBA(0.934, 0.764, 0.46, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.3 .. 0.4 \| startLifetime: TwoConstants 3 .. 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_blob_death | yes | wetsplsh | startColor: TwoColors RGBA(0.276, 0.324, 0.109, 1) .. RGBA(0.287, 0.239, 0.154, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_blob_frost_hit |  | vfx_blob_frost_hit | startColor: TwoColors RGBA(0.091, 0.348, 1, 1) .. RGBA(0.236, 1, 0.977, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_blob_frost_hit |  | wetsplsh | startColor: TwoColors RGBA(0.206, 0.432, 0.648, 1) .. RGBA(0.233, 0.89, 0.937, 1) \| startSize: TwoConstants 0.7 .. 1 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Surface2; material queenslime; _MainTex slime_splash_2 (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_blob_hit | yes | vfx_blob_hit | startColor: TwoColors RGBA(0.743, 0.572, 0.268, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_blob_hit | yes | chunks | startColor: TwoColors RGBA(0.632, 0.446, 0.112, 1) .. RGBA(0.316, 0.574, 0.139, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_blob_hit | yes | chunks/blob_splat | startColor: TwoColors RGBA(0.493, 0.377, 0, 1) .. RGBA(0.239, 0.544, 0.092, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 5 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_blob_hit | yes | vfx_RockHit (1) | startColor: TwoColors RGBA(0.934, 0.764, 0.46, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_blob_hit | yes | wetsplsh | startColor: TwoColors RGBA(0.638, 0.743, 0.268, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.3 .. 0.7 \| startLifetime: TwoConstants 1 .. 1.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_blobmork_hit |  | vfx_blobmork_hit | startColor: TwoColors RGBA(0.114, 0.725, 0.694, 1) .. RGBA(0.286, 0.482, 0.463, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_blobmork_hit |  | chunks | startColor: TwoColors RGBA(0.286, 0.482, 0.463, 1) .. RGBA(0.114, 0.725, 0.694, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_blobmork_hit |  | chunks/blob_splat | startColor: TwoColors RGBA(0.286, 0.482, 0.463, 1) .. RGBA(0.114, 0.725, 0.694, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 5 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_blobmork_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(1, 0.914, 0.759, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_blobmork_hit |  | wetsplsh | startColor: TwoColors RGBA(0.286, 0.482, 0.463, 1) .. RGBA(0.114, 0.725, 0.694, 1) \| startSize: TwoConstants 0.3 .. 0.7 \| startLifetime: TwoConstants 1 .. 1.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_teal; _MainTex slime_splash (64x64); _Color RGBA(0, 1, 0.741, 1) |
+| vfx_blobtar_hit |  | vfx_blobtar_hit | startColor: Color RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_blobtar_hit |  | chunks | startColor: Color RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.1 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_blobtar_hit |  | chunks/blob_splat (1) | startColor: Color RGBA(0.057, 0.057, 0.057, 1) \| startSize: Constant 2 \| startLifetime: Constant 7 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/AlphaParticle; material puke; _MainTex water_foam (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_blobtar_hit |  | wetsplsh | startColor: Color RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.3 .. 0.7 \| startLifetime: TwoConstants 1 .. 1.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime; _MainTex slime_splash (64x64); _Color RGBA(0.699, 0.699, 0.699, 1) |
+| vfx_boar_hit | yes | vfx_boar_hit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_boar_hit | yes | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_boar_hit | yes | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_boar_hit | yes | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_boar_hit | yes | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_bush2_e_hit |  | ps | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.5 \| startLifetime: Constant 3 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material leaf_en; _MainTex en_particle (32x32); _Color RGBA(1, 1, 1, 1) |
+| vfx_bush2_e_hit |  | smokepoff | startColor: Color RGBA(0.669, 0.613, 0.492, 0.228) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 1 .. 3 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_clubhit |  | vfx_clubhit | startColor: TwoColors RGBA(0.603, 0.509, 0.408, 1) .. RGBA(1, 0.937, 0.801, 1) \| startSize: TwoConstants 0.3 .. 0.6 \| startLifetime: Constant 1 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_crossbow_blood_fire |  | smoke | startColor: Color RGBA(0.443, 0.136, 0.136, 0.369) \| startSize: TwoConstants 0.3 .. 1.5 \| startLifetime: TwoConstants 2 .. 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slowwispysmoke; _MainTex slowwispysmokeloop (512x512); _Color RGBA(1, 1, 1, 1) |
+| vfx_crossbow_blood_fire |  | smoke/spikes | startColor: Color RGBA(0.321, 0.026, 0.075, 1) \| startSize: TwoConstants 0.05 .. 0.2 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 100 \| simulationSpace World \| renderer: mode Stretch; shader Custom/LitParticles; material water_drop_noemissive; _MainTex drop_pixel (32x8); _Color RGBA(0.745, 0.745, 0.745, 1) |
+| vfx_crossbow_blood_fire |  | smoke/shockwave | startColor: Color RGBA(1, 0.476, 0.476, 0.216) \| startSize: Constant 4 \| startLifetime: Constant 0.3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Unlit2; material block_wave; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_deer_hit |  | vfx_deer_hit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_deer_hit |  | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_deer_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_deer_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_deer_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_dragon_hurt |  | vfx_dragon_hurt | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_dragon_hurt |  | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_dragon_hurt |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_dragon_hurt |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_dragon_hurt |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_dragon_hurt |  | skinflakes | startColor: TwoColors RGBA(0.537, 0.339, 0.275, 1) .. RGBA(0.357, 0.216, 0.201, 1) \| startSize: TwoConstants 0.2 .. 0.6 \| startLifetime: TwoConstants 2 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Mesh; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_dragon_ice_hit |  | vfx_dragon_ice_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.05 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material cold_sparcs; _MainTex none; _Color RGBA(0.961, 1.877, 2.42, 1) |
+| vfx_dragon_ice_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.02 .. 0.04 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material coldball; _MainTex iron (64x64); _Color RGBA(0.897, 0.949, 1, 1) |
+| vfx_dragon_ice_hit |  | vfx_ice_hit | startColor: TwoColors RGBA(0.647, 0.956, 1, 0.497) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.04 .. 0.1 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_dragon_ice_hit |  | smoke | startColor: Color RGBA(0.544, 0.83, 1, 0.216) \| startSize: TwoConstants 2 .. 4 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_draugr_hit |  | vfx_draugr_hit | startColor: TwoColors RGBA(0.315, 0.449, 0.063, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_draugr_hit |  | chunks | startColor: TwoColors RGBA(0.346, 0.241, 0.053, 1) .. RGBA(0.212, 0.412, 0.076, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_draugr_hit |  | chunks/blob_splat | startColor: TwoColors RGBA(0.647, 0.524, 0.01, 1) .. RGBA(0.284, 0.684, 0.01, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 5 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_draugr_hit |  | wetsplsh | startColor: TwoColors RGBA(0.309, 0.36, 0.127, 1) .. RGBA(0.382, 0.287, 0.115, 1) \| startSize: TwoConstants 0.2 .. 1 \| startLifetime: TwoConstants 1 .. 1.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_draugrpile_hit |  | vfx_draugrpile_hit | startColor: TwoColors RGBA(0.315, 0.449, 0.063, 1) .. RGBA(0.574, 0.478, 0.308, 1) \| startSize: TwoConstants 0.05 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_draugrpile_hit |  | chunks | startColor: TwoColors RGBA(0.346, 0.241, 0.053, 1) .. RGBA(0.212, 0.412, 0.076, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_draugrpile_hit |  | chunks/blob_splat | startColor: TwoColors RGBA(0.647, 0.524, 0.01, 1) .. RGBA(0.284, 0.684, 0.01, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 5 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_draugrpile_hit |  | wetsplsh | startColor: TwoColors RGBA(0.309, 0.36, 0.127, 1) .. RGBA(1, 0, 0, 1) \| startSize: TwoConstants 0.5 .. 2 \| startLifetime: TwoConstants 1 .. 1.5 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_fenring_hurt |  | vfx_fenring_hurt | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_fenring_hurt |  | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 0.3 .. 0.6 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_fenring_hurt |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_fenring_hurt |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_fenring_hurt |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_fenring_hurt |  | skinflakes | startColor: TwoColors RGBA(0.36, 0.36, 0.36, 0.566) .. RGBA(0.368, 0.368, 0.368, 1) \| startSize: TwoConstants 0.5 .. 1 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_foresttroll_hit |  | vfx_foresttroll_hit | startColor: TwoColors RGBA(0.337, 0.535, 0.765, 0.728) .. RGBA(0.203, 0.326, 0.919, 1) \| startSize: TwoConstants 0.5 .. 0.5 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_foresttroll_hit |  | vfx_BloodHit 1 | startColor: TwoColors RGBA(0.581, 0, 0.036, 0.816) .. RGBA(0.824, 0, 0, 0.884) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_foresttroll_hit |  | cunks | startColor: TwoColors RGBA(0.511, 0.765, 0.337, 0.728) .. RGBA(0.559, 0.411, 0.189, 1) \| startSize: TwoConstants 0.5 .. 0.5 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_foresttroll_hit |  | cunks/blob_splat | startColor: TwoColors RGBA(0.691, 0, 0, 1) .. RGBA(0.831, 0.049, 0.049, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_frostarrow_hit |  | vfx_frostarrow_hit | startColor: TwoColors RGBA(0.603, 0.509, 0.408, 1) .. RGBA(1, 0.937, 0.801, 1) \| startSize: TwoConstants 0.5 .. 0.8 \| startLifetime: Constant 1 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle_pixel; _MainTex wildfire01_pixel (32x32); _Color RGBA(1, 1, 1, 1) |
+| vfx_frostarrow_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.01 .. 0.03 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material coldball; _MainTex iron (64x64); _Color RGBA(0.897, 0.949, 1, 1) |
+| vfx_frostarrow_hit |  | vfx_ice_hit | startColor: TwoColors RGBA(0.647, 0.956, 1, 0.497) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.04 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_frostarrow_hit |  | smoke | startColor: Color RGBA(0.544, 0.83, 1, 0.216) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_frosttroll_hit |  | vfx_frosttroll_hit | startColor: TwoColors RGBA(0.337, 0.535, 0.765, 0.728) .. RGBA(0.203, 0.326, 0.919, 1) \| startSize: TwoConstants 0.5 .. 0.5 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_frosttroll_hit |  | vfx_BloodHit 1 | startColor: TwoColors RGBA(0.581, 0, 0.036, 0.816) .. RGBA(0.824, 0, 0, 0.884) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_frosttroll_hit |  | cunks | startColor: TwoColors RGBA(0.337, 0.535, 0.765, 0.728) .. RGBA(0.203, 0.326, 0.919, 1) \| startSize: TwoConstants 0.5 .. 0.5 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_frosttroll_hit |  | cunks/blob_splat | startColor: TwoColors RGBA(0.691, 0, 0, 1) .. RGBA(0.831, 0.049, 0.049, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 5 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_ghost_hit |  | vfx_ghost_hit | startColor: TwoColors RGBA(0.046, 0.046, 0.046, 1) .. RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.5 .. 0.5 \| startLifetime: Constant 0.5 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/LitParticles; material wraith_smoke; _MainTex wildfire06 (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_goblin_dn_hit |  | vfx_goblin_dn_hit | startColor: TwoColors RGBA(0.408, 0.431, 0.38, 1) .. RGBA(1, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 0.7 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_goblin_dn_hit |  | wetsplsh | startColor: Color RGBA(0.743, 0, 0, 1) \| startSize: TwoConstants 0.5 .. 0.7 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_goblin_dn_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_goblin_dn_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_goblin_dn_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_goblin_dn_hit |  | skinflakes | startColor: Color RGBA(0.408, 0.431, 0.38, 1) \| startSize: TwoConstants 0.4 .. 0.6 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_goblin_hit |  | vfx_goblin_hit | startColor: TwoColors RGBA(0.232, 0.772, 0.097, 0.728) .. RGBA(1, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 0.7 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_goblin_hit |  | wetsplsh | startColor: Color RGBA(0.743, 0, 0, 1) \| startSize: TwoConstants 0.5 .. 0.7 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_goblin_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_goblin_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_goblin_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_goblin_hit |  | skinflakes | startColor: Color RGBA(0.385, 0.618, 0.123, 1) \| startSize: TwoConstants 0.4 .. 0.6 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_goblinbrute_hit |  | vfx_goblinbrute_hit | startColor: TwoColors RGBA(0.232, 0.772, 0.097, 0.728) .. RGBA(1, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 0.7 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_goblinbrute_hit |  | wetsplsh | startColor: Color RGBA(0.743, 0, 0, 1) \| startSize: TwoConstants 0.5 .. 0.7 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_goblinbrute_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_goblinbrute_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_goblinbrute_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_goblinbrute_hit |  | skinflakes | startColor: Color RGBA(0.385, 0.618, 0.123, 1) \| startSize: TwoConstants 0.4 .. 0.6 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_greydwarf_hit |  | vfx_greydwarf_hit | startColor: TwoColors RGBA(0.772, 0.362, 0.097, 0.728) .. RGBA(0.76, 0.801, 0.041, 1) \| startSize: TwoConstants 0.5 .. 0.5 \| startLifetime: Constant 0.7 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_greydwarf_hit |  | vfx_BloodHit 1 | startColor: TwoColors RGBA(0.404, 0.262, 0.048, 1) .. RGBA(0.419, 0.347, 0.046, 1) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_greydwarf_hit |  | vfx_BloodHit_decals | startColor: TwoColors RGBA(0.404, 0.262, 0.048, 1) .. RGBA(0.419, 0.347, 0.046, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 2 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_greydwarf_hit |  | vfx_BloodHit_decals/blob_splat | startColor: TwoColors RGBA(0.838, 0.468, 0, 1) .. RGBA(0.824, 0.804, 0.103, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: Constant 5 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_greydwarfnest_hit |  | vfx_greydwarfnest_hit | startColor: TwoColors RGBA(0.772, 0.362, 0.097, 0.728) .. RGBA(0.76, 0.801, 0.041, 1) \| startSize: TwoConstants 0.5 .. 0.5 \| startLifetime: Constant 0.7 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_greydwarfnest_hit |  | vfx_BloodHit 1 | startColor: TwoColors RGBA(0.404, 0.262, 0.048, 1) .. RGBA(0.419, 0.347, 0.046, 1) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_greydwarfnest_hit |  | vfx_BloodHit_decals | startColor: TwoColors RGBA(0.404, 0.262, 0.048, 1) .. RGBA(0.419, 0.347, 0.046, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 2 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_greydwarfnest_hit |  | vfx_BloodHit_decals/blob_splat | startColor: TwoColors RGBA(0.838, 0.468, 0, 1) .. RGBA(0.824, 0.804, 0.103, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: Constant 5 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_greydwarfnest_hit |  | twiggs | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.2 \| startLifetime: TwoConstants 4 .. 7 \| maxParticles 100 \| simulationSpace World \| renderer: mode Mesh; shader Standard; material branch; _MainTex acacia_trunk01 (256x256); _Color RGBA(1, 0.933, 0.933, 1) |
+| vfx_hatchling_hurt |  | vfx_hatchling_hurt | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_hatchling_hurt |  | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_hatchling_hurt |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_hatchling_hurt |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_hatchling_hurt |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_hatchling_hurt |  | skinflakes | startColor: TwoColors RGBA(0.529, 0.649, 1, 1) .. RGBA(0.338, 0.617, 1, 1) \| startSize: TwoConstants 0.2 .. 0.6 \| startLifetime: TwoConstants 2 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Mesh; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_hjall_spit_hit |  | vfx_hjall_spit_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.1 .. 0.05 \| startLifetime: TwoConstants 0.3 .. 0.6 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material cold_sparcs; _MainTex none; _Color RGBA(0.961, 1.877, 2.42, 1) |
+| vfx_hjall_spit_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.01 .. 0.04 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material coldball; _MainTex iron (64x64); _Color RGBA(0.897, 0.949, 1, 1) |
+| vfx_hjall_spit_hit |  | vfx_ice_hit | startColor: TwoColors RGBA(0.647, 0.956, 1, 0.497) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.04 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_hjall_spit_hit |  | smoke | startColor: Color RGBA(0.544, 0.83, 1, 0.216) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_hjall_spit_hit |  | smoke (1) | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_hjall_spit_hit |  | zinder | startColor: TwoColors RGBA(0.741, 0.462, 0.267, 1) .. RGBA(1, 0.936, 0.094, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material pixel_unlit_red; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_hjall_spit_hit |  | wetsplsh | startColor: TwoColors RGBA(0.875, 0.385, 0.078, 1) .. RGBA(0.67, 0.831, 0.165, 1) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 1.5 .. 3 \| maxParticles 2000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime; _MainTex slime_splash (64x64); _Color RGBA(0.699, 0.699, 0.699, 1) |
+| vfx_hjall_spit_hit |  | wet trailers | startColor: TwoColors RGBA(0.34, 0.426, 0.141, 1) .. RGBA(0.434, 0.373, 0.121, 1) \| startSize: TwoConstants 0.2 .. 1 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 2000 \| simulationSpace World \| renderer: mode None; shader Lux Lit Particles/ Bumped; material slime; _MainTex slime_splash (64x64); _Color RGBA(0.699, 0.699, 0.699, 1) |
+| vfx_hjall_spit_hit |  | splash decals | startColor: TwoColors RGBA(0, 0.557, 0.395, 0.491) .. RGBA(0, 0.604, 0.127, 1) \| startSize: TwoConstants 0.05 .. 0.08 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_hjall_spit_hit |  | splash decals/blood_decal | startColor: Color RGBA(1, 0.657, 0, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: TwoConstants 10 .. 11 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/Decal; material seeker_blood_splat; _MainTex brains (64x64); _Color RGBA(0.557, 0.557, 0.557, 1) |
+| vfx_ice_hit |  | vfx_ice_hit | startColor: TwoColors RGBA(0.647, 0.956, 1, 0.497) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.04 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_ice_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.596, 0.596, 0.596, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.01 .. 0.04 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material ice; _MainTex none; _Color RGBA(0.838, 0.973, 1, 1) |
+| vfx_leech_death | yes | vfx_leech_death | startColor: Color RGBA(0.691, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 1 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Standard; material blood_splat2; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_leech_death | yes | skinflakes | startColor: TwoColors RGBA(0.868, 0.051, 0.304, 0.566) .. RGBA(0.566, 0.2, 0.2, 1) \| startSize: TwoConstants 0.1 .. 0.4 \| startLifetime: TwoConstants 2 .. 4 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_leech_death | yes | vfx_BloodHit 1 | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 3 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_leech_death | yes | vfx_BloodHit 1/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_leech_death | yes | wetsplsh | startColor: Color RGBA(0.816, 0, 0, 1) \| startSize: TwoConstants 0.4 .. 1 \| startLifetime: TwoConstants 0.5 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_leech_hit | yes | vfx_leech_hit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_leech_hit | yes | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 0.3 .. 0.6 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_leech_hit | yes | blood_drops | startColor: TwoColors RGBA(0.331, 0, 0.171, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_leech_hit | yes | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_leech_hit | yes | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_neck_hit |  | vfx_neck_hit | startColor: TwoColors RGBA(0.318, 0.434, 0.051, 1) .. RGBA(0.26, 0.441, 0.114, 1) \| startSize: TwoConstants 1.5 .. 2 \| startLifetime: Constant 0.5 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_neck_hit |  | blood_drips | startColor: TwoColors RGBA(0.048, 0.404, 0.198, 1) .. RGBA(0.374, 0.507, 0, 1) \| startSize: TwoConstants 0.04 .. 0.04 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_neck_hit |  | vfx_BloodHit_decals | startColor: TwoColors RGBA(0.17, 0.551, 0.049, 1) .. RGBA(0.09, 0.647, 0.279, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 2 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_neck_hit |  | vfx_BloodHit_decals/blob_splat | startColor: TwoColors RGBA(0.549, 0.838, 0, 1) .. RGBA(0.128, 0.824, 0.103, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: Constant 5 \| maxParticles 10 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_player_hit |  | vfx_player_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: Constant 1 \| startLifetime: Constant 5 \| maxParticles 0 \| simulationSpace Local \| renderer: Billboard, no sharedMaterial |
+| vfx_player_hit |  | vfx_BloodHit 1 | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_player_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_player_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_player_hit |  | skinflakes | startColor: Color RGBA(0.831, 0.462, 0.214, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: TwoConstants 0.5 .. 1.2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_player_hit |  | wetsplsh | startColor: Color RGBA(0.971, 0, 0, 1) \| startSize: TwoConstants 0.3 .. 0.7 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_poisonarrow_hit |  | vfx_poisonarrow_hit | startColor: TwoColors RGBA(0.531, 0.618, 0.132, 1) .. RGBA(0.963, 0.279, 0.163, 1) \| startSize: TwoConstants 0.5 .. 1 \| startLifetime: Constant 1 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle_pixel; _MainTex wildfire01_pixel (32x32); _Color RGBA(1, 1, 1, 1) |
+| vfx_poisonarrow_hit |  | vfx_ice_hit | startColor: TwoColors RGBA(0.3, 1, 0.125, 0.497) .. RGBA(0.262, 0.574, 0.008, 1) \| startSize: TwoConstants 0.04 .. 0.06 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_poisonarrow_hit |  | smoke | startColor: Color RGBA(0.1, 0.904, 0.105, 0.216) \| startSize: TwoConstants 2 .. 3 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_seal_hit |  | vfx_seal_hit | startColor: TwoColors RGBA(0.232, 0.772, 0.097, 0.728) .. RGBA(1, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.2 \| startLifetime: Constant 0.7 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_seal_hit |  | wetsplsh | startColor: Color RGBA(0.743, 0, 0, 1) \| startSize: TwoConstants 0.5 .. 0.7 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_seal_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_seal_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_seal_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_seal_hit |  | skinflakes | startColor: Color RGBA(0.774, 0.774, 0.774, 1) \| startSize: TwoConstants 0.4 .. 0.6 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_serpent_hurt |  | vfx_serpent_hurt | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_serpent_hurt |  | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_serpent_hurt |  | blood_drops | startColor: TwoColors RGBA(0.331, 0, 0.171, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.07 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_serpent_hurt |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.3 .. 0.4 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_serpent_hurt |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_shrub_2_hit |  | vfx_shrub_2_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.3 .. 0.5 \| startLifetime: Constant 3 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Mesh; shader Particles/Standard Surface2; material shrub2_leafparticle; _MainTex shrub_2_particle (32x32); _Color RGBA(1, 1, 1, 1) |
+| vfx_shrub_heath_hit |  | vfx_shrub_heath_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.3 .. 0.5 \| startLifetime: Constant 3 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Mesh; shader Particles/Standard Surface2; material shrub2_leafparticle_heath; _MainTex shrub_2_particle_heath (32x32); _Color RGBA(1, 1, 1, 1) |
+| vfx_silvermace_hit |  | vfx_silvermace_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.5 .. 1 \| startLifetime: Constant 1 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_silvermace_hit |  | Snow flakes | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.02 .. 0.06 \| startLifetime: Constant 3 \| maxParticles 200 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material pixel_lit; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_silvermace_hit |  | flying lumps | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.02 .. 0.03 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Mesh; shader Standard; material snowlump; _MainTex none; _Color RGBA(0.871, 0.871, 0.871, 1) |
+| vfx_skeleton_hit |  | vfx_skeleton_hit | startColor: TwoColors RGBA(0.456, 0.448, 0.335, 1) .. RGBA(0.676, 0.653, 0.612, 1) \| startSize: TwoConstants 0.02 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_skeleton_hit |  | dust | startColor: TwoColors RGBA(0.603, 0.509, 0.408, 1) .. RGBA(1, 0.937, 0.801, 1) \| startSize: TwoConstants 0.5 .. 0.8 \| startLifetime: Constant 1 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle_pixel; _MainTex wildfire01_pixel (32x32); _Color RGBA(1, 1, 1, 1) |
+| vfx_skeleton_mace_hit |  | wetsplsh | startColor: Color RGBA(0.274, 0.816, 0.102, 0.222) \| startSize: TwoConstants 1 .. 1.5 \| startLifetime: TwoConstants 1 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Unlit2; material flame_large; _MainTex wildfire06 (128x128); _Color RGBA(1.059, 0.488, 0.216, 1) |
+| vfx_skeleton_mace_hit |  | Chunks | startColor: Color RGBA(0.425, 0.625, 0.156, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 3 .. 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material blood_cloud; _MainTex brains (64x64); _Color RGBA(1, 1, 1, 1) |
+| vfx_skeleton_mace_hit |  | Chunks/blob_splat | startColor: TwoColors RGBA(0.375, 0.61, 0, 1) .. RGBA(0.316, 0.463, 0.215, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 5 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_sledge_hit |  | waves | startColor: Color RGBA(1, 1, 1, 0.666) \| startSize: Constant 12 \| startLifetime: Constant 0.8 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode HorizontalBillboard; shader Particles/Standard Unlit2; material block_wave; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_sledge_hit |  | Cloud | startColor: TwoColors RGBA(0.206, 0.159, 0.074, 1) .. RGBA(0.434, 0.382, 0.316, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 2 .. 4 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_sledge_hit |  | vfx_troll_rock_destroyed | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.544, 0.448, 0.36, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_sledge_hit |  | vfx_Splosh (1) | startColor: TwoColors RGBA(0.228, 0.198, 0.154, 0.978) .. RGBA(0.529, 0.437, 0.319, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 1 .. 4 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_sledge_iron_hit |  | waves | startColor: Color RGBA(1, 1, 1, 0.666) \| startSize: Constant 12 \| startLifetime: Constant 0.8 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode HorizontalBillboard; shader Particles/Standard Unlit2; material block_wave; _MainTex shockwave (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_sledge_iron_hit |  | Cloud | startColor: TwoColors RGBA(0.279, 0.279, 0.279, 1) .. RGBA(0.721, 0.721, 0.721, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 2 .. 4 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_sledge_iron_hit |  | vfx_troll_rock_destroyed | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.351, 0.403, 0.434, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_sledge_iron_hit |  | vfx_Splosh (1) | startColor: TwoColors RGBA(0.346, 0.538, 0.588, 0.978) .. RGBA(0.319, 0.434, 0.529, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 1 .. 4 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_stonegolem_attack_hit |  | vfx_stonegolem_attack_hit | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.574, 0.574, 0.574, 1) \| startSize: TwoConstants 0.01 .. 0.05 \| startLifetime: Constant 4 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_stonegolem_attack_hit |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.419, 0.419, 0.419, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.02 .. 0.03 \| startLifetime: Constant 4 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_stonegolem_attack_hit |  | dust | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 3 .. 4 \| startLifetime: Constant 4 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 0.472) |
+| vfx_stonegolem_attack_hit |  | sparcs | startColor: TwoColors RGBA(0.169, 0.066, 0.066, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.01 .. 0.06 \| startLifetime: Constant 3 \| maxParticles 200 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material rock_sparcs; _MainTex none; _Color RGBA(3.428, 1.631, 0, 1) |
+| vfx_stonegolem_hurt |  | vfx_stonegolem_hurt | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.574, 0.574, 0.574, 1) \| startSize: TwoConstants 0.01 .. 0.05 \| startLifetime: Constant 4 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_stonegolem_hurt |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.419, 0.419, 0.419, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.02 .. 0.05 \| startLifetime: Constant 4 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_stonegolem_hurt |  | dust | startColor: Color RGBA(1, 1, 1, 0.841) \| startSize: TwoConstants 2 .. 1 \| startLifetime: Constant 4 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 0.472) |
+| vfx_stonegolem_hurt |  | sparcs | startColor: TwoColors RGBA(0.169, 0.066, 0.066, 1) .. RGBA(1, 0.683, 0, 1) \| startSize: TwoConstants 0.01 .. 0.06 \| startLifetime: Constant 3 \| maxParticles 200 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Unlit2; material rock_sparcs; _MainTex none; _Color RGBA(3.428, 1.631, 0, 1) |
+| vfx_torch_hit |  | vfx_torch_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.03 .. 0.05 \| startLifetime: TwoConstants 0.2 .. 1 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Stretch; shader Legacy Shaders/Particles/Additive; material flame_small; _MainTex leaf_low (8x8); _TintColor RGBA(1, 1, 1, 1) |
+| vfx_torch_hit |  | smoke | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 1 .. 2 \| startLifetime: TwoConstants 4 .. 6 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material smoke; _MainTex dust01_bw (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_torch_hit |  | fire | startColor: TwoColors RGBA(1, 0.984, 0.934, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 1 .. 0.75 \| startLifetime: TwoConstants 0.3 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/Gradient Mapped Particle (Unlit); material flameball_flipbook_gradient; _MainTex flameball_flipbook (256x256) |
+| vfx_tree_fall_hit |  | vfx_tree_fall_hit | startColor: TwoColors RGBA(0.603, 0.509, 0.408, 0.578) .. RGBA(1, 0.937, 0.801, 0.516) \| startSize: TwoConstants 2 .. 3 \| startLifetime: Constant 1 \| maxParticles 10 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material dust_particle; _MainTex wildfire01 (128x128); _Color RGBA(1, 1, 1, 1) |
+| vfx_troll_attack_hit |  | vfx_troll_attack_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.03 .. 0.03 \| startLifetime: TwoConstants 0.3 .. 0.5 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material gnista; _MainTex crystal (64x64); _Color RGBA(2, 2, 2, 1) |
+| vfx_troll_attack_hit |  | vfx_Splosh (1) | startColor: TwoColors RGBA(0.522, 0.347, 0.084, 0.766) .. RGBA(0.566, 0.397, 0.183, 0.797) \| startSize: TwoConstants 3 .. 5 \| startLifetime: TwoConstants 1 .. 4 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_troll_log_hitground |  | vfx_troll_log_hitground | startColor: TwoColors RGBA(0.176, 0.176, 0.176, 1) .. RGBA(0.574, 0.574, 0.574, 1) \| startSize: TwoConstants 0.05 .. 0.1 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material rocks; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_troll_log_hitground |  | vfx_RockHit (1) | startColor: TwoColors RGBA(0.419, 0.419, 0.419, 1) .. RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.05 .. 0.15 \| startLifetime: Constant 4 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Mesh; shader Custom/StaticRock; material stone; _MainTex rock_low (32x32); _Color RGBA(0.779, 0.779, 0.779, 1) |
+| vfx_troll_log_hitground |  | poff_ring | startColor: TwoColors RGBA(0.206, 0.159, 0.074, 1) .. RGBA(0.434, 0.382, 0.316, 1) \| startSize: TwoConstants 1 .. 1.5 \| startLifetime: TwoConstants 0.6 .. 2 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_trollsnow_attack_hit |  | vfx_trollsnow_attack_hit | startColor: Color RGBA(1, 1, 1, 1) \| startSize: TwoConstants 0.03 .. 0.03 \| startLifetime: TwoConstants 0.3 .. 0.5 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Stretch; shader Particles/Standard Unlit2; material gnista; _MainTex crystal (64x64); _Color RGBA(2, 2, 2, 1) |
+| vfx_trollsnow_attack_hit |  | vfx_Splosh (1) | startColor: TwoColors RGBA(0.624, 0.761, 0.764, 0.766) .. RGBA(0.736, 0.736, 0.736, 0.797) \| startSize: TwoConstants 3 .. 5 \| startLifetime: TwoConstants 1 .. 4 \| maxParticles 100 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material fog; _MainTex dirt (256x256); _Color RGBA(1, 1, 1, 1) |
+| vfx_wolf_hit |  | vfx_wolf_hit | startColor: Color RGBA(0.86, 0, 0, 1) \| startSize: TwoConstants 1 .. 1 \| startLifetime: Constant 0.4 \| maxParticles 0 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_wolf_hit |  | wetsplsh | startColor: Color RGBA(0.809, 0, 0, 1) \| startSize: TwoConstants 0.2 .. 0.5 \| startLifetime: TwoConstants 0.5 .. 1 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Lux Lit Particles/ Bumped; material slime_green; _MainTex slime_splash (64x64); _Color RGBA(0.557, 0.702, 0.384, 1) |
+| vfx_wolf_hit |  | blood_drops | startColor: TwoColors RGBA(0.331, 0.048, 0, 0.491) .. RGBA(0.544, 0, 0, 0.534) \| startSize: TwoConstants 0.05 .. 0.05 \| startLifetime: Constant 2 \| maxParticles 1000 \| simulationSpace Local \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_drop; _MainTex none; _Color RGBA(1, 1, 1, 1) |
+| vfx_wolf_hit |  | bloodchunks | startColor: Color RGBA(1, 0.007, 0.007, 1) \| startSize: TwoConstants 0.2 .. 0.3 \| startLifetime: Constant 1 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_wolf_hit |  | bloodchunks/blob_splat (1) | startColor: TwoColors RGBA(0.868, 0.006, 0.006, 1) .. RGBA(0.934, 0.034, 0.034, 1) \| startSize: TwoConstants 1 .. 3 \| startLifetime: Constant 10 \| maxParticles 100 \| simulationSpace World \| renderer: mode Billboard; shader Custom/ParticleDecal; material splat_decal_blend; _MainTex brains (64x64); _Color RGBA(0.502, 0.502, 0.502, 1) |
+| vfx_wolf_hit |  | skinflakes | startColor: TwoColors RGBA(0.36, 0.36, 0.36, 0.566) .. RGBA(0.838, 0.838, 0.838, 1) \| startSize: TwoConstants 0.4 .. 0.8 \| startLifetime: TwoConstants 2 .. 3 \| maxParticles 1000 \| simulationSpace World \| renderer: mode Billboard; shader Particles/Standard Surface2; material blood_splat; _MainTex leaf_low (8x8); _Color RGBA(1, 1, 1, 1) |
+| vfx_wraith_hit |  | vfx_wraith_hit | startColor: TwoColors RGBA(0.046, 0.046, 0.046, 1) .. RGBA(0, 0, 0, 1) \| startSize: TwoConstants 0.5 .. 0.5 \| startLifetime: Constant 0.5 \| maxParticles 50 \| simulationSpace Local \| renderer: mode Billboard; shader Custom/LitParticles; material wraith_smoke; _MainTex wildfire06 (128x128); _Color RGBA(1, 1, 1, 1) |
+
+## 11. Effects referenced by the dumped creatures
+
+Creatures scanned (reflection over every public `EffectList` field of their components and of their Humanoid items SharedData / Attack): Aspect_SeekerQueen, Blob, BlobAspect, BlobElite, BlobFrost, BlobLava, BlobMork, BlobMorkMini, BlobTar, Leech, Leech_cave, Seeker, SeekerBrood, SeekerBrute, SeekerQueen, Tick. Only sfx_ / vfx_ / fx_ prefabs are listed, whether or not they are in ZNetScene.
+
+| Prefab | Referenced by | ZNetScene | Root components | ZSFX clips |
+| --- | --- | --- | --- | --- |
+| fx_QueenPierceGround | Aspect_SeekerQueen:item aspect_SeekerQueen_PierceAOE.m_triggerEffect; SeekerQueen:item SeekerQueen_PierceAOE.m_triggerEffect | net | ZNetView, TimedDestruction, CamShaker | [Hit_Metal_HighPitch1, Hit_Metal_HighPitch7, Hit_Metal_HighPitch5, Hit_Metal_HighPitch3, Hit_Metal_HighPitch2, Hit_Metal_HighPitch4, Hit_Metal_HighPitch6], [Hit_Metal_HighPitch1, Hit_Metal_HighPitch7, Hit_Metal_HighPitch5, Hit_Metal_HighPitch3, Hit_Metal_HighPitch2, Hit_Metal_HighPitch4, Hit_Metal_HighPitch6], [Hit_Metal_HighPitch1, Hit_Metal_HighPitch7, Hit_Metal_HighPitch5, Hit_Metal_HighPitch3, Hit_Metal_HighPitch2, Hit_Metal_HighPitch4, Hit_Metal_HighPitch6], [Hit_Metal_HighPitch1, Hit_Metal_HighPitch7, Hit_Metal_HighPitch5, Hit_Metal_HighPitch3, Hit_Metal_HighPitch2, Hit_Metal_HighPitch4, Hit_Metal_HighPitch6] |
+| fx_Queen_Death | SeekerQueen:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction, CamShaker | [HogMonster_DeathRoar5, HogMonster_DeathRoar6] |
+| fx_TickBloodHit | Tick:item tick_attack_attach.m_hitEffect | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| fx_aspect_death | Aspect_SeekerQueen:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction, CamShaker | [Enemy_FrozenKing_Spirit_Death_01, Enemy_FrozenKing_Spirit_Death_02, Enemy_FrozenKing_Spirit_Death_03] |
+| fx_babyseeker_death | SeekerBrood:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | [Enemy_BabySeeker_Fx_Death_01, Enemy_BabySeeker_Fx_Death_02, Enemy_BabySeeker_Fx_Death_03, Enemy_BabySeeker_Fx_Death_04] |
+| fx_babyseeker_hurt | SeekerBrood:Humanoid.m_hitEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| fx_backstab | Aspect_SeekerQueen:Humanoid.m_backstabHitEffects; Blob:Humanoid.m_backstabHitEffects; BlobAspect:Humanoid.m_backstabHitEffects; BlobElite:Humanoid.m_backstabHitEffects; BlobFrost:Humanoid.m_backstabHitEffects; BlobLava:Humanoid.m_backstabHitEffects; BlobMork:Humanoid.m_backstabHitEffects; BlobMorkMini:Humanoid.m_backstabHitEffects; BlobTar:Humanoid.m_backstabHitEffects; Leech:Humanoid.m_backstabHitEffects; Leech_cave:Humanoid.m_backstabHitEffects; Seeker:Humanoid.m_backstabHitEffects; SeekerBrood:Humanoid.m_backstabHitEffects; SeekerBrute:Humanoid.m_backstabHitEffects; SeekerQueen:Humanoid.m_backstabHitEffects; Tick:Humanoid.m_backstabHitEffects | net | TimedDestruction, ZNetView | [Magic_AiryHit1, Magic_AiryHit3] |
+| fx_blobLava_explosion | BlobLava:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, CamShaker, ZNetView, TimedDestruction | - |
+| fx_crit | Aspect_SeekerQueen:Humanoid.m_critHitEffects; Blob:Humanoid.m_critHitEffects; BlobAspect:Humanoid.m_critHitEffects; BlobElite:Humanoid.m_critHitEffects; BlobFrost:Humanoid.m_critHitEffects; BlobLava:Humanoid.m_critHitEffects; BlobMork:Humanoid.m_critHitEffects; BlobMorkMini:Humanoid.m_critHitEffects; BlobTar:Humanoid.m_critHitEffects; Leech:Humanoid.m_critHitEffects; Leech_cave:Humanoid.m_critHitEffects; Seeker:Humanoid.m_critHitEffects; SeekerBrood:Humanoid.m_critHitEffects; SeekerBrute:Humanoid.m_critHitEffects; SeekerQueen:Humanoid.m_critHitEffects; Tick:Humanoid.m_critHitEffects | net | TimedDestruction, ZNetView | [Smash_SpikeWallImpact] |
+| fx_seeker_death | Seeker:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | [Enemy_Seeker_FX_Death_01, Enemy_Seeker_FX_Death_02, Enemy_Seeker_FX_Death_03, Enemy_Seeker_FX_Death_04, Enemy_Seeker_FX_Death_05] |
+| fx_seeker_hurt | Aspect_SeekerQueen:Humanoid.m_hitEffects; Seeker:Humanoid.m_hitEffects; SeekerBrute:Humanoid.m_hitEffects; SeekerQueen:Humanoid.m_hitEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| fx_seeker_melee_hit | Seeker:item seeker_claw_left.m_hitEffect; Seeker:item seeker_claw_right.m_hitEffect; Seeker:item seeker_groundslam.m_hitEffect; Seeker:item seeker_groundslam_flying.m_hitEffect; Seeker:item seeker_pincers.m_hitEffect; SeekerBrood:item babyseeker_attack.m_hitEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView, CamShaker | [Enemy_Seeker_Attack_VO_01, Enemy_Seeker_Attack_VO_02, Enemy_Seeker_Attack_VO_03, Enemy_Seeker_Attack_VO_04, Enemy_Seeker_Attack_VO_05, Enemy_Seeker_Attack_VO_06, Enemy_Seeker_Attack_VO_07] |
+| fx_seekerbrute_death | SeekerBrute:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction, CamShaker | [Enemy_Gjall_TickDrop_FX_01, Enemy_Gjall_TickDrop_FX_02, Enemy_Gjall_TickDrop_FX_03] |
+| fx_tick_death | Tick:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | [Enemy_Tick_Death_01, Enemy_Tick_Death_02, Enemy_Tick_Death_03, Enemy_Tick_Death_04, Enemy_Tick_Death_05] |
+| sfx_GoblinShaman_fireball_launch | BlobTar:item blobtar_attack.m_trailStartEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Magic_Spell04] |
+| sfx_HiveQueen_alerted | Aspect_SeekerQueen:MonsterAI.m_alertedEffects; SeekerQueen:MonsterAI.m_alertedEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [HiveQueen_Alerted_01, HiveQueen_Alerted_02, HiveQueen_Alerted_03, HiveQueen_Alerted_04, HiveQueen_Alerted_05] |
+| sfx_HiveQueen_idle | Aspect_SeekerQueen:MonsterAI.m_idleSound; SeekerQueen:MonsterAI.m_idleSound | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [HiveQueen_Idle_01, HiveQueen_Idle_02, HiveQueen_Idle_03, HiveQueen_Idle_04, HiveQueen_Idle_05, HiveQueen_Idle_06] |
+| sfx_baby_seeker_alerted | SeekerBrood:MonsterAI.m_alertedEffects | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [Enemy_BabySeeker_Alerted_01, Enemy_BabySeeker_Alerted_02, Enemy_BabySeeker_Alerted_03, Enemy_BabySeeker_Alerted_04] |
+| sfx_baby_seeker_attack_start | SeekerBrood:item babyseeker_attack.m_startEffect | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [Enemy_BabySeeker_Attack_Start_01, Enemy_BabySeeker_Attack_Start_02, Enemy_BabySeeker_Attack_Start_03, Enemy_BabySeeker_Attack_Start_04] |
+| sfx_baby_seeker_idle | SeekerBrood:MonsterAI.m_idleSound | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [Enemy_BabySeeker_Idle_01, Enemy_BabySeeker_Idle_02, Enemy_BabySeeker_Idle_03, Enemy_BabySeeker_Idle_04, Enemy_BabySeeker_Idle_05, Enemy_BabySeeker_Idle_06, Enemy_BabySeeker_Idle_07, Enemy_BabySeeker_Idle_08, Enemy_BabySeeker_Idle_09, Enemy_BabySeeker_Idle_10, Enemy_BabySeeker_Idle_11] |
+| sfx_blob_alerted | Blob:MonsterAI.m_alertedEffects; BlobAspect:MonsterAI.m_alertedEffects; BlobElite:MonsterAI.m_alertedEffects; BlobFrost:MonsterAI.m_alertedEffects; BlobMork:MonsterAI.m_alertedEffects; BlobMorkMini:MonsterAI.m_alertedEffects; BlobTar:MonsterAI.m_alertedEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [FatMonster_Growl2] |
+| sfx_blob_attack | Blob:item blob_attack_aoe.m_triggerEffect; BlobAspect:item blob_attack_aoe.m_triggerEffect; BlobElite:item blobelite_attack_aoe.m_triggerEffect; BlobFrost:item blob_frost_attack_aoe.m_triggerEffect; BlobMork:item blobmork_attack_aoe.m_triggerEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [FatMonster_Growl1] |
+| sfx_blob_death | Blob:Humanoid.m_deathEffects; BlobAspect:Humanoid.m_deathEffects; BlobElite:Humanoid.m_deathEffects; BlobFrost:Humanoid.m_deathEffects; BlobMork:Humanoid.m_deathEffects; BlobMorkMini:Humanoid.m_deathEffects; BlobTar:Humanoid.m_deathEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [FishMonster_DeathRoar1, FishMonster_DeathRoar2, FishMonster_DeathRoar3] |
+| sfx_blob_hit | Blob:Humanoid.m_hitEffects; BlobAspect:Humanoid.m_hitEffects; BlobElite:Humanoid.m_hitEffects; BlobFrost:Humanoid.m_hitEffects; BlobLava:Humanoid.m_hitEffects; BlobMork:Humanoid.m_hitEffects; BlobMorkMini:Humanoid.m_hitEffects; BlobTar:Humanoid.m_hitEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Hit_SlimeSplat5, Hit_SlimeSplat4, Hit_SlimeSplat3] |
+| sfx_blob_idle | Blob:MonsterAI.m_idleSound; BlobAspect:MonsterAI.m_idleSound; BlobElite:MonsterAI.m_idleSound; BlobFrost:MonsterAI.m_idleSound; BlobMork:MonsterAI.m_idleSound; BlobMorkMini:MonsterAI.m_idleSound | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [FatMonster_Growl3] |
+| sfx_blob_jump | Blob:Humanoid.m_jumpEffects; BlobAspect:Humanoid.m_jumpEffects; BlobElite:Humanoid.m_jumpEffects; BlobFrost:Humanoid.m_jumpEffects; BlobMork:Humanoid.m_jumpEffects; BlobMorkMini:Humanoid.m_jumpEffects; BlobTar:Humanoid.m_jumpEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [MudMonster_AttackSplat1] |
+| sfx_bloblava_alert | BlobLava:MonsterAI.m_alertedEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView, AudioHighPassFilter | [Enemy_LavaBlob_Alert_01, Enemy_LavaBlob_Alert_02, Enemy_LavaBlob_Alert_03] |
+| sfx_bloblava_death | BlobLava:Humanoid.m_deathEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Enemy_LavaBlob_DeathBurst_01, Enemy_LavaBlob_DeathBurst_02, Enemy_LavaBlob_DeathBurst_03, Enemy_LavaBlob_DeathBurst_04, Enemy_LavaBlob_DeathBurst_05, Enemy_LavaBlob_DeathBurst_06, Enemy_LavaBlob_DeathBurst_07, Enemy_LavaBlob_DeathBurst_08] |
+| sfx_bloblava_grow | BlobLava:item blobLava_attack_aoe.m_attack.m_startEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Enemy_LavaBlob_Grow_01, Enemy_LavaBlob_Grow_02, Enemy_LavaBlob_Grow_03, Enemy_LavaBlob_Grow_04] |
+| sfx_bloblava_idle | BlobLava:MonsterAI.m_idleSound | net | TimedDestruction, ZSFX, AudioSource, ZNetView, AudioHighPassFilter | [Enemy_LavaBlob_Idle_01, Enemy_LavaBlob_Idle_02, Enemy_LavaBlob_Idle_03, Enemy_LavaBlob_Idle_04, Enemy_LavaBlob_Idle_05, Enemy_LavaBlob_Idle_06] |
+| sfx_bloblava_jump | BlobLava:Humanoid.m_jumpEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Enemy_LavaBlob_Jump_01, Enemy_LavaBlob_Jump_02, Enemy_LavaBlob_Jump_03, Enemy_LavaBlob_Jump_04] |
+| sfx_blobtar_attack_spit | BlobTar:item blobtar_attack.m_triggerEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Blood_Splat_Gib14, Blood_Splat_Gib17] |
+| sfx_blobtar_idle | BlobTar:MonsterAI.m_idleSound | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Squish_Wet_FleshBlood01, Squish_Wet_FleshBlood03, Squish_Wet_FleshBlood04, Squish_Wet_FleshBlood05, Squish_Wet_FleshBlood06, Squish_Wet_FleshBlood07] |
+| sfx_creature_consume | Tick:Humanoid.m_consumeItemEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Eat] |
+| sfx_dragon_melee_hit | Aspect_SeekerQueen:item aspect_SeekerQueen_Rush.m_hitEffect; Aspect_SeekerQueen:item aspect_SeekerQueen_Slap.m_hitEffect; SeekerQueen:item SeekerQueen_Rush.m_hitEffect; SeekerQueen:item SeekerQueen_Slap.m_hitEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView, CamShaker | [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] |
+| sfx_dragon_melee_start | Aspect_SeekerQueen:item aspect_SeekerQueen_Bite.m_startEffect; Aspect_SeekerQueen:item aspect_SeekerQueen_PierceAOE.m_startEffect; Aspect_SeekerQueen:item aspect_SeekerQueen_Rush.m_startEffect; Aspect_SeekerQueen:item aspect_SeekerQueen_Slap.m_startEffect; SeekerQueen:item SeekerQueen_Bite.m_startEffect; SeekerQueen:item SeekerQueen_PierceAOE.m_startEffect; SeekerQueen:item SeekerQueen_Rush.m_startEffect; SeekerQueen:item SeekerQueen_Slap.m_startEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Dragon_JumpRoar] |
+| sfx_goblinking_beam | Aspect_SeekerQueen:item aspect_SeekerQueen_Spit.m_triggerEffect; SeekerQueen:item SeekerQueen_Spit.m_triggerEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView, CamShaker | [LaserBeam_Loop04] |
+| sfx_greydwarf_attack_hit | Aspect_SeekerQueen:item aspect_SeekerQueen_Spit.m_hitEffect; Blob:item blob_attack_aoe.m_hitEffect; BlobAspect:item blob_attack_aoe.m_hitEffect; BlobElite:item blobelite_attack_aoe.m_hitEffect; BlobFrost:item blob_frost_attack_aoe.m_hitEffect; BlobLava:item blobLava_attack_aoe.m_hitEffect; BlobMork:item blobmork_attack_aoe.m_hitEffect; BlobTar:item blobtar_attack.m_hitEffect; Seeker:item seeker_land.m_hitEffect; Seeker:item seeker_takeoff.m_hitEffect; SeekerQueen:item SeekerQueen_Spit.m_hitEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] |
+| sfx_leech_alerted | Leech:MonsterAI.m_alertedEffects; Leech_cave:MonsterAI.m_alertedEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Splash_WaterEmerge01, Splash_WaterEmerge02, Splash_WaterEmerge03, Splash_WaterEmerge04, Splash_WaterEmerge05, Splash_WaterEmerge06, Splash_WaterEmerge07, Splash_WaterEmerge08, Splash_WaterEmerge09] |
+| sfx_leech_attack | Leech:item Leech_BiteAttack.m_startEffect; Leech_cave:item Leech_BiteAttack.m_startEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [LizardMan_AttackHiss1, LizardMan_AttackHiss2] |
+| sfx_leech_attack_hit | Leech:item Leech_BiteAttack.m_hitEffect; Leech_cave:item Leech_BiteAttack.m_hitEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Zombie04_Claw_Swipe2, Zombie04_Claw_Swipe3] |
+| sfx_leech_death | Leech:Humanoid.m_deathEffects; Leech_cave:Humanoid.m_deathEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Blood_Splat_Gib05, Blood_Splat_Gib06, Blood_Splat_Gib07] |
+| sfx_leech_hit | Leech:Humanoid.m_hitEffects; Leech_cave:Humanoid.m_hitEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Blood_Splat_Gib01, Blood_Splat_Gib02, Blood_Splat_Gib03] |
+| sfx_leech_idle | Leech:MonsterAI.m_idleSound; Leech_cave:MonsterAI.m_idleSound | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Splash_WaterEmerge01, Splash_WaterEmerge02, Splash_WaterEmerge03, Splash_WaterEmerge04, Splash_WaterEmerge05, Splash_WaterEmerge06, Splash_WaterEmerge07, Splash_WaterEmerge08, Splash_WaterEmerge09] |
+| sfx_seeker_alerted | Seeker:MonsterAI.m_alertedEffects | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [Enemy_Seeker_Alerted_01, Enemy_Seeker_Alerted_02, Enemy_Seeker_Alerted_03, Enemy_Seeker_Alerted_04, Enemy_Seeker_Alerted_05] |
+| sfx_seeker_attack_start | Seeker:item seeker_claw_left.m_startEffect; Seeker:item seeker_claw_right.m_startEffect; Seeker:item seeker_groundslam.m_startEffect; Seeker:item seeker_groundslam_flying.m_startEffect; Seeker:item seeker_pincers.m_startEffect | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [Enemy_Seeker_Attack_Start_01, Enemy_Seeker_Attack_Start_02, Enemy_Seeker_Attack_Start_03, Enemy_Seeker_Attack_Start_04, Enemy_Seeker_Attack_Start_05] |
+| sfx_seeker_brute_alerted | SeekerBrute:MonsterAI.m_alertedEffects | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [SeekerBrute_Alerted_01, SeekerBrute_Alerted_02, SeekerBrute_Alerted_03, SeekerBrute_Alerted_04] |
+| sfx_seeker_brute_attack_bite | SeekerBrute:item SeekerBrute_bite.m_hitEffect | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [SeekerBrute_Attack_Bite_01, SeekerBrute_Attack_Bite_02, SeekerBrute_Attack_Bite_03, SeekerBrute_Attack_Bite_04] |
+| sfx_seeker_brute_attack_ram_hit | SeekerBrute:item SeekerBrute_ram.m_hitEffect | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [SeekerBrute_Attack_Ram_Hit_01, SeekerBrute_Attack_Ram_Hit_02, SeekerBrute_Attack_Ram_Hit_03] |
+| sfx_seeker_brute_attack_ram_start | SeekerBrute:item SeekerBrute_ram.m_startEffect | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [SeekerBrute_Attack_Ram_Start_01, SeekerBrute_Attack_Ram_Start_02, SeekerBrute_Attack_Ram_Start_03] |
+| sfx_seeker_brute_groundslam_Start | SeekerBrute:item SeekerBrute_bite.m_startEffect; SeekerBrute:item SeekerBrute_groundslam.m_startEffect | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [SeekerBrute_Attack_Slam_Start_01, SeekerBrute_Attack_Slam_Start_02, SeekerBrute_Attack_Slam_Start_03] |
+| sfx_seeker_brute_groundslam_impact | SeekerBrute:item SeekerBrute_groundslam.m_triggerEffect | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [SeekerBrute_Attack_Slam_Impact_01, SeekerBrute_Attack_Slam_Impact_02, SeekerBrute_Attack_Slam_Impact_03, SeekerBrute_Attack_Slam_Impact_04, SeekerBrute_Attack_Slam_Impact_05, SeekerBrute_Attack_Slam_Impact_06] |
+| sfx_seeker_brute_idle | SeekerBrute:MonsterAI.m_idleSound | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [SeekerBrute_Vocal_Idle_01, SeekerBrute_Vocal_Idle_02, SeekerBrute_Vocal_Idle_03, SeekerBrute_Vocal_Idle_04, SeekerBrute_Vocal_Idle_05, SeekerBrute_Vocal_Idle_06, SeekerBrute_Vocal_Idle_07] |
+| sfx_seeker_flying | Seeker:Humanoid.m_flyingContinuousEffect | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [Enemy_Seeker_Flying_Loop_01, Enemy_Seeker_Flying_Loop_02, Enemy_Seeker_Flying_Loop_03] |
+| sfx_seeker_hurt | Seeker:Humanoid.m_hitEffects | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [Enemy_Seeker_Hurt_01, Enemy_Seeker_Hurt_02, Enemy_Seeker_Hurt_03, Enemy_Seeker_Hurt_04, Enemy_Seeker_Hurt_05, Enemy_Seeker_Hurt_06, Enemy_Seeker_Hurt_07, Enemy_Seeker_Hurt_08] |
+| sfx_seeker_idle | Seeker:MonsterAI.m_idleSound | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [Enemy_BabySeeker_Idle_01, Enemy_BabySeeker_Idle_02, Enemy_BabySeeker_Idle_03, Enemy_BabySeeker_Idle_04, Enemy_BabySeeker_Idle_05, Enemy_BabySeeker_Idle_06, Enemy_BabySeeker_Idle_07, Enemy_BabySeeker_Idle_08, Enemy_BabySeeker_Idle_09, Enemy_BabySeeker_Idle_10, Enemy_BabySeeker_Idle_11] |
+| sfx_seeker_overlay | Seeker:MonsterAI.m_idleSound | NOT in ZNetScene | TimedDestruction, ZSFX, AudioSource | [Enemy_Seeker_Idle_Overlay_01, Enemy_Seeker_Idle_Overlay_02, Enemy_Seeker_Idle_Overlay_03, Enemy_Seeker_Idle_Overlay_04, Enemy_Seeker_Idle_Overlay_05, Enemy_Seeker_Idle_Overlay_06, Enemy_Seeker_Idle_Overlay_07, Enemy_Seeker_Idle_Overlay_08] |
+| sfx_tick_alerted | Tick:MonsterAI.m_alertedEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Enemy_Tick_Alerted_01, Enemy_Tick_Alerted_02, Enemy_Tick_Alerted_03, Enemy_Tick_Alerted_04, Enemy_Tick_Alerted_05, Enemy_Tick_Alerted_06] |
+| sfx_tick_attack_drain | Tick:item tick_attack_attach.m_hitEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Enemy_Tick_Drain_01, Enemy_Tick_Drain_02, Enemy_Tick_Drain_03, Enemy_Tick_Drain_04, Enemy_Tick_Drain_05, Enemy_Tick_Drain_06, Enemy_Tick_Drain_07, Enemy_Tick_Drain_08] |
+| sfx_tick_attack_jump | Tick:item tick_attack_attach.m_startEffect | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Enemy_Tick_DrainAttack_01, Enemy_Tick_DrainAttack_02, Enemy_Tick_DrainAttack_03, Enemy_Tick_DrainAttack_04, Enemy_Tick_DrainAttack_05, Enemy_Tick_DrainAttack_06] |
+| sfx_tick_hurt | Tick:Humanoid.m_hitEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Enemy_Tick_Hurt_01, Enemy_Tick_Hurt_02, Enemy_Tick_Hurt_03, Enemy_Tick_Hurt_04, Enemy_Tick_Hurt_05, Enemy_Tick_Hurt_06] |
+| sfx_tick_idle | Tick:MonsterAI.m_idleSound | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Enemy_Tick_Idle_01, Enemy_Tick_Idle_02, Enemy_Tick_Idle_03, Enemy_Tick_Idle_04, Enemy_Tick_Idle_05, Enemy_Tick_Idle_06, Enemy_Tick_Idle_07, Enemy_Tick_Idle_08, Enemy_Tick_Idle_09, Enemy_Tick_Idle_10] |
+| sfx_troll_rock_destroyed | Aspect_SeekerQueen:Humanoid.m_jumpEffects; Seeker:Humanoid.m_jumpEffects; SeekerBrood:Humanoid.m_jumpEffects; SeekerBrute:Humanoid.m_jumpEffects; SeekerQueen:Humanoid.m_jumpEffects | net | TimedDestruction, ZSFX, AudioSource, ZNetView | [Hit_LargeRockSmash1, Hit_LargeRockSmash2, Hit_LargeRockSmash3] |
+| vfx_HitSparks | Aspect_SeekerQueen:item aspect_SeekerQueen_Rush.m_hitEffect; Aspect_SeekerQueen:item aspect_SeekerQueen_Slap.m_hitEffect; Aspect_SeekerQueen:item aspect_SeekerQueen_Spit.m_hitEffect; Blob:item blob_attack_aoe.m_hitEffect; BlobAspect:item blob_attack_aoe.m_hitEffect; BlobElite:item blobelite_attack_aoe.m_hitEffect; BlobFrost:item blob_frost_attack_aoe.m_hitEffect; BlobLava:item blobLava_attack_aoe.m_hitEffect; BlobMork:item blobmork_attack_aoe.m_hitEffect; BlobTar:item blobtar_attack.m_hitEffect; Leech:item Leech_BiteAttack.m_hitEffect; Leech_cave:item Leech_BiteAttack.m_hitEffect; Seeker:item seeker_claw_left.m_hitEffect; Seeker:item seeker_claw_right.m_hitEffect; Seeker:item seeker_groundslam.m_hitEffect; Seeker:item seeker_groundslam_flying.m_hitEffect; Seeker:item seeker_land.m_hitEffect; Seeker:item seeker_pincers.m_hitEffect; Seeker:item seeker_takeoff.m_hitEffect; SeekerBrood:item babyseeker_attack.m_hitEffect; SeekerBrute:item SeekerBrute_bite.m_hitEffect; SeekerBrute:item SeekerBrute_ram.m_hitEffect; SeekerQueen:item SeekerQueen_Rush.m_hitEffect; SeekerQueen:item SeekerQueen_Slap.m_hitEffect; SeekerQueen:item SeekerQueen_Spit.m_hitEffect | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_blob_attack | Blob:item blob_attack_aoe.m_triggerEffect; BlobAspect:item blob_attack_aoe.m_triggerEffect | net | ZNetView, TimedDestruction | - |
+| vfx_blob_death | Blob:Humanoid.m_deathEffects; BlobAspect:Humanoid.m_deathEffects; BlobElite:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_blob_frost_attack | BlobFrost:item blob_frost_attack_aoe.m_triggerEffect | net | ZNetView, TimedDestruction | - |
+| vfx_blob_frost_death | BlobFrost:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_blob_frost_hit | BlobFrost:Humanoid.m_hitEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_blob_hit | Blob:Humanoid.m_hitEffects; BlobAspect:Humanoid.m_hitEffects; BlobElite:Humanoid.m_hitEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_blobelite_attack | BlobElite:item blobelite_attack_aoe.m_triggerEffect | net | ZNetView, TimedDestruction | - |
+| vfx_blobmork_attack | BlobMork:item blobmork_attack_aoe.m_triggerEffect | net | ZNetView, TimedDestruction | - |
+| vfx_blobmork_death | BlobMork:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_blobmork_hit | BlobMork:Humanoid.m_hitEffects; BlobMorkMini:Humanoid.m_deathEffects; BlobMorkMini:Humanoid.m_hitEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_blobtar_death | BlobTar:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_blobtar_hit | BlobTar:Humanoid.m_hitEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_boar_hit | Tick:Humanoid.m_hitEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_leech_death | Leech:Humanoid.m_deathEffects; Leech_cave:Humanoid.m_deathEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_leech_hit | Leech:Humanoid.m_hitEffects; Leech_cave:Humanoid.m_hitEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_seekerbrute_groundslam | SeekerBrute:item SeekerBrute_groundslam.m_startEffect; SeekerBrute:item SeekerBrute_groundslam.m_triggerEffect | net | ZNetView, TimedDestruction | - |
+| vfx_tar_surface | BlobTar:Humanoid.m_tarEffects | NOT in ZNetScene | ParticleSystem, ParticleSystemRenderer, TimedDestruction | - |
+| vfx_troll_rock_destroyed | Aspect_SeekerQueen:Humanoid.m_jumpEffects; Seeker:Humanoid.m_jumpEffects; SeekerBrood:Humanoid.m_jumpEffects; SeekerBrute:Humanoid.m_jumpEffects; SeekerQueen:Humanoid.m_jumpEffects | net | ParticleSystem, ParticleSystemRenderer, ZNetView, TimedDestruction | - |
+| vfx_water_surface | Aspect_SeekerQueen:Humanoid.m_waterEffects; Blob:Humanoid.m_waterEffects; BlobAspect:Humanoid.m_waterEffects; BlobElite:Humanoid.m_waterEffects; BlobFrost:Humanoid.m_waterEffects; BlobLava:Humanoid.m_waterEffects; BlobMork:Humanoid.m_waterEffects; BlobMorkMini:Humanoid.m_waterEffects; BlobTar:Humanoid.m_waterEffects; Leech:Humanoid.m_waterEffects; Leech_cave:Humanoid.m_waterEffects; Seeker:Humanoid.m_waterEffects; SeekerBrood:Humanoid.m_waterEffects; SeekerBrute:Humanoid.m_waterEffects; SeekerQueen:Humanoid.m_waterEffects; Tick:Humanoid.m_waterEffects | NOT in ZNetScene | ParticleSystem, ParticleSystemRenderer, TimedDestruction | - |
+
+## 12. Albedo and gloss texture statistics
+
+Each texture is blitted to a temporary ARGB32 RenderTexture (sRGB read/write matched to the source format so the bytes are the stored values), read back with ReadPixels; values are 0..255. Temporary objects are released.
+
+| Source | Texture | Size / sRGB | Channel | Mean | Min | Max |
+| --- | --- | --- | --- | --- | --- | --- |
+| by name | babyseeker_d | 64x64 / sRGB | R | 206.365 | 74 | 255 |
+| by name | babyseeker_d | 64x64 / sRGB | G | 195.695 | 77 | 251 |
+| by name | babyseeker_d | 64x64 / sRGB | B | 181.071 | 74 | 247 |
+| by name | babyseeker_d | 64x64 / sRGB | A | 254.969 | 241 | 255 |
+| by name | Feasting_m | 64x64 / sRGB | R | 0 | 0 | 0 |
+| by name | Feasting_m | 64x64 / sRGB | G | 0 | 0 | 0 |
+| by name | Feasting_m | 64x64 / sRGB | B | 0 | 0 | 0 |
+| by name | Feasting_m | 64x64 / sRGB | A | 150.738 | 0 | 238 |
+| by name | Feasting_d | 64x64 / sRGB | R | 132.08 | 0 | 255 |
+| by name | Feasting_d | 64x64 / sRGB | G | 102.086 | 0 | 251 |
+| by name | Feasting_d | 64x64 / sRGB | B | 84.925 | 0 | 198 |
+| by name | Feasting_d | 64x64 / sRGB | A | 229.14 | 0 | 255 |
+| Leech _MainTex | swampfish_d | 128x128 / sRGB | R | 122.622 | 0 | 231 |
+| Leech _MainTex | swampfish_d | 128x128 / sRGB | G | 49.568 | 0 | 255 |
+| Leech _MainTex | swampfish_d | 128x128 / sRGB | B | 43.687 | 0 | 189 |
+| Leech _MainTex | swampfish_d | 128x128 / sRGB | A | 247.573 | 0 | 255 |
+| Blob _MainTex | blob_d | 128x128 / sRGB | R | 97.207 | 43 | 239 |
+| Blob _MainTex | blob_d | 128x128 / sRGB | G | 88.638 | 37 | 223 |
+| Blob _MainTex | blob_d | 128x128 / sRGB | B | 62.542 | 16 | 214 |
+| Blob _MainTex | blob_d | 128x128 / sRGB | A | 254.579 | 254 | 255 |
+| Blob _MainTex | dust01_bw | 256x256 / sRGB | R | 104.795 | 68 | 255 |
+| Blob _MainTex | dust01_bw | 256x256 / sRGB | G | 104.795 | 68 | 255 |
+| Blob _MainTex | dust01_bw | 256x256 / sRGB | B | 104.795 | 68 | 255 |
+| Blob _MainTex | dust01_bw | 256x256 / sRGB | A | 57.908 | 0 | 161 |
+| Blob _MainTex | slime_splash | 64x64 / sRGB | R | 187.469 | 0 | 255 |
+| Blob _MainTex | slime_splash | 64x64 / sRGB | G | 187.248 | 0 | 255 |
+| Blob _MainTex | slime_splash | 64x64 / sRGB | B | 187.469 | 0 | 255 |
+| Blob _MainTex | slime_splash | 64x64 / sRGB | A | 61.64 | 0 | 251 |
 
 
 ## 6b. Deferred render check
