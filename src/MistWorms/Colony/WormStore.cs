@@ -45,6 +45,16 @@ namespace MistWorms.Colony
         public readonly float[] progressTime;
         public readonly Vector3[] fleeFrom;
         public readonly float[] animTime;         // local, never synchronized
+        public readonly float[] stillSince;       // last time the worm really moved (> 1 mm in a step); local, never synchronized (idle pose)
+
+        // ---- group behaviour (local, never synchronized)
+        public readonly float[] lastSpeed;        // m/s over the last step (file: the worm behind never outruns it)
+        public readonly int[] approachRank;       // rank among the hunters of approachTarget, -1 = none yet
+        public readonly long[] approachTarget;
+        public readonly float[] approachBase;     // bearing from the target at which the first hunter of the wave arrived (rad)
+        public readonly Vector3[] approachOffset; // approach point relative to the target, zero = aim at the target itself
+        public readonly float[] approachNext;     // when the approach point is evaluated next
+        public readonly byte[] approachMode;      // 0 = not evaluated yet, 1 = a validated place, 2 = no valid place (aims at the target itself)
 
         // ---- scheduling and perception
         public readonly float[] nextSimTime;
@@ -95,6 +105,15 @@ namespace MistWorms.Colony
             progressTime = new float[capacity];
             fleeFrom = new Vector3[capacity];
             animTime = new float[capacity];
+            stillSince = new float[capacity];
+
+            lastSpeed = new float[capacity];
+            approachRank = new int[capacity];
+            approachTarget = new long[capacity];
+            approachBase = new float[capacity];
+            approachOffset = new Vector3[capacity];
+            approachNext = new float[capacity];
+            approachMode = new byte[capacity];
 
             nextSimTime = new float[capacity];
             lastSimTime = new float[capacity];
@@ -150,6 +169,15 @@ namespace MistWorms.Colony
             progressTime[i] = now;
             fleeFrom[i] = position;
             animTime[i] = 0f;
+            stillSince[i] = now;
+
+            lastSpeed[i] = 0f;
+            approachRank[i] = -1;
+            approachTarget[i] = 0;
+            approachBase[i] = 0f;
+            approachOffset[i] = Vector3.zero;
+            approachNext[i] = 0f;
+            approachMode[i] = 0;
 
             lastSimTime[i] = now;
             nextSimTime[i] = now;

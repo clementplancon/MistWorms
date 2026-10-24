@@ -33,6 +33,8 @@ namespace MistWorms.Colony
         private int[] _pathFree;
         private int _pathFreeCount;
         private float _pathTokens;
+        private int _pathsThisTick;
+        private const int PathsPerTick = 2;              // a burst of requests never lands in one frame
         private readonly List<Vector3> _pathScratch = new List<Vector3>(64);
 
         // ------------------------------------------------------------------ targets
@@ -223,12 +225,19 @@ namespace MistWorms.Colony
             WormStore s = Store;
             if (s.pathSlot[i] >= 0 && now < s.pathExpire[i]) return;   // cached
             ReleasePath(i);
-            if (now < s.nextPathTime[i] || _pathTokens < 1f || _pathFreeCount == 0) return;
+            if (now < s.nextPathTime[i] || _pathTokens < 1f || _pathFreeCount == 0 || _pathsThisTick >= PathsPerTick) return;
             if (Pathfinding.instance == null) return;
 
             _pathTokens -= 1f;
+            _pathsThisTick++;
+#if MW_DEV
+            _framePaths++;
+#endif
             bool ok = Pathfinding.instance.GetPath(s.pos[i], target, _pathScratch, Pathfinding.AgentType.Humanoid,
                 requireFullPath: false, cleanup: true);
+#if MW_DEV
+            CountPath(ok && _pathScratch.Count >= 2, ok && _pathScratch.Count > 0 ? _pathScratch[_pathScratch.Count - 1] : target, target);
+#endif
             if (!ok || _pathScratch.Count < 2)
             {
                 s.nextPathTime[i] = now + PathRetrySeconds;

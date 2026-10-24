@@ -1049,8 +1049,76 @@ namespace MistWorms.Dev
             return s.Length == 0 ? "shot" : s;
         }
 
-        /// <summary>Never throws; reports (path, null) on success or (null, error).</summary>
+        // ---- UI hiding: chat window, in-world chat texts and console never appear in a capture.
+
+        private static int s_hideDepth;
+        private static float s_chatHideDelay;
+        private static bool s_consoleWasOpen;
+        private static readonly List<GameObject> s_hiddenTexts = new List<GameObject>();
+
+        /// <summary>True while <see cref="HideUi"/> is in force.</summary>
+        public static bool UiHidden => s_hideDepth > 0;
+
+        /// <summary>
+        /// Hides the chat window (its hide delay set to 0 so Chat.Update keeps it closed), the chat texts above heads and the console.
+        /// Nestable: <see cref="RestoreUi"/> must be called once per call. A scenario with tight capture timing calls it once for its whole run.
+        /// </summary>
+        public static void HideUi()
+        {
+            if (s_hideDepth++ > 0) return;
+            try
+            {
+                Chat chat = Chat.instance;
+                if (chat != null)
+                {
+                    s_chatHideDelay = chat.m_hideDelay;
+                    chat.m_hideDelay = 0f;
+                    if (chat.m_chatWindow != null) chat.m_chatWindow.gameObject.SetActive(false);
+                    s_hiddenTexts.Clear();
+                    foreach (Chat.WorldTextInstance t in chat.WorldTexts)
+                    {
+                        if (t != null && t.m_gui != null && t.m_gui.activeSelf) { t.m_gui.SetActive(false); s_hiddenTexts.Add(t.m_gui); }
+                    }
+                }
+                global::Console console = global::Console.instance;
+                s_consoleWasOpen = console != null && console.m_chatWindow != null && console.m_chatWindow.gameObject.activeSelf;
+                if (s_consoleWasOpen) console.m_chatWindow.gameObject.SetActive(false);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogException("DevShots.HideUi", e);
+            }
+        }
+
+        public static void RestoreUi()
+        {
+            if (s_hideDepth <= 0 || --s_hideDepth > 0) return;
+            try
+            {
+                Chat chat = Chat.instance;
+                if (chat != null) chat.m_hideDelay = s_chatHideDelay;
+                foreach (GameObject g in s_hiddenTexts) if (g != null) g.SetActive(true);
+                s_hiddenTexts.Clear();
+                global::Console console = global::Console.instance;
+                if (s_consoleWasOpen && console != null && console.m_chatWindow != null) console.m_chatWindow.gameObject.SetActive(true);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogException("DevShots.RestoreUi", e);
+            }
+        }
+
+        /// <summary>Never throws; reports (path, null) on success or (null, error). Hides the chat and the console around the capture.</summary>
         public static IEnumerator Capture(string name, Action<string, string> onDone)
+        {
+            bool hideHere = !UiHidden;
+            HideUi();
+            if (hideHere) { yield return null; yield return null; }   // let the UI and the world texts update before the frame is read
+            yield return CaptureCore(name, onDone);
+            RestoreUi();
+        }
+
+        private static IEnumerator CaptureCore(string name, Action<string, string> onDone)
         {
             string path = Path.Combine(ShotsDir, Sanitize(name) + ".png");
             try

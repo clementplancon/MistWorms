@@ -7,7 +7,18 @@ namespace MistWorms.Assets
     /// <summary>GlbMeshData (glTF, right-handed) to UnityEngine.Mesh (left-handed), spec §13.2.</summary>
     internal static class GltfLoader
     {
-        public static Mesh ToMesh(GlbMeshData d, string name)
+        /// <summary>Unity-space arrays of one mesh; built on any thread, turned into a Mesh on the main thread.</summary>
+        public sealed class MeshArrays
+        {
+            public Vector3[] Pos, Nrm;
+            public Vector2[] Uv;
+            public int[] Tris;
+        }
+
+        public static Mesh ToMesh(GlbMeshData d, string name) => Build(Convert(d), name);
+
+        /// <summary>Handedness and UV conversion. No Unity API call besides plain structs: safe on worker threads.</summary>
+        public static MeshArrays Convert(GlbMeshData d)
         {
             int vc = d.Positions.Length / 3;
             var pos = new Vector3[vc];
@@ -31,12 +42,18 @@ namespace MistWorms.Assets
                 tris[i + 2] = src[i + 1];
             }
 
+            return new MeshArrays { Pos = pos, Nrm = nrm, Uv = uv, Tris = tris };
+        }
+
+        /// <summary>Main thread only.</summary>
+        public static Mesh Build(MeshArrays a, string name)
+        {
             var mesh = new Mesh { name = name };
-            if (vc > 65535) mesh.indexFormat = IndexFormat.UInt32;
-            mesh.vertices = pos;
-            mesh.normals = nrm;
-            mesh.uv = uv;
-            mesh.triangles = tris;
+            if (a.Pos.Length > 65535) mesh.indexFormat = IndexFormat.UInt32;
+            mesh.SetVertices(a.Pos);
+            mesh.SetNormals(a.Nrm);
+            mesh.SetUVs(0, a.Uv);
+            mesh.SetTriangles(a.Tris, 0);
             mesh.RecalculateBounds();
             mesh.RecalculateTangents(); // normal maps need tangents and glTF exports none
             // Keep the CPU copy only when frames are blended on the CPU (Performance.FlipbookBlend).

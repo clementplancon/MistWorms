@@ -291,7 +291,7 @@ La colonie ne s'éveille que pour un joueur ; une fois éveillée, elle dévore 
 | Structures (`WearNTear` : pièces construites par les joueurs, portes et objets dvergr destructibles de la mine) | oui | `Targets.AttackStructures` | 1,5 |
 | Nids, vers, amas, pierres tombales, portails, objets non destructibles | jamais | — | — |
 
-Choix de cible, réévalué toutes les 0,5 s : parmi les cibles visibles à moins de `Mass.TargetRange` (20 m), la plus petite valeur `distance × poids` gagne ; une cible engloutie est conservée jusqu'au détachement (§4.9). Un ver seul suit les mêmes règles avec `Worm.ViewRange` (20 m) pour portée de ciblage (§3.1). Les joueurs sont donc préférés à distance égale, mais un fouineur collé à l'amas sera mangé avant un joueur à 15 m.
+Choix de cible, réévalué toutes les 0,5 s : parmi les cibles visibles à moins de `Mass.TargetRange` (20 m), la plus petite valeur `distance × poids` gagne ; une cible engloutie est conservée jusqu'au détachement (§4.9). Un ver seul suit les mêmes règles avec `Worm.ViewRange` (20 m) pour portée de ciblage (§3.1). Les prefabs listés dans `Targets.ExcludedPrefabs` (défaut `SW_DivineWhale`) ne sont jamais ciblés, ni par les vers ni par les amas (§10.4 ; phase 6, plus la sélection de cibles de l'amas en 4B). Les joueurs sont donc préférés à distance égale, mais un fouineur collé à l'amas sera mangé avant un joueur à 15 m.
 
 ### 5.4 Factions et guerre dans la mine
 
@@ -521,6 +521,20 @@ Le pair propriétaire simule la colonie et ses amas ; chaque morsure voyage comm
 
 Aucun transpiler : des préfixes et postfixes uniquement, chacun protégé par un `try/catch` qui journalise et laisse passer le comportement vanilla en cas d'erreur. Chaque patch a un test dans le harnais qui vérifie qu'il s'applique (Harmony `GetPatchedMethods`) et qu'il produit l'effet attendu.
 
+### 10.4 Compatibilité avec SkyWhale
+
+L'utilisateur demande que MistWorms et SkyWhale tournent ensemble sur le même serveur. Deux règles suffisent, aucune `Priority` ni `Before`/`After` Harmony n'est nécessaire :
+
+1. un patch ne modifie le résultat que si une créature ou un objet du mod est en jeu ;
+2. un prefix ne renvoie jamais `false` sur un objet qui n'est pas au mod.
+
+- **Patchs communs** : `Character.ApplyDamage` et `BaseAI.IsEnemy`. SkyWhale patche la surcharge statique `BaseAI.IsEnemy(Character a, Character b)` : `false` si `a` est la baleine, ou si `b` est la baleine et `a` n'est pas un `Player`. Nos vers ne sont pas des `Player` ; l'exclusion par prefab (ci-dessous) tient.
+- **Noms** : préfixes de prefab `MW_` pour nous, `SW_` pour SkyWhale ; clés ZDO `mw_*` pour nous, `sw_*` pour SkyWhale.
+- **Couches** : la coque, les nageoires et la capsule racine de la baleine sont sur `hitbox` (18), partagée avec nos proxys ; son pont est sur `vehicle` (28), ses triggers sur `character_trigger`. Nos requêtes physiques n'utilisent pas `hitbox` (`SolidMask` et `ViewBlockMask` sont les masques vanilla de `BaseAI`) ; toute requête future sur `hitbox` doit filtrer sur `WormProxy`. Le pont `vehicle` est dans `SolidMask` et `ViewBlockMask`, comme un bateau pour les créatures vanilla : accepté. De son côté, SkyWhale filtre aussi sur ses propres composants ses requêtes sur `hitbox`.
+- **Exclusion de cible** : `Targets.ExcludedPrefabs` (défaut `SW_DivineWhale`, §14) ; ces prefabs ne sont jamais ciblés par les vers ni par les amas (§5.3). Phase 6, plus la sélection de cibles de l'amas en 4B.
+- **Crash de la baleine** : il passe par le `Damage()` vanilla et touche donc nos proxys normalement.
+- **Copies de dev** : `C:\ValheimDev\` et le serveur local sont partagés entre les deux projets ; on les prend chacun son tour.
+
 ## 11. Simulation, réseau et persistance
 
 Budget sur le pair propriétaire, mine entière à 400 vers actifs : **≤ 1,0 ms par frame** de simulation en moyenne, 3 ms au pire, zéro allocation GC en régime stable ; sur les autres clients ≤ 0,3 ms ; ≤ 6 Ko/s de réseau par colonie active, ≈ 0 en dormance. Ces chiffres sont mesurés par le harnais (scénario S11, §15) et font partie des critères d'acceptation.
@@ -680,6 +694,7 @@ Chaque nombre de ce document est une clé du fichier `BepInEx/config/dev.pointvi
 | Engulf | `WisplightPrefab` | `Demister` **\[À VÉRIFIER\]** | string | §6.3 |
 | Targets | `AttackPlayers` / `AttackTamed` / `AttackCreatures` / `AttackStructures` | true ×4 | bool | §5.3 |
 | Targets | `PlayerWeight` / `TamedWeight` / `CreatureWeight` / `StructureWeight` | 0.6 / 0.8 / 1.0 / 1.5 | 0.1–5 | §5.3 |
+| Targets | `ExcludedPrefabs` | `SW_DivineWhale` | liste de prefabs séparés par des virgules | §5.3, §10.4 |
 | Targets | `WakeOnlyByPlayers` / `ActiveRadius` / `CalmDelay` | true / 45 / 60 | bool / 10–200 m / 5–600 s | §5.1, §5.2 |
 | Fire | `AfraidOfFire` / `FearRadius` / `FearDuration` | true / 4.0 / 3.0 | bool / 0–15 / 0–30 | §9.1 |
 | Drops | `EquipmentDropRatio` / `IncludeUpgradeMaterials` | 1.0 / true | 0–1 / bool | §7.2 |
@@ -765,7 +780,7 @@ Tout est exécuté sur le thread principal via une file ; les requêtes sont sé
 | S15 | Sauvegarde / rechargement du monde | mêmes compteurs, pools, nids, timers (± 1 ver) |
 | S16 | Ensemencement d'une vraie mine (`/tp-mine`) | ≥ 1 nid par salle éligible, ≤ 24 nids, vers isolés présents, aucun objet hors de la boîte du donjon, mine vanilla intacte ; mine déjà visitée avant le mod → ensemencée au premier chargement, une seule fois |
 | S17 | Multijoueur local : serveur dédié + 1 client (2 si une seconde instance peut démarrer) | config synchronisée, client sans mod refusé, amas visible et frappable depuis un non-propriétaire, bande passante mesurée |
-| S18 | S18_GroupCoherence : 30 vers chassent un joueur immobile en terrain ouvert, puis 20 vers dans un couloir de mine (phase 4A) | en régime établi, ≥ 95 % des paires de voisins ont leurs milieux de corps à plus de 0,2 m ; en terrain ouvert, les chasseurs arrivés couvrent ≥ 240° autour de la cible (secteurs de 30° occupés) ; dans le couloir, aucun ver sans progrès (moins de 0,5 m) pendant plus de 6 s alors que son but est atteignable (compatible avec le chemin demandé à 3 s, §11.1), et aucune violation mur/sol (mêmes contrôles que P3_Wander) |
+| S18 | S18_GroupCoherence : a) 30 vers chassent un joueur immobile en terrain ouvert ; b) 20 vers en mine, spawnés en passes autour du joueur (comme P3_Wander) avec ligne de vue (phase 4A) | a) en régime établi, ≥ 95 % des paires de voisins ont leurs milieux de corps à plus de 0,2 m, et les chasseurs arrivés couvrent ≥ 240° autour de la cible (secteurs de 30° occupés) ; b) aucun ver sans progrès (moins de 0,5 m) pendant plus de 6 s alors que son but est atteignable (compatible avec le chemin demandé à 3 s, §11.1 ; un ver à moins de 2,5 m du joueur ou en Striking n'est pas compté comme bloqué), et aucune violation mur/sol (mêmes contrôles que P3_Wander). Le couloir de 2,5 m n'est pas une précondition : la largeur du passage le plus étroit et le taux de chemins de chasse sont informatifs |
 | V01 | Visuel : le ver de près, à l'échelle du joueur (refait en phase 4A : look « pâle de caverne », crawl et idle) | captures relues par Claude Code : rien d'invisible ou de noir, échelle 0,4 m, ombres présentes |
 | V02–V06 | Visuels : V02 amas de 10, V03 amas de 200, V04 amas de 50 (comme le code), V05 engloutissement, V06 nid, à côté du joueur ; V02 à V04 refaits en phase 4B avec un vrai `MW_WritheMass` | captures relues par Claude Code : rien d'invisible ou de noir, échelles conformes à §4.5, ombres présentes ; le repère « 20 ≈ couvain » se vérifie en V02/V04 par la table, sans capture dédiée |
 | V07 | V07_WormLight : ver de près sous une torche, puis sous une lampe dvergr ; captures à 0,5 m et 2 m, et séquence de 4 captures de reptation (phase 4A) | reflets nets, ondulation en S lisible |
@@ -773,6 +788,8 @@ Tout est exécuté sur le thread principal via une file ; les requêtes sont sé
 | V09 | V09_MassTransitions : captures de la formation (3 vers puis dôme), d'une absorption, d'une fusion, d'une dissolution et d'une mort de ver de surface (phase 4B) | transitions lisibles, jamais de saut de rayon |
 
 Scénarios propres à la phase 3, hors numérotation S/V : `P3_Wander` (100 vers errent en mine réelle sans traverser sol ni murs) et `P3_Cobra` (coup de cobra et règle d'équipement) ; ils sont rejoués à chaque phase.
+
+Dans les scénarios de combat de groupe (S18), le joueur est épinglé toutes les 0,25 s (le recul des morsures est voulu) et les créatures vanilla à moins de 40 m sont retirées avant la partie b). La frame de la première frappe de la session (premier `Damage()` vanilla et JIT, de 1,5 à 5,4 ms) est exclue du max de simulation : ce n'est pas un coût récurrent.
 
 Chaque scénario remet l'état à zéro (`mw_kill`, inventaire vidé, mode dieu) avant et après ; un scénario qui dépasse 120 s échoue ; une exception du mod dans le log pendant un scénario le fait échouer.
 

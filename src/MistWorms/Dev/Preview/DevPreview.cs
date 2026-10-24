@@ -189,8 +189,8 @@ namespace MistWorms.Dev.Preview
             foreach (string part in animSpec.Split(','))
             {
                 string a = part.Trim().ToLowerInvariant();
-                if (a == "all") { anims.AddRange(new[] { WormAnim.Crawl, WormAnim.Rear, WormAnim.Strike, WormAnim.Sleep }); continue; }
-                if (!TryParseAnim(a, out WormAnim parsed)) return $"unknown worm animation '{part}' (crawl, rear, strike, sleep, all)";
+                if (a == "all") { anims.AddRange(new[] { WormAnim.Crawl, WormAnim.Idle, WormAnim.Rear, WormAnim.Strike, WormAnim.Sleep }); continue; }
+                if (!TryParseAnim(a, out WormAnim parsed)) return $"unknown worm animation '{part}' (crawl, idle, rear, strike, sleep, all)";
                 anims.Add(parsed);
             }
 
@@ -208,7 +208,7 @@ namespace MistWorms.Dev.Preview
                 _worms.Add(new WormItem
                 {
                     Anim = anims[i % anims.Count],
-                    Phase = i * 1.7f,
+                    Phase = i * (anims[i % anims.Count] == WormAnim.Idle ? 0.9f : 6.1f),
                     Matrix = Matrix4x4.TRS(pos, rot, Vector3.one),
                 });
             }
@@ -250,7 +250,7 @@ namespace MistWorms.Dev.Preview
                 _worms.Add(new WormItem
                 {
                     Anim = WormAnim.Crawl,
-                    Phase = i * 1.7f,
+                    Phase = i * 6.1f,
                     Matrix = Matrix4x4.TRS(pos, rot, Vector3.one * s),
                 });
             }
@@ -390,6 +390,7 @@ namespace MistWorms.Dev.Preview
                 case "rear": anim = WormAnim.Rear; return true;
                 case "strike": anim = WormAnim.Strike; return true;
                 case "sleep": anim = WormAnim.Sleep; return true;
+                case "idle": anim = WormAnim.Idle; return true;
                 default: anim = WormAnim.Crawl; return false;
             }
         }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace MistWorms.Assets
@@ -21,10 +22,15 @@ namespace MistWorms.Assets
     {
         private const long SlowLoadMs = 300;
 
+        /// <summary>Textures with this prefix are Point filtered like the vanilla creatures (dump section 1); mass and nest stay bilinear until phase 4B.</summary>
+        public const string WormTexturePrefix = "worm_";
+
         private static readonly Dictionary<string, Mesh> _meshes = new Dictionary<string, Mesh>();
         private static readonly Dictionary<string, Mesh[]> _frames = new Dictionary<string, Mesh[]>();
         private static readonly Dictionary<string, Texture2D> _textures = new Dictionary<string, Texture2D>();
         private static readonly Dictionary<string, AnimationInfo> _anims = new Dictionary<string, AnimationInfo>();
+
+        private static string _breakdown = string.Empty;
 
         public static bool IsReady { get; private set; }
         public static string Error { get; private set; }
@@ -40,7 +46,7 @@ namespace MistWorms.Assets
                 LoadAll(assetsDir);
                 sw.Stop();
                 IsReady = true;
-                string msg = "[Assets] loaded " + _meshes.Count + " meshes, " + _textures.Count + " textures in " + sw.ElapsedMilliseconds + " ms";
+                string msg = "[Assets] loaded " + _meshes.Count + " meshes, " + _textures.Count + " textures in " + sw.ElapsedMilliseconds + " ms (" + _breakdown + ")";
                 Plugin.Log?.LogInfo(msg);
                 if (sw.ElapsedMilliseconds > SlowLoadMs) Plugin.Log?.LogWarning("[Assets] load time above the " + SlowLoadMs + " ms target");
                 return true;
@@ -120,15 +126,68 @@ namespace MistWorms.Assets
                 for (int i = 0; i < frames; i++) animOfMesh[kv.Key + "_" + i.ToString("00")] = kv.Key;
             }
 
-            foreach (object entry in meshes)
-            {
-                string name = JsonReader.Str(entry, "name");
-                string file = JsonReader.Str(entry, "file");
-                if (name == null || file == null) throw new InvalidDataException("manifest.json: mesh entry without name/file");
-                string path = Path.Combine(dir, file);
-                if (!File.Exists(path)) throw new FileNotFoundException("missing mesh file " + file);
+            var sw = Stopwatch.StartNew();
 
-                GlbMeshData data = GlbParser.Parse(File.ReadAllBytes(path), file);
+            // Stage 1, worker threads: read every .glb and .png, parse the glTF and convert to Unity-space arrays.
+            // Nothing here touches the Unity API; failures are kept per slot and rethrown in manifest order below.
+            int meshCount = meshes.Count, texCount = textures.Count;
+            var meshNames = new string[meshCount];
+            var meshFiles = new string[meshCount];
+            for (int i = 0; i < meshCount; i++)
+            {
+                meshNames[i] = JsonReader.Str(meshes[i], "name");
+                meshFiles[i] = JsonReader.Str(meshes[i], "file");
+                if (meshNames[i] == null || meshFiles[i] == null) throw new InvalidDataException("manifest.json: mesh entry without name/file");
+            }
+            var texNames = new string[texCount];
+            var texFiles = new string[texCount];
+            for (int i = 0; i < texCount; i++)
+            {
+                texNames[i] = JsonReader.Str(textures[i], "name");
+                texFiles[i] = JsonReader.Str(textures[i], "file");
+                if (texNames[i] == null || texFiles[i] == null) throw new InvalidDataException("manifest.json: texture entry without name/file");
+            }
+
+            var parsed = new GlbMeshData[meshCount];
+            var arrays = new GltfLoader.MeshArrays[meshCount];
+            var meshErrors = new Exception[meshCount];
+            var pngs = new byte[texCount][];
+            var texErrors = new Exception[texCount];
+            Parallel.For(0, meshCount + texCount, k =>
+            {
+                if (k < meshCount)
+                {
+                    try
+                    {
+                        string path = Path.Combine(dir, meshFiles[k]);
+                        if (!File.Exists(path)) throw new FileNotFoundException("missing mesh file " + meshFiles[k]);
+                        parsed[k] = GlbParser.Parse(File.ReadAllBytes(path), meshFiles[k]);
+                        arrays[k] = GltfLoader.Convert(parsed[k]);
+                    }
+                    catch (Exception e) { meshErrors[k] = e; }
+                }
+                else
+                {
+                    int t = k - meshCount;
+                    try
+                    {
+                        string path = Path.Combine(dir, texFiles[t]);
+                        if (!File.Exists(path)) throw new FileNotFoundException("missing texture file " + texFiles[t]);
+                        pngs[t] = File.ReadAllBytes(path);
+                    }
+                    catch (Exception e) { texErrors[t] = e; }
+                }
+            });
+            long parallelMs = sw.ElapsedMilliseconds;
+            sw.Restart();
+
+            for (int mi = 0; mi < meshCount; mi++)
+            {
+                if (meshErrors[mi] != null) throw meshErrors[mi];
+                string name = meshNames[mi];
+                string file = meshFiles[mi];
+                object entry = meshes[mi];
+                GlbMeshData data = parsed[mi];
                 int vc = data.Positions.Length / 3;
 
                 string anim;
@@ -147,8 +206,10 @@ namespace MistWorms.Assets
                 int declared = (int)JsonReader.Num(entry, "vertices", vc);
                 if (declared != vc) Plugin.Log?.LogWarning("[Assets] " + file + ": manifest says " + declared + " vertices, file has " + vc);
 
-                _meshes[name] = GltfLoader.ToMesh(data, name);
+                _meshes[name] = GltfLoader.Build(arrays[mi], name);
             }
+            long meshMs = sw.ElapsedMilliseconds;
+            sw.Restart();
 
             foreach (var kv in _anims)
             {
@@ -164,15 +225,16 @@ namespace MistWorms.Assets
                 _frames[kv.Key] = arr;
             }
 
-            foreach (object entry in textures)
+            TextureLoader.ResetTimings();
+            for (int ti = 0; ti < texCount; ti++)
             {
-                string name = JsonReader.Str(entry, "name");
-                string file = JsonReader.Str(entry, "file");
-                if (name == null || file == null) throw new InvalidDataException("manifest.json: texture entry without name/file");
-                string path = Path.Combine(dir, file);
-                if (!File.Exists(path)) throw new FileNotFoundException("missing texture file " + file);
+                if (texErrors[ti] != null) throw texErrors[ti];
+                object entry = textures[ti];
+                string name = texNames[ti];
+                string file = texFiles[ti];
 
-                Texture2D tex = TextureLoader.FromPng(File.ReadAllBytes(path), name, JsonReader.Bool(entry, "linear", false));
+                Texture2D tex = TextureLoader.FromPng(pngs[ti], name, JsonReader.Bool(entry, "linear", false),
+                    name.StartsWith(WormTexturePrefix, StringComparison.Ordinal));
                 if (tex == null) throw new InvalidDataException(file + ": PNG could not be decoded");
                 int w = (int)JsonReader.Num(entry, "width", tex.width), h = (int)JsonReader.Num(entry, "height", tex.height);
                 if (tex.width != w || tex.height != h)
@@ -183,6 +245,9 @@ namespace MistWorms.Assets
                 }
                 _textures[name] = tex;
             }
+            _breakdown = "read+parse+convert " + parallelMs + " (parallel), meshes " + meshMs + ", textures " + sw.ElapsedMilliseconds
+                + " [decode " + TextureLoader.Ms(TextureLoader.DecodeTicks).ToString("0") + ", compress " + TextureLoader.Ms(TextureLoader.CompressTicks).ToString("0")
+                + ", apply+mips " + TextureLoader.Ms(TextureLoader.ApplyTicks).ToString("0") + "]";
         }
 
         private static bool SameIndices(int[] a, int[] b)

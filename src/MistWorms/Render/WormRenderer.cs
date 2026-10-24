@@ -14,6 +14,7 @@ namespace MistWorms.Render
         Rear = 1,
         Strike = 2,
         Sleep = 3,
+        Idle = 4,
     }
 
     /// <summary>A producer of instances (colony, mass, dev preview). Called once per frame from <see cref="WormRenderer"/>.</summary>
@@ -37,9 +38,11 @@ namespace MistWorms.Render
         public const string RearName = "worm_rear";
         public const string StrikeName = "worm_strike";
         public const string SleepName = "worm_sleep";
+        public const string IdleName = "worm_idle";
         public const string BoilName = "mass_boil";
         public const string NestName = "nest_idle";
 
+        private const int AnimCount = 5;   // WormAnim values
         private const int MaxInstancesPerCall = 1023;
         private const int MaxInstancesPerList = 16384;
 
@@ -79,9 +82,9 @@ namespace MistWorms.Render
 
         private readonly List<IWormRenderSource> _sources = new List<IWormRenderSource>();
         private readonly List<Batch> _batches = new List<Batch>();
-        private readonly Batch[][] _anim = new Batch[4][];
-        private readonly float[] _animFps = new float[4];
-        private readonly bool[] _animLoop = new bool[4];
+        private readonly Batch[][] _anim = new Batch[AnimCount][];
+        private readonly float[] _animFps = new float[AnimCount];
+        private readonly bool[] _animLoop = new bool[AnimCount];
         private Batch[] _dome;
         private float _domeFps;
         private Batch _nest;
@@ -253,6 +256,7 @@ namespace MistWorms.Render
             _animFps[(int)WormAnim.Rear] = Build(WormAnim.Rear, RearName, MaterialFactory.Worm, MaterialFactory.WormInstancing);
             _animFps[(int)WormAnim.Strike] = Build(WormAnim.Strike, StrikeName, MaterialFactory.Worm, MaterialFactory.WormInstancing);
             _animFps[(int)WormAnim.Sleep] = Build(WormAnim.Sleep, SleepName, MaterialFactory.Worm, MaterialFactory.WormInstancing);
+            _animFps[(int)WormAnim.Idle] = Build(WormAnim.Idle, IdleName, MaterialFactory.Worm, MaterialFactory.WormInstancing);
 
             Mesh[] boil = AssetCatalog.Frames(BoilName) ?? throw new InvalidOperationException("missing animation " + BoilName);
             _dome = new Batch[boil.Length];
@@ -404,6 +408,7 @@ namespace MistWorms.Render
                     case RearName: return WormAnim.Rear;
                     case StrikeName: return WormAnim.Strike;
                     case SleepName: return WormAnim.Sleep;
+                    case IdleName: return WormAnim.Idle;
                     default: throw new ArgumentException("unknown worm animation '" + animation + "'");
                 }
             }

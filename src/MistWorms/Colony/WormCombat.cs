@@ -16,6 +16,7 @@ namespace MistWorms.Colony
         private const float StrikeReachMargin = 0.1f;   // decisions.md 55: the sphere covers up to CobraRange + 0.1 m from the head
         private const float StrikeHeight = EyeHeight;   // same origin as the Striking trigger in StepHunting (eye = pos + 0.15 m)
         private const float StrikeRadius = 0.5f;
+        private const float MinShownDamage = 0.1f;      // vanilla shows no text and no effect below this (see ApplyWormHit)
 
 #if MW_DEV
         // Debug counters (plan B3, B6), read by the scenarios.
@@ -23,6 +24,20 @@ namespace MistWorms.Colony
         public float LastHitDamage { get; private set; }
         public int StrikesLanded { get; private set; }
         public int StrikesMissed { get; private set; }
+        // Hunting path requests (plan 4B uses the vanilla pathfinder too): a route is complete when it ends at the goal (1 m horizontally, 1.5 m vertically).
+        public int PathRequests { get; private set; }
+        public int PathComplete { get; private set; }
+        public int PathPartial { get; private set; }
+        public int PathFailed { get; private set; }
+
+        private void CountPath(bool ok, Vector3 end, Vector3 goal)
+        {
+            PathRequests++;
+            if (!ok) { PathFailed++; return; }
+            float dx = end.x - goal.x, dz = end.z - goal.z;
+            if (dx * dx + dz * dz <= 1f && Mathf.Abs(end.y - goal.y) <= 1.5f) PathComplete++;
+            else PathPartial++;
+        }
         /// <summary>Distance from the strike sphere centre to the target collider at the last strike (the sphere reaches when it is <= 0.5).</summary>
         public float LastStrikeGap { get; private set; } = -1f;
 
@@ -32,6 +47,8 @@ namespace MistWorms.Colony
             LastHitDamage = 0f;
             StrikesLanded = 0;
             StrikesMissed = 0;
+            PathRequests = PathComplete = PathPartial = PathFailed = 0;
+            DeathCauses.Clear();
             LastStrikeGap = -1f;
         }
 #endif
@@ -46,6 +63,14 @@ namespace MistWorms.Colony
         {
             if (!_initialized || Store == null || hit == null) return;
             if (!Store.IsAlive(i, generation)) return;
+
+            // The blood plays here, on the peer that lands the hit, once: the owner applying a hit that came by RPC does not play it
+            // again, and in solo (attacker = owner) this local path is the only one. A hit too weak to count shows nothing.
+            if (!Disabled && hit.GetTotalDamage() > MinShownDamage)
+            {
+                Vector3 where = hit.m_point == Vector3.zero ? Store.pos[i] + Vector3.up * 0.1f : hit.m_point;
+                WormEffects.PlayHit(ref _hitFx, where, Time.time);
+            }
 
             if (_nview.IsValid() && _nview.IsOwner())
             {
@@ -111,11 +136,13 @@ namespace MistWorms.Colony
 
             Vector3 point = hit.m_point == Vector3.zero ? pos + Vector3.up * 0.1f : hit.m_point;
             if (DamageText.instance != null) DamageText.instance.ShowText(modifier, point, shown, false);
-            WormEffects.PlayHit(ref _hitFx, point, Time.time);
 
             s.hp[i] -= damage;
             if (s.hp[i] <= 0f)
             {
+#if MW_DEV
+                _lastKillCause = $"{(attacker != null ? attacker.name : "no attacker")} (hit type {hit.m_hitType}, {damage:0.#} damage, hp left {s.hp[i]:0.#})";
+#endif
                 KillWorm(i, true);
                 return;
             }
@@ -141,6 +168,16 @@ namespace MistWorms.Colony
         private void OnStrike(int i, float now)
         {
             WormStore s = Store;
+#if MW_DEV
+            _frameStrikes++;
+            if (s_sessionStrikes++ == 0) _frameFirstSessionStrike = true;
+            long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+#endif
+            WormEffects.PlayStrike(ref _strikeFx, s.pos[i] + Vector3.up * StrikeHeight, now);   // the lunge, hit or miss
+#if MW_DEV
+            long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+            _frameStrikeFxMs += (t1 - t0) * 1000f / System.Diagnostics.Stopwatch.Frequency;
+#endif
             Player target = (TargetKind)s.targetKind[i] == TargetKind.Player ? FindPlayer(s.targetId[i]) : null;
             // Phase 6: other target kinds (tamed animals, creatures through WormBite.HitCreature, structures).
 
@@ -168,6 +205,7 @@ namespace MistWorms.Colony
                 }
             }
 #if MW_DEV
+            _frameStrikeBiteMs += (System.Diagnostics.Stopwatch.GetTimestamp() - t1) * 1000f / System.Diagnostics.Stopwatch.Frequency;
             if (landed) StrikesLanded++;
             else StrikesMissed++;
 #endif

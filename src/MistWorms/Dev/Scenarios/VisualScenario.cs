@@ -36,6 +36,21 @@ namespace MistWorms.Dev.Scenarios
 
         protected virtual bool TopShot => false;
 
+        /// <summary>Minimum height of the subject ground above the water level (m).</summary>
+        protected virtual float MinHeightAboveWater => 0.5f;
+
+        /// <summary>Extra test on the ground point under the subject, after the shared ones.</summary>
+        protected virtual bool AcceptSubject(Vector3 subjectGround) => true;
+
+        /// <summary>Time of day forced for the scenario (0.5 = noon, 0 = midnight); anything but noon is released at the end.</summary>
+        protected virtual float TimeOfDay => 0.5f;
+
+        /// <summary>Scenario specific captures and assertions, run after the standard angle shots (the preview exists, the camera is free).</summary>
+        protected virtual IEnumerator Extra(ScenarioContext ctx, DevPreview preview)
+        {
+            yield break;
+        }
+
         private static int SolidMask() =>
             LayerMask.GetMask("Default", "static_solid", "Default_small", "piece", "piece_nonsolid", "vehicle", "item");
 
@@ -43,6 +58,7 @@ namespace MistWorms.Dev.Scenarios
         {
             bool keep = ctx.ParamBool("keep", false);
             bool clutterHidden = false;
+            bool timeForced = false;
             var hiddenRenderers = new List<Renderer>();
             try
             {
@@ -57,7 +73,8 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Log($"instancing supported: worm={MaterialFactory.WormInstancing} mass={MaterialFactory.MassInstancing} nest={MaterialFactory.NestInstancing}");
 
                 // Noon so the lighting is the same in every capture; the vanilla console command is the supported way.
-                ctx.Console($"{VanillaNames.CmdTimeOfDay} 0.5");
+                ctx.Console($"{VanillaNames.CmdTimeOfDay} {TimeOfDay.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}");
+                timeForced = true;
                 DevPreview.Instance.Clear();
 
                 Describe(out string kind, out int n, out string anim, out int count, out string compare);
@@ -86,7 +103,7 @@ namespace MistWorms.Dev.Scenarios
                 fwd = fwd.sqrMagnitude > 1e-4f ? fwd.normalized : Vector3.forward;
                 int solid = SolidMask();
                 int terrain = LayerMask.GetMask("terrain");
-                float water = ZoneSystem.instance != null ? ZoneSystem.instance.m_waterLevel + 0.5f : float.MinValue;
+                float water = ZoneSystem.instance != null ? ZoneSystem.instance.m_waterLevel + MinHeightAboveWater : float.MinValue;
                 float subjectRadius = Mathf.Max(ClearRadius, estSize * 0.5f);
                 var own = new HashSet<Collider>(player.GetComponentsInChildren<Collider>(true));
 
@@ -95,6 +112,7 @@ namespace MistWorms.Dev.Scenarios
                     Vector3 subject = pg + fwd * subjectDistance;
                     if (!Ground(subject, terrain, out Vector3 sg) || sg.y <= water) return false;
                     if (!Free(sg, subjectRadius, solid, own)) return false;
+                    if (!AcceptSubject(sg)) return false;
                     for (int c = 0; c < Yaws.Length; c++)
                     {
                         Vector3 camXz = sg + Quaternion.AngleAxis(Yaws[c], Vector3.up) * -fwd * estCamDist;
@@ -142,6 +160,8 @@ namespace MistWorms.Dev.Scenarios
                     yield return ctx.Shot("top");
                 }
 
+                yield return Extra(ctx, preview);
+
                 WormRenderer.FrameStats stats = WormRenderer.Last;
                 ctx.Log("render stats: " + DevPreview.Describe(stats));
                 ctx.Assert("renderer_drew_instances", stats.Instances > 0, "> 0", stats.Instances);
@@ -154,6 +174,7 @@ namespace MistWorms.Dev.Scenarios
                     if (r != null) r.enabled = true;
                 }
                 if (clutterHidden && ClutterSystem.instance != null) ClutterSystem.instance.enabled = true;
+                if (timeForced && TimeOfDay != 0.5f) ctx.Console($"{VanillaNames.CmdTimeOfDay} -1");
                 DevPreview.Instance.WormSpacing = 0.5f;
                 if (!keep)
                 {
@@ -216,13 +237,14 @@ namespace MistWorms.Dev.Scenarios
 
         protected override void Describe(out string kind, out int n, out string anim, out int count, out string compare)
         {
-            kind = "worm"; n = 0; anim = "crawl,rear,sleep"; count = 3; compare = null;
+            kind = "worm"; n = 0; anim = "crawl,rear,sleep,idle"; count = 4; compare = null;
         }
 
         // Worms are small: close camera, wider spacing, and a straight-down shot to judge texture and head orientation.
-        protected override float CameraDistance(float size) => 1.2f;
+        // Four worms now (crawl, rear, sleep, idle): a little further back and closer together than with three.
+        protected override float CameraDistance(float size) => 1.5f;
 
-        protected override float WormSpacing => 0.6f;
+        protected override float WormSpacing => 0.5f;
 
         protected override bool TopShot => true;
     }
@@ -257,6 +279,247 @@ namespace MistWorms.Dev.Scenarios
         protected override void Describe(out string kind, out int n, out string anim, out int count, out string compare)
         {
             kind = "mass"; n = 50; anim = null; count = 1; compare = VanillaNames.SeekerBrood;
+        }
+    }
+
+    /// <summary>
+    /// V07: the worm skin under light. At night, three preview worms (crawl, idle, crawl) are shot at 0.5 m then 2 m under a
+    /// vanilla ground torch placed 1.5 m away, then under a dvergr lamp (skipped with a log line when none is found), then
+    /// four crawl frames 1/12 s apart. Assertions only cover loading (lustre active, Point filtering): the judgement is visual.
+    /// </summary>
+    internal sealed class V07_WormLight : VisualScenario
+    {
+        private const float LightSideDistance = 1.0f;     // light 90 degrees to the camera axis, 1 m from the central worm
+        private const float NearShot = 0.6f;              // horizontal camera distance, height NearHeight (dive about 34 degrees)
+        private const float NearHeight = 0.45f;
+        private const float FarShot = 2f;                 // height FarHeight (dive about 30 degrees)
+        private const float FarHeight = 1.2f;
+        private const float RaiseStep = 0.1f;
+        private const int MaxRaises = 25;
+        private const float FlatTolerance = 0.15f;        // ground height spread allowed at 1.5 m and 3 m around the subject
+        private const float CrawlShotInterval = 1f / 12f;
+        private const int CrawlShots = 4;
+        private const float LightSettle = 3f;     // Fireplace.UpdateFireplace runs every 2 s
+        private const float WaterClearance = 6f;
+        private const float LampProbe = 0.6f;
+
+        public override string Name => "V07_WormLight";
+
+        protected override float TimeOfDay => 0f;
+
+        protected override void Describe(out string kind, out int n, out string anim, out int count, out string compare)
+        {
+            kind = "worm"; n = 0; anim = "crawl,idle,crawl"; count = 3; compare = null;
+        }
+
+        protected override float CameraDistance(float size) => 1.2f;
+
+        // Side by side, perpendicular to the camera axis (the camera looks along the preview's forward axis).
+        protected override float WormSpacing => 0.35f;
+
+        // Dry ground: at least 1.5 m above the water and no water within WaterClearance of the subject (rings of samples).
+        protected override float MinHeightAboveWater => 1.5f;
+
+        protected override bool AcceptSubject(Vector3 subjectGround)
+        {
+            ZoneSystem zs = ZoneSystem.instance;
+            if (zs == null) return true;
+            float limit = zs.m_waterLevel + MinHeightAboveWater;
+            // Flat: the ground stays within FlatTolerance of the subject on 8 points at 1.5 m and at 3 m.
+            for (float r = 1.5f; r <= 3.01f; r += 1.5f)
+            {
+                for (int k = 0; k < 8; k++)
+                {
+                    float a = k * Mathf.PI * 0.25f;
+                    Vector3 s = subjectGround + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * r;
+                    if (!zs.GetGroundHeight(s, out float h) || Mathf.Abs(h - subjectGround.y) >= FlatTolerance) return false;
+                }
+            }
+            for (float r = 2f; r <= WaterClearance + 0.01f; r += 2f)
+            {
+                for (int k = 0; k < 8; k++)
+                {
+                    float a = k * Mathf.PI * 0.25f;
+                    Vector3 s = subjectGround + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * r;
+                    if (!zs.GetGroundHeight(s, out float h) || h < limit) return false;
+                }
+            }
+            return true;
+        }
+
+        protected override IEnumerator Extra(ScenarioContext ctx, DevPreview preview)
+        {
+            AssertLoading(ctx);
+
+            Vector3 right = Vector3.Cross(Vector3.up, preview.Forward);
+            Vector3 lightPos = preview.Center + right * LightSideDistance;
+            if (ZoneSystem.instance != null && ZoneSystem.instance.GetGroundHeight(lightPos, out float gy)) lightPos.y = gy;
+
+            GameObject torch = Spawn(ctx, FindTorch(ctx), lightPos);
+            if (torch != null)
+            {
+                yield return ctx.Wait(LightSettle);
+                yield return Shoot(ctx, preview, "torch_0_5m", true);
+                yield return Shoot(ctx, preview, "torch_2m", false);
+                Despawn(torch);
+            }
+
+            Vector3 lampPos = lightPos;
+            GameObject lamp = null;
+            foreach (GameObject candidate in DvergrLampCandidates(ctx))
+            {
+                GameObject inst = Spawn(ctx, candidate, lampPos);
+                yield return ctx.Wait(LampProbe);
+                Light active = null;
+                if (inst != null)
+                {
+                    foreach (Light l in inst.GetComponentsInChildren<Light>(false))
+                    {
+                        if (l.enabled && l.gameObject.activeInHierarchy) { active = l; break; }
+                    }
+                }
+                ctx.Log($"dvergr lamp candidate {candidate.name}: {(active != null ? "has an active Light (" + active.type + ", range " + active.range.ToString("0.0") + ", intensity " + active.intensity.ToString("0.0") + ")" : "no active Light")}");
+                if (active != null) { lamp = inst; break; }
+                Despawn(inst);
+            }
+            if (lamp != null)
+            {
+                yield return ctx.Wait(LightSettle);
+                yield return Shoot(ctx, preview, "dvergr_0_5m", true);
+                yield return Shoot(ctx, preview, "dvergr_2m", false);
+                Despawn(lamp);
+            }
+            else ctx.Log("no dvergr lamp prefab found: the dvergr captures are skipped");
+
+            // Crawl sequence on the first preview worm, under a torch again so the surface reads.
+            GameObject seqLight = Spawn(ctx, FindTorch(ctx), lightPos);
+            if (seqLight != null) yield return ctx.Wait(LightSettle);
+            Vector3 wormPos = preview.Origin - right * preview.WormSpacing + Vector3.up * 0.04f;
+            for (int i = 0; i < CrawlShots; i++)
+            {
+                float t0 = Time.time;
+                PlaceCamera(ctx, wormPos, preview, NearShot, NearHeight);
+                yield return ctx.WaitFrames(2);
+                yield return ctx.Shot("crawl_" + i);
+                float took = Time.time - t0;
+                ctx.Log($"crawl shot {i}: capture took {took * 1000f:0} ms (target spacing {CrawlShotInterval * 1000f:0} ms)");
+                if (took < CrawlShotInterval) yield return ctx.Wait(CrawlShotInterval - took);
+            }
+            if (seqLight != null) Despawn(seqLight);
+        }
+
+        private static void AssertLoading(ScenarioContext ctx)
+        {
+            ctx.Assert("worm_gloss_active", MaterialFactory.WormGlossActive, true, MaterialFactory.WormGlossActive);
+            foreach (string tex in new[] { "worm_albedo", "worm_normal", "worm_gloss" })
+            {
+                Texture2D t = AssetCatalog.Texture(tex);
+                ctx.Assert(tex + "_point_filter", t != null && t.filterMode == FilterMode.Point, FilterMode.Point,
+                    t != null ? (object)t.filterMode : "missing");
+            }
+        }
+
+        private static IEnumerator Shoot(ScenarioContext ctx, DevPreview preview, string name, bool near)
+        {
+            PlaceCamera(ctx, preview.Center, preview, near ? NearShot : FarShot, near ? NearHeight : FarHeight);
+            yield return ctx.WaitFrames(10);
+            yield return ctx.Shot(name);
+        }
+
+        /// <summary>
+        /// Camera behind the worms (along -Forward), <paramref name="height"/> above the ground there, looking at the target;
+        /// raised by RaiseStep while terrain or solid geometry lies on the line to the target.
+        /// </summary>
+        private static void PlaceCamera(ScenarioContext ctx, Vector3 target, DevPreview preview, float horizontal, float height)
+        {
+            Vector3 pos = target - preview.Forward * horizontal;
+            float ground = ZoneSystem.instance != null && ZoneSystem.instance.GetGroundHeight(pos, out float gy) ? gy : target.y;
+            pos.y = Mathf.Max(ground, target.y - 0.05f) + height;
+            int mask = LayerMask.GetMask("terrain", "static_solid");
+            int raises = 0;
+            while (raises < MaxRaises && Physics.Linecast(pos, target, mask, QueryTriggerInteraction.Ignore))
+            {
+                pos.y += RaiseStep;
+                raises++;
+            }
+            if (raises > 0) ctx.Log($"camera raised {raises * RaiseStep:0.0} m to clear the terrain{(raises == MaxRaises ? " (still blocked)" : string.Empty)}");
+            DevCamera.Free(pos, target);
+        }
+
+        private static GameObject FindTorch(ScenarioContext ctx) =>
+            FindPrefab(ctx, "torch", VanillaNames.PieceGroundTorch, new[] { "groundtorch" }, null);
+
+        /// <summary>The named lamps first, then any prefab whose name looks like a dvergr lamp; the caller keeps the first one that really lights.</summary>
+        private static List<GameObject> DvergrLampCandidates(ScenarioContext ctx)
+        {
+            var list = new List<GameObject>();
+            ZNetScene scene = ZNetScene.instance;
+            if (scene == null) return list;
+            foreach (string n in VanillaNames.DvergrLampPrefabs)
+            {
+                GameObject p = scene.GetPrefab(n);
+                if (p != null) list.Add(p);
+            }
+            foreach (GameObject prefab in scene.m_prefabs)
+            {
+                if (prefab == null || list.Contains(prefab) || list.Count >= 8) continue;
+                string lower = prefab.name.ToLowerInvariant();
+                if (!lower.Contains(VanillaNames.DvergrLampSearch) && !lower.Contains("dverger")) continue;
+                foreach (string kind in VanillaNames.DvergrLampKinds)
+                {
+                    if (lower.Contains(kind)) { list.Add(prefab); break; }
+                }
+            }
+            var names = new List<string>();
+            foreach (GameObject g in list) names.Add(g.name);
+            ctx.Log("dvergr lamp candidates: [" + string.Join(", ", names) + "]");
+            return list;
+        }
+
+        /// <summary>Exact name first, then the first prefab whose lower case name contains one of <paramref name="words"/> (and one of <paramref name="kinds"/>).</summary>
+        private static GameObject FindPrefab(ScenarioContext ctx, string what, string exact, string[] words, string[] kinds)
+        {
+            ZNetScene scene = ZNetScene.instance;
+            if (scene == null) return null;
+            if (exact != null)
+            {
+                GameObject p = scene.GetPrefab(exact);
+                if (p != null) { ctx.Log($"{what}: prefab {exact}"); return p; }
+            }
+            var found = new List<string>();
+            GameObject first = null;
+            foreach (GameObject prefab in scene.m_prefabs)
+            {
+                if (prefab == null) continue;
+                string lower = prefab.name.ToLowerInvariant();
+                bool w = false;
+                foreach (string word in words) { if (lower.Contains(word)) { w = true; break; } }
+                if (!w) continue;
+                bool k = kinds == null;
+                if (!k) { foreach (string kind in kinds) { if (lower.Contains(kind)) { k = true; break; } } }
+                if (!k) continue;
+                found.Add(prefab.name);
+                if (first == null) first = prefab;
+            }
+            ctx.Log($"{what}: {(first != null ? "using " + first.name : "none found")}; candidates [{string.Join(", ", found)}]");
+            return first;
+        }
+
+        private static GameObject Spawn(ScenarioContext ctx, GameObject prefab, Vector3 pos)
+        {
+            if (prefab == null) return null;
+            GameObject go = Object.Instantiate(prefab, pos, Quaternion.identity);
+            Fireplace fire = go.GetComponent<Fireplace>();
+            if (fire != null) fire.AddFuel(fire.m_maxFuel);
+            ctx.Log($"spawned {prefab.name} at {pos}");
+            return go;
+        }
+
+        private static void Despawn(GameObject go)
+        {
+            if (go == null) return;
+            if (ZNetScene.instance != null) ZNetScene.instance.Destroy(go);
+            else Object.Destroy(go);
         }
     }
 }

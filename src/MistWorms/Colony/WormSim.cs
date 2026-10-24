@@ -21,10 +21,28 @@ namespace MistWorms.Colony
         private const float AvoidInterval = 0.25f;
         private const float AvoidLength = 1f;
         private const float AvoidAngle = 35f * Mathf.Deg2Rad;
+        private const float MovedEpsilon = 0.001f;         // a step longer than 1 mm counts as moving (idle pose, WormStore.stillSince)
         private const float AvoidWeight = 1.5f;
-        private const float SeparationRadius = 0.5f;
-        private const int SeparationNeighbors = 4;
-        private const float SeparationWeight = 0.6f;
+
+        // Group behaviour of free worms (spec §3.3, §11.1; plan 4A-3). One grid query per worm and step feeds all of it.
+        private const float SeparationRadius = 0.3f;       // between body middles
+        private const int SeparationNeighbors = 6;
+        private const float SeparationWeight = 1f;
+        private const float SeparationQueryRadius = SeparationRadius + 2f * WormMath.BodyMidOffset; // head distance that can still mean middles < 0.3 m apart
+        private const int NeighborQueryCount = 8;          // the 6 separation neighbours plus 2 for cohesion and alignment
+        private const float NeighborMaxDy = 1.5f;
+        private const float CohesionRadius = 3f;           // query radius of a wandering worm
+        private const float CohesionMinDistance = 0.3f;
+        private const float CohesionWeight = 0.2f;
+        private const float AlignRadius = 1.5f;            // query radius of a hunting / gathering worm
+        private const float AlignWeight = 0.3f;
+        private const float FileMinSpeed = 0.2f;           // a stopped leader still lets the follower creep so that it can steer around it
+        private const float ApproachInterval = 0.5f;       // the approach point is re-evaluated this often
+        private const float ApproachRangeFactor = 0.9f;    // point = target + direction x CobraRange x 0.9
+        private const float ApproachReach = 0.3f;          // a hunter strikes only once this close to its place...
+        private const float ApproachPatience = 4f;         // ...or after this long in Hunting without getting there (anti-blocking)
+        private const float RecoverSpeedFactor = 0.3f;     // a worm recovering from a strike shuffles to its place at this share of the speed
+        private const float ApproachMaxDy = 0.6f;          // floor of the point within this of the target's feet
         private const float GridInterval = 0.1f;
         private const float StuckWindow = 3f;              // spec §11.1: no 0.5 m of progress in 3 s
         private const float StuckDistance = 0.5f;
@@ -33,8 +51,10 @@ namespace MistWorms.Colony
 
         private Bounds _boxBounds;
         private float _nextGridTime;
-        private readonly int[] _neighborIdx = new int[SeparationNeighbors];
-        private readonly float[] _neighborSqr = new float[SeparationNeighbors];
+        private readonly int[] _neighborIdx = new int[NeighborQueryCount];
+        private readonly float[] _neighborSqr = new float[NeighborQueryCount];
+        private bool _warmed;
+        private readonly ApproachRanks _approach = new ApproachRanks();
 
         // ------------------------------------------------------------------ colony tick
 
@@ -44,10 +64,17 @@ namespace MistWorms.Colony
             float now = Time.time;
             WormStore s = Store;
 
+            _pathsThisTick = 0;
+            if (!_warmed)
+            {
+                _warmed = true;
+                WormEffects.Prewarm();
+            }
             _players = Player.GetAllPlayers();
             RefreshFire(now);
             RefreshPathBudget(now);
-            if (now >= _nextGridTime) RebuildGrid(now);
+            bool gridRebuilt = false;
+            if (now >= _nextGridTime) { RebuildGrid(now); gridRebuilt = true; }
 
             float nearRate = MWConfig.Performance.SimRateNear.Value;
             float farRate = MWConfig.Performance.SimRateFar.Value;
@@ -84,6 +111,9 @@ namespace MistWorms.Colony
             _lastTickTime = now;
             LastSimSteps = steps;
             LastSimMs = (float)((Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency);
+#if MW_DEV
+            RecordFrame(now, steps, gridRebuilt);
+#endif
             AvgSimMs = AvgSimMs <= 0f ? LastSimMs : AvgSimMs + (LastSimMs - AvgSimMs) * 0.02f;
             if (LastSimMs > MaxSimMs) MaxSimMs = LastSimMs;
         }
@@ -121,6 +151,7 @@ namespace MistWorms.Colony
             WormStore s = Store;
             s.prevPos[i] = s.pos[i];
             s.stateTime[i] += dt;
+            s.lastSpeed[i] = 0f; // MoveWorm sets the real value when the worm moves
 
             switch ((WormState)s.state[i])
             {
@@ -249,19 +280,69 @@ namespace MistWorms.Colony
             if (FireCheck(i, false)) { SetState(i, WormState.Fleeing, now); return; }
 
             Vector3 pos = s.pos[i];
-            // Distance to the target's surface: eye to capsule centre minus its radius (spec §3.3).
-            float surface = Vector3.Distance(pos + Vector3.up * EyeHeight, target.GetCenterPoint()) - target.GetRadius();
-            if (surface <= MWConfig.Worm.CobraRange.Value)
+            Vector3 goal = ApproachGoal(i, target, now);
+            // The strike needs the target in range AND the worm at its place (or no valid place, or too long waiting), so the hunters
+            // spread around the target instead of striking where they stand in a heap.
+            if (SurfaceDistance(i, target) <= MWConfig.Worm.CobraRange.Value)
             {
-                SetState(i, WormState.Striking, now);
-                return;
+                Vector3 toPlace = goal - pos;
+                toPlace.y = 0f;
+                bool atPlace = s.approachMode[i] == 2 || toPlace.sqrMagnitude <= ApproachReach * ApproachReach || s.stateTime[i] > ApproachPatience;
+                if (s.approachMode[i] != 0 && atPlace)
+                {
+                    SetState(i, WormState.Striking, now);
+                    return;
+                }
             }
 
-            Vector3 goal = target.transform.position;
             bool stuck = CheckStuck(i, now);
             if (stuck || !s.hasLos[i]) TryRequestPath(i, goal, now);
             goal = FollowPath(i, goal);
-            MoveWorm(i, goal, MWConfig.Worm.MoveSpeed.Value, now, dt, noiseWeight: 0f, stopAtGoal: false);
+            MoveWorm(i, goal, MWConfig.Worm.MoveSpeed.Value, now, dt, noiseWeight: 0f, stopAtGoal: s.approachMode[i] == 1);
+        }
+
+        /// <summary>Distance to the target's surface: eye to capsule centre minus its radius (spec 3.3).</summary>
+        private float SurfaceDistance(int i, Player target) =>
+            Vector3.Distance(Store.pos[i] + Vector3.up * EyeHeight, target.GetCenterPoint()) - target.GetRadius();
+
+        /// <summary>
+        /// Where a hunter heads (plan 4A-3 point 3): its own place around the target, at CobraRange x 0.9, chosen by rank x golden angle from
+        /// the bearing at which the first hunter of that target arrived. The rank is kept as long as the worm hunts the same target. The
+        /// point is validated (floor, no wall from the target) every 0.5 s; otherwise the worm aims at the target itself.
+        /// </summary>
+        private Vector3 ApproachGoal(int i, Player target, float now)
+        {
+            WormStore s = Store;
+            Vector3 tp = target.transform.position;
+            if (s.approachRank[i] < 0 || s.approachTarget[i] != s.targetId[i])
+            {
+                Vector3 from = s.pos[i] - tp;
+                s.approachRank[i] = _approach.Assign(s.targetId[i], now, WormMath.HeadingOf(from.x, from.z), out float baseAngle);
+                s.approachBase[i] = baseAngle;
+                s.approachTarget[i] = s.targetId[i];
+                s.approachNext[i] = now + (i % 10) * (ApproachInterval / 10f); // spread the evaluations of a wave over frames
+                s.approachMode[i] = 0;
+            }
+            if (now >= s.approachNext[i])
+            {
+                s.approachNext[i] = now + ApproachInterval;
+                s.approachOffset[i] = Vector3.zero;
+                s.approachMode[i] = 2;
+                WormMath.ApproachPlace(s.approachRank[i], s.approachBase[i], MWConfig.Worm.CobraRange.Value * ApproachRangeFactor, out float a, out float radius);
+                Vector3 point = tp + new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * radius;
+#if MW_DEV
+                _frameApproach++;
+#endif
+                if (Physics.Raycast(point + Vector3.up, Vector3.down, out RaycastHit floor, 2.5f, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore)
+                    && Mathf.Abs(floor.point.y - tp.y) <= ApproachMaxDy
+                    && !Physics.Linecast(tp + Vector3.up * WormPhysics.WallHeight, floor.point + Vector3.up * WormPhysics.WallHeight,
+                        WormPhysics.SolidMask, QueryTriggerInteraction.Ignore))
+                {
+                    s.approachOffset[i] = floor.point - tp;
+                    s.approachMode[i] = 1;
+                }
+            }
+            return tp + s.approachOffset[i];
         }
 
         private void StepStriking(int i, float now, float dt)
@@ -290,13 +371,31 @@ namespace MistWorms.Colony
             }
 
             if (FireCheck(i, false)) { SetState(i, WormState.Fleeing, now); return; }
-            Rest(i, now);
+            if (phase == StrikePhase.Recovery && target != null && Targetable(target)) RecoverMove(i, target, now, dt);
+            else Rest(i, now);
 
             if (t >= windup + StrikeDuration + cooldown)
             {
                 // Phase 4: re-evaluate "somebody to join?" after each recovery.
                 if (target != null && Targetable(target)) SetState(i, WormState.Hunting, now);
                 else LoseTarget(i, now);
+            }
+        }
+
+        /// <summary>
+        /// Recovery of a strike: the worm shuffles toward its place at 0.3 x the speed, steering only by its place and the separation (it
+        /// moves off a neighbour it overlaps), and never leaves the cobra range. The windup stays motionless.
+        /// </summary>
+        private void RecoverMove(int i, Player target, float now, float dt)
+        {
+            WormStore s = Store;
+            Vector3 before = s.pos[i];
+            Vector3 goal = ApproachGoal(i, target, now);
+            MoveWorm(i, goal, MWConfig.Worm.MoveSpeed.Value * RecoverSpeedFactor, now, dt, noiseWeight: 0f, stopAtGoal: true);
+            if (SurfaceDistance(i, target) > MWConfig.Worm.CobraRange.Value)
+            {
+                s.pos[i] = before;
+                s.lastSpeed[i] = 0f;
             }
         }
 
@@ -314,6 +413,7 @@ namespace MistWorms.Colony
             Store.targetKind[i] = (byte)TargetKind.None;
             Store.targetId[i] = 0;
             Store.hasLos[i] = false;
+            Store.approachRank[i] = -1;
         }
 
         // ---- Fleeing
@@ -359,7 +459,8 @@ namespace MistWorms.Colony
 
             if (now >= s.nextAvoidTime[i]) EvaluateAvoidance(i, now);
             desired += s.avoidDir[i] * AvoidWeight;
-            desired += Separation(i) * SeparationWeight;
+            desired += GroupSteer(i, pos, h, out float fileCap);
+            if (fileCap < speed) speed = fileCap;
             if (noiseWeight > 0f)
             {
                 float a = (Mathf.PerlinNoise(now * 0.6f, i * 0.731f) - 0.5f) * 2.4f; // about +-70 degrees
@@ -398,6 +499,8 @@ namespace MistWorms.Colony
             s.pos[i] = newPos;
             s.groundNormal[i] = Vector3.Lerp(s.groundNormal[i], newNormal, 0.35f).normalized;
             s.animTime[i] += moved / Mathf.Max(0.1f, MWConfig.Worm.MoveSpeed.Value);
+            s.lastSpeed[i] = dt > 1e-4f ? moved / dt : 0f;
+            if (moved > MovedEpsilon) s.stillSince[i] = now;
             s.nextGroundTime[i] = now + GroundInterval;
             return true;
         }
@@ -441,28 +544,92 @@ namespace MistWorms.Colony
             return false;
         }
 
-        /// <summary>Push away from the four closest neighbours within 0.5 m, stronger when closer.</summary>
-        private Vector3 Separation(int i)
+        /// <summary>
+        /// Group steering of one step from a single grid query (plan 4A-3): separation between body middles (all states), cohesion toward the
+        /// neighbours within 3 m (wandering), alignment with the neighbours in the same state (hunting, gathering), and the speed cap of the
+        /// file (a worm ahead within 0.6 m in a 30 degree cone going the same way: its last speed + 5 %, never below FileMinSpeed).
+        /// <paramref name="speedCap"/> is float.MaxValue when there is no cap.
+        /// </summary>
+        private Vector3 GroupSteer(int i, Vector3 p, float h, out float speedCap)
         {
+            speedCap = float.MaxValue;
             WormStore s = Store;
-            Vector3 p = s.pos[i];
-            int n = _grid.QueryNearest(p.x, p.y, p.z, SeparationRadius, 1.5f, i, s.pos, SeparationNeighbors, _neighborIdx, _neighborSqr);
-            Vector3 push = Vector3.zero;
+            byte state = s.state[i];
+            bool cohesion = state == (byte)WormState.Idle;
+            bool align = state == (byte)WormState.Hunting || state == (byte)WormState.Gathering;
+            float radius = cohesion ? CohesionRadius : align ? AlignRadius : SeparationQueryRadius;
+
+#if MW_DEV
+            _frameQueries++;
+#endif
+            int n = _grid.QueryNearest(p.x, p.y, p.z, radius, NeighborMaxDy, i, s.pos, NeighborQueryCount, _neighborIdx, _neighborSqr);
+            if (n == 0) return Vector3.zero;
+
+            WormMath.BodyMid(p.x, p.z, h, out float mx, out float mz);
+            float pushX = 0f, pushZ = 0f, cohX = 0f, cohZ = 0f, alignX = 0f, alignZ = 0f;
+            int cohN = 0, alignN = 0;
+            bool filed = false;
+
             for (int k = 0; k < n; k++)
             {
                 int j = _neighborIdx[k];
-                Vector3 d = p - s.pos[j];
-                d.y = 0f;
-                float m = Mathf.Sqrt(_neighborSqr[k]);
-                if (m < 1e-3f)
+                Vector3 pj = s.pos[j];
+                float hj = s.heading[j];
+                float dist = Mathf.Sqrt(_neighborSqr[k]);
+
+                if (k < SeparationNeighbors && dist < SeparationQueryRadius)
                 {
-                    // Exactly stacked: split along an arbitrary but opposite axis for the two worms.
-                    d = new Vector3(i > j ? 1f : -1f, 0f, 0f);
-                    m = 1f;
+                    WormMath.BodyMid(pj.x, pj.z, hj, out float jx, out float jz);
+                    float dx = mx - jx, dz = mz - jz;
+                    float m = Mathf.Sqrt(dx * dx + dz * dz);
+                    if (m < 1e-3f)
+                    {
+                        // Exactly stacked: split along an arbitrary but opposite axis for the two worms.
+                        dx = i > j ? 1f : -1f;
+                        dz = 0f;
+                        m = 1f;
+                    }
+                    if (m < SeparationRadius)
+                    {
+                        float scale = (1f - m / SeparationRadius) / m;
+                        pushX += dx * scale;
+                        pushZ += dz * scale;
+                    }
                 }
-                push += d / m * (1f - Mathf.Min(1f, m / SeparationRadius));
+
+                if (!filed && dist < WormMath.FileMaxDistance && WormMath.IsAheadInFile(h, pj.x - p.x, pj.z - p.z, hj))
+                {
+                    filed = true;
+                    speedCap = WormMath.FileSpeedCap(s.lastSpeed[j], FileMinSpeed);
+                }
+
+                if (cohesion && dist > CohesionMinDistance)
+                {
+                    cohX += pj.x;
+                    cohZ += pj.z;
+                    cohN++;
+                }
+                if (align && s.state[j] == state)
+                {
+                    alignX += Mathf.Sin(hj);
+                    alignZ += Mathf.Cos(hj);
+                    alignN++;
+                }
             }
-            return push;
+
+            var steer = new Vector3(pushX, 0f, pushZ) * SeparationWeight;
+            if (cohN > 0)
+            {
+                float cx = cohX / cohN - p.x, cz = cohZ / cohN - p.z;
+                float cm = Mathf.Sqrt(cx * cx + cz * cz);
+                if (cm > 1e-3f) steer += new Vector3(cx, 0f, cz) * (CohesionWeight / cm);
+            }
+            if (alignN > 0)
+            {
+                float am = Mathf.Sqrt(alignX * alignX + alignZ * alignZ);
+                if (am > 0.1f) steer += new Vector3(alignX, 0f, alignZ) * (AlignWeight / am);
+            }
+            return steer;
         }
 
         /// <summary>No 0.5 m of progress in 3 s while it wants to move (spec §11.1). Resets its window every time it is evaluated.</summary>

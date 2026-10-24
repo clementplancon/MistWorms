@@ -120,7 +120,7 @@ def png_size(path):
     w, h, depth, ctype = struct.unpack(">IIBB", head[16:26])
     if depth != 8 or ctype not in (2, 6):
         raise Violation("PNG must be 8-bit RGB or RGBA (depth %d, colour type %d)" % (depth, ctype))
-    return w, h
+    return w, h, ctype
 
 
 def main():
@@ -173,7 +173,7 @@ def main():
     for name, m in info.items():
         mn, mx = m["min"], m["max"]
         ext = [mx[i] - mn[i] for i in range(3)]
-        if name.startswith(("worm_crawl", "worm_sleep")):
+        if name.startswith(("worm_crawl", "worm_idle", "worm_sleep")):
             if not config.WORM_LENGTH[0] <= ext[2] <= config.WORM_LENGTH[1]:
                 errors.append("%s: length along Z %.3f outside %s" % (name, ext[2], config.WORM_LENGTH))
             if mn[1] < -0.015 or ext[0] > 0.2:
@@ -206,12 +206,16 @@ def main():
             errors.append("%s: file missing" % name)
             continue
         try:
-            tw, th = png_size(path)
+            tw, th, ctype = png_size(path)
         except (Violation, struct.error) as e:
             errors.append("%s: %s" % (name, e))
             continue
         if (tw, th) != (w, h):
             errors.append("%s: size %dx%d, expected %dx%d" % (name, tw, th, w, h))
+        if name.startswith("worm_") and max(tw, th) > config.WORM_TEXTURE_MAX:
+            errors.append("%s: %dx%d above the %d px worm limit" % (name, tw, th, config.WORM_TEXTURE_MAX))
+        if (ctype == 6) != (name == "worm_gloss"):
+            errors.append("%s: %s (only worm_gloss carries alpha)" % (name, "RGBA" if ctype == 6 else "RGB, expected RGBA"))
         textures.append({"name": name, "file": name + ".png", "width": tw, "height": th, "linear": linear})
 
     if errors:

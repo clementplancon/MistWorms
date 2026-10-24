@@ -22,6 +22,7 @@ namespace MistWorms
             CommandManager.Instance.AddConsoleCommand(new StateCommand());
             CommandManager.Instance.AddConsoleCommand(new TpMineCommand());
             CommandManager.Instance.AddConsoleCommand(new FreezeCommand());
+            CommandManager.Instance.AddConsoleCommand(new GlossCommand());
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_mass", "<n> - spawn a writhing mass of n worms in front of the player", 4));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_nest", "- place a worm nest in front of the player", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_wake", "- wake every dormant group of the current mine", 7));
@@ -187,6 +188,27 @@ namespace MistWorms
                     Colony.WormColony.Frozen = !Colony.WormColony.Frozen;
                 }
                 Print(context, $"mw_freeze: simulation {(Colony.WormColony.Frozen ? "frozen" : "running")}");
+            }
+        }
+
+        private sealed class GlossCommand : MWCommand
+        {
+            public override string Name => "mw_gloss";
+            public override string Help => "[dev] <map 0|1> [glossiness] - switch the worm lustre map and _Glossiness live";
+            public override bool IsCheat => true;
+
+            public override List<string> CommandOptionList() => new List<string> { "0", "1" };
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                float g = 0f;
+                bool hasG = args.Length > 1 && float.TryParse(args[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out g);
+                if (args.Length == 0 || (args[0] != "0" && args[0] != "1") || (args.Length > 1 && !hasG))
+                {
+                    Print(context, "usage: mw_gloss <map 0|1> [glossiness]");
+                    return;
+                }
+                Print(context, "mw_gloss: " + Render.MaterialFactory.DevSetGloss(args[0] == "1", hasG ? g : (float?)null));
             }
         }
 

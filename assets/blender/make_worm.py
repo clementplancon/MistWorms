@@ -19,6 +19,7 @@ BODY_LEN = 0.385
 HEAD_INSET = 0.007
 TAIL_INSET = 0.004    # blunt tail: the pole sits slightly inside the first ring
 SEGMENTS = 14
+RING_BULGE = 0.02     # alternate rings +-2 % (was 5 %: tyre look)
 FLAT = 0.92           # belly flattening of the cross-section
 
 # Radius profile along u (tail 0 -> head 1): tail 0.012, body 0.030, head bulb 0.035.
@@ -67,31 +68,67 @@ def ring_u():
     return np.arange(RINGS + 1) / RINGS
 
 
-def pose(rear=0.0, lunge=0.0, crawl_k=None, pulse=1.0, flat=FLAT, sink=0.0, curl=0.0, ring_wave=None):
-    """Returns glTF-space vertices (V,3) for one frame."""
+CRAWL_FRAMES = 16
+IDLE_FRAMES = 8
+
+# Crawl (plan 4A-1 point 2): lateral wave travelling head -> tail, peristalsis and stretch travelling tail -> head.
+CRAWL_WAVE_LEN = 0.35
+CRAWL_AMP_HEAD = 0.02
+CRAWL_AMP_TAIL = 0.045
+CRAWL_PERI_LEN = 0.13
+CRAWL_PERI_AMP = 0.25
+CRAWL_STRETCH = 0.06
+# Idle (point 3): head yaw sweep, slow lateral undulation, light peristalsis.
+IDLE_YAW_DEG = 15.0
+IDLE_WAVE_LEN = 0.40
+IDLE_WAVE_AMP = 0.01
+IDLE_PERI_AMP = 0.08
+IDLE_HEAD_START = 0.75   # the front 25 % of the body carries the sweep
+IDLE_HEAD_RAMP = 0.12
+
+
+def pose(rear=0.0, lunge=0.0, crawl_k=None, pulse=1.0, flat=FLAT, sink=0.0, curl=0.0, idle_k=None):
+    """Returns glTF-space vertices (V,3) for one frame. crawl_k / idle_k are frame indices of the looping flipbooks."""
     u = ring_u()
-    s = u * BODY_LEN
-    ds = BODY_LEN / RINGS
+    ds_nom = BODY_LEN / RINGS
+    s_nom = u * BODY_LEN
+    s_mid = 0.5 * (s_nom[:-1] + s_nom[1:])
+
+    # --- longitudinal stretch (crawl): interval lengths, renormalised so the mean body length stays BODY_LEN
+    w = np.ones(RINGS)
+    if crawl_k is not None:
+        w = 1.0 + CRAWL_STRETCH * np.sin(2 * np.pi * (s_mid / CRAWL_PERI_LEN - crawl_k / CRAWL_FRAMES))
+    ds = BODY_LEN * w / w.sum()
+    s = np.concatenate([[0.0], np.cumsum(ds)])
 
     # --- bending (rear): pitch grows from mid body to the head, integrated along the arc
     theta = rear * (np.pi / 2) * smoothstep((s - REAR_S0) / REAR_W)
     th_mid = 0.5 * (theta[:-1] + theta[1:])
-    z = np.concatenate([[0.0], np.cumsum(np.cos(th_mid) * ds)])
+    # --- head yaw sweep (idle): heading angle in the ground plane, integrated along the arc
+    psi = np.zeros(RINGS + 1)
+    if idle_k is not None:
+        psi = np.radians(IDLE_YAW_DEG) * np.sin(2 * np.pi * idle_k / IDLE_FRAMES) *             smoothstep((u - IDLE_HEAD_START) / IDLE_HEAD_RAMP)
+    psi_mid = 0.5 * (psi[:-1] + psi[1:])
+    x = np.concatenate([[0.0], np.cumsum(np.sin(psi_mid) * np.cos(th_mid) * ds)])
+    z = np.concatenate([[0.0], np.cumsum(np.cos(psi_mid) * np.cos(th_mid) * ds)])
     y = np.concatenate([[0.0], np.cumsum(np.sin(th_mid) * ds)])
     # --- front lunge (strike): the front part stretches forward, the radius thins to keep volume
     z = z + lunge * smoothstep((s - 0.15) / 0.20)
     # --- lateral motion
-    x = np.zeros(RINGS + 1)
+    peri = np.zeros(RINGS + 1)
     if crawl_k is not None:
-        x = x + 0.02 * np.sin(2 * np.pi * (s / 0.28 - crawl_k / 12.0))
+        amp = CRAWL_AMP_HEAD + (CRAWL_AMP_TAIL - CRAWL_AMP_HEAD) * (1.0 - u)
+        x = x + amp * np.sin(2 * np.pi * (s / CRAWL_WAVE_LEN + crawl_k / CRAWL_FRAMES))
+        peri = CRAWL_PERI_AMP * np.sin(2 * np.pi * (s / CRAWL_PERI_LEN - crawl_k / CRAWL_FRAMES))
+    if idle_k is not None:
+        x = x + IDLE_WAVE_AMP * np.sin(2 * np.pi * (s / IDLE_WAVE_LEN + idle_k / IDLE_FRAMES))
+        peri = IDLE_PERI_AMP * np.sin(2 * np.pi * (s / CRAWL_PERI_LEN - idle_k / IDLE_FRAMES))
     x = x + curl * np.sin(np.pi * u)
 
     # radius
     rb = np.interp(u, PROFILE_U, PROFILE_R)
-    ann = 1.0 + 0.05 * np.where(np.arange(RINGS + 1) % 2 == 0, 1.0, -1.0)
-    rr = rb * ann * pulse
-    if crawl_k is not None:
-        rr = rr * (1.0 + 0.20 * np.sin(2 * np.pi * (s / 0.13 - crawl_k / 12.0)))
+    ann = 1.0 + RING_BULGE * np.where(np.arange(RINGS + 1) % 2 == 0, 1.0, -1.0)
+    rr = rb * ann * pulse * (1.0 + peri)
     seg = np.linalg.norm(np.diff(np.stack([x, y, z], 1), axis=0), axis=1) / ds
     ring_strain = np.concatenate([[seg[0]], 0.5 * (seg[:-1] + seg[1:]), [seg[-1]]])
     rr = rr * np.power(np.maximum(ring_strain, 0.2), -0.5)
@@ -132,84 +169,168 @@ REAR_S0 = 0.07
 REAR_W = 0.15
 
 
+TEX = 128             # final texture size (Valheim creature textures are 64 to 128 px, Point filtered)
+PAINT = 512           # painted at 4x then reduced with a box filter
+WRINKLES = 2 * SEGMENTS
+
+COL_BASE = np.array([0xE6, 0xDD, 0xBE]) / 255.0       # whitish yellow
+COL_BELLY = np.array([0xF2, 0xEC, 0xD4]) / 255.0
+COL_BACK = np.array([0xE6, 0xD2, 0xA2]) / 255.0       # a little warmer
+COL_PATCH = np.array([0xF6, 0xF1, 0xDC]) / 255.0      # translucent paler patches
+COL_VEIN = np.array([0x8D, 0xBA, 0x2E]) / 255.0       # acid green
+COL_HEAD = np.array([0x8A, 0x5A, 0x2B]) / 255.0       # amber brown
+COL_MOUTH = np.array([0x3B, 0x26, 0x15]) / 255.0
+
+# lustre (alpha of worm_gloss): body, folds, head, mandibles
+GLOSS_BODY, GLOSS_FOLD, GLOSS_HEAD, GLOSS_MOUTH = 0.92, 0.5, 0.7, 0.4
+
+HEAD_V0 = 0.895       # head capsule starts here (V = 0 tail, 1 head tip)
+MOUTH_V0 = 0.968      # head cap tip and mandibles
+
+
+def box_reduce(a, factor):
+    h, w = a.shape[:2]
+    return a.reshape(h // factor, factor, w // factor, factor, *a.shape[2:]).mean(axis=(1, 3))
+
+
+def circ(a, b):
+    """Distance on the circle of circumference 1 (U wraps around the body)."""
+    d = np.abs(a - b) % 1.0
+    return np.minimum(d, 1.0 - d)
+
+
 def make_textures(out_dir):
-    H = W = 512
+    H = W = PAINT
     V, U = np.meshgrid((np.arange(H) + 0.5) / H, (np.arange(W) + 0.5) / W, indexing="ij")
-    ring = 0.5 + 0.5 * np.cos(2 * np.pi * SEGMENTS * V)         # 1 on a ridge, 0 in a groove
-    groove = 1.0 - ring
-    low = C.fbm2_tile(H, W, 4, 1, octaves=4)
-    mid = C.fbm2_tile(H, W, 16, 2, octaves=3)
-    fine = C.fbm2_tile(H, W, 64, 3, octaves=2)
-    f1, f2 = C.voronoi_tile(H, W, 36, 72, 4)
-    edge = C.smoothstep((f2 - f1) / 0.22)                         # 0 on cell borders (wrinkles)
+    low = C.fbm2_tile(H, W, 3, 1, octaves=2)
 
-    base = np.array([204, 166, 160]) / 255.0
-    dark = np.array([142, 88, 92]) / 255.0
-    col = base[None, None, :] * (0.92 + 0.16 * low)[..., None]
-    col = col * (0.95 + 0.10 * edge)[..., None]
-    col = col + (np.array([0.05, 0.0, -0.02]))[None, None, :] * (mid - 0.5)[..., None] * 2
-    gw = (groove ** 1.4 * 0.75)[..., None]
-    col = col * (1 - gw) + dark[None, None, :] * gw
-    # dorsal vessel (darker) and paler belly
-    dorsal = np.exp(-(((U - 0.25) / 0.045) ** 2)) * 0.30
-    col = col * (1 - dorsal[..., None]) + np.array([0.42, 0.28, 0.30])[None, None, :] * dorsal[..., None]
-    belly = np.exp(-(((U - 0.75) / 0.12) ** 2)) * 0.15
-    col = col + belly[..., None] * np.array([0.10, 0.09, 0.06])[None, None, :]
-    # painted-in glints, because the runtime shader has no real wet look: pale blobs on the ridges
-    blob = C.smoothstep((C.fbm2_tile(H, W, 10, 5, octaves=2) - 0.58) / 0.12) * ring ** 1.2
-    spec = C.smoothstep((fine - 0.6) / 0.1) * ring * 0.5
-    col = col + (blob * 0.12 + spec * 0.15)[..., None] * np.array([1.0, 0.95, 0.9])[None, None, :]
-    # head and mouth darker
-    head = C.smoothstep((V - 0.915) / 0.05)
-    col = col * (1 - head[..., None]) + np.array([0.36, 0.22, 0.18])[None, None, :] * head[..., None] * (0.85 + 0.3 * mid[..., None])
-    tailm = 1.0 - C.smoothstep(V / 0.05)
-    col = col * (1 - 0.25 * tailm[..., None])
-    C.write_png(os.path.join(out_dir, "worm_albedo.png"), C.to_u8(col))
+    # --- ring folds: 14 segments, ridges where V = m / 14 (the even mesh rings); thin folds, same hue, ~22 % darker
+    ridge_c = np.cos(2 * np.pi * SEGMENTS * V)
+    groove = C.smoothstep((0.5 - 0.5 * ridge_c - 0.76) / 0.20)
+    groove = groove * (0.75 + 0.25 * C.fbm2_tile(H, W, 2, 11, octaves=2, aspect=4.0))   # not every fold equally deep
 
-    height = ring * 0.55 + edge * 0.12 + mid * 0.12 + fine * 0.10
-    height = C.box_blur(height, 1)
-    C.write_png(os.path.join(out_dir, "worm_normal.png"), C.normal_map_from_height(height, 3.5))
+    # --- body colour: dorsal weight d (1 on top, U = 0.25) to belly (U = 0.75)
+    d = 0.5 + 0.5 * np.cos(2 * np.pi * (U - 0.25))
+    col = COL_BASE[None, None, :] * (0.97 + 0.06 * low)[..., None]
+    belly_w = ((1.0 - d) ** 2 * 0.7)[..., None]
+    col = col * (1 - belly_w) + COL_BELLY[None, None, :] * belly_w
+    # translucent paler patches (big, soft shapes)
+    patch = C.smoothstep((C.fbm2_tile(H, W, 5, 4, octaves=2, aspect=2.0) - 0.56) / 0.12) * 0.40
+    col = col * (1 - patch[..., None]) + COL_PATCH[None, None, :] * patch[..., None]
+    # dorsal line: a little warmer and darker
+    dl = np.exp(-(circ(U, 0.25) / 0.035) ** 2)
+    col = col * (1 - 0.55 * dl[..., None]) + (COL_BACK * 0.93)[None, None, :] * (0.55 * dl)[..., None]
+
+    # --- veins seen through the skin: thin sinuous acid-green lines running ALONG the body (U varies slowly with V),
+    # crossing the rings, with a few branches; irregular (fade) and half visible
+    def vein(centre, wid, mix, fade):
+        return np.exp(-(circ(U, centre) / wid) ** 2) * fade * (1.0 - 0.5 * groove) * mix
+    veins = []
+    for k, (u0, phi, mix) in enumerate(((0.22, 0.0, 0.36), (0.62, 2.1, 0.32), (0.92, 4.0, 0.28))):
+        # drifts by about +-25 % of the circumference along the body, and only shows in stretches
+        centre = u0 + 0.25 * np.sin(2 * np.pi * (0.9 * V) + phi) + 0.05 * np.sin(2 * np.pi * (3.1 * V) + 2 * phi)
+        fade = C.smoothstep((C.fbm2_tile(H, W, 2, 20 + k, octaves=2, aspect=3.0) - 0.42) / 0.12)
+        veins.append(vein(centre, 0.016, mix, fade))
+        v0 = 0.25 + 0.3 * k
+        rise = C.smoothstep((V - v0) / 0.25)
+        win = C.smoothstep((V - v0) / 0.04) * (1.0 - C.smoothstep((V - v0 - 0.25) / 0.08))
+        bc = centre + (1.0 if k % 2 == 0 else -1.0) * 0.06 * rise
+        veins.append(vein(bc, 0.012, mix * 0.7, fade * win))
+    for m in veins:
+        col = col * (1 - m[..., None]) + COL_VEIN[None, None, :] * m[..., None]
+
+    # --- grooves between the rings: the surrounding colour, darker
+    gw = (groove * 0.11)[..., None]
+    col = col * (1 - gw)
+
+    # --- discreet painted sheen on the back (the real wet look comes from the lustre map)
+    sheen = np.exp(-(circ(U, 0.36) / 0.028) ** 2) * (1 - groove) * 0.08
+    col = col + sheen[..., None]
+
+    # --- head capsule and mouth
+    head = C.smoothstep((V - HEAD_V0) / 0.05)
+    hcol = COL_HEAD[None, None, :] * (0.85 + 0.25 * d)[..., None] * (1 - 0.25 * groove)[..., None]
+    col = col * (1 - head[..., None]) + hcol * head[..., None]
+    mouth = C.smoothstep((V - MOUTH_V0) / 0.008)
+    col = col * (1 - mouth[..., None]) + COL_MOUTH[None, None, :] * mouth[..., None]
+    # blunt tail tip a little darker
+    tailm = (1.0 - C.smoothstep(V / 0.05)) * 0.15
+    col = col * (1 - tailm[..., None])
+
+    albedo = box_reduce(col, PAINT // TEX)
+    C.write_png(os.path.join(out_dir, "worm_albedo.png"), C.to_u8(albedo))
+
+    # --- height: ring ridges, transverse wrinkles, a few longitudinal creases
+    wr = np.cos(2 * np.pi * WRINKLES * V + 2.0 * np.sin(2 * np.pi * U))
+    wr_mod = C.smoothstep((C.fbm2_tile(H, W, 4, 5, octaves=2) - 0.35) / 0.3)
+    crease = np.cos(2 * np.pi * (7 * U + 0.4 * np.sin(2 * np.pi * 2 * V)))
+    height = (1 - groove) * 0.85 + 0.10 * wr * wr_mod + 0.05 * crease * (1 - groove)
+    height = box_reduce(height, PAINT // TEX)
+    C.write_png(os.path.join(out_dir, "worm_normal.png"), C.normal_map_from_height(height, 1.5))
+
+    # --- lustre: RGB = 0, A = gloss (0.92 body, 0.5 folds, 0.7 head, 0.4 mandibles)
+    g = GLOSS_BODY + (GLOSS_FOLD - GLOSS_BODY) * groove
+    g = g * (1 - head) + GLOSS_HEAD * head
+    g = g * (1 - mouth) + GLOSS_MOUTH * mouth
+    g = box_reduce(g, PAINT // TEX)
+    rgba = np.zeros((TEX, TEX, 4), dtype=np.uint8)
+    rgba[..., 3] = C.to_u8(g)
+    C.write_png(os.path.join(out_dir, "worm_gloss.png"), rgba)
 
 
-def preview(paths, items, out_dir):
-    """items: list of (name, verts, faces, uv, x_offset)."""
+def preview(items, out_dir):
+    """items: list of (name, verts, faces, uv, x_offset[, z_offset])."""
     import bpy
     C.reset_scene()
     C.setup_world((0.05, 0.055, 0.06), 1.0)
     mat = C.make_pbr_material("worm", os.path.join(out_dir, "worm_albedo.png"),
-                              os.path.join(out_dir, "worm_normal.png"), roughness=0.22, normal_strength=1.0)
-    for name, verts, faces, uv, xo in items:
+                              os.path.join(out_dir, "worm_normal.png"), roughness=0.2, normal_strength=1.0,
+                              specular=0.6, gloss_png=os.path.join(out_dir, "worm_gloss.png"), closest=True)
+    for it in items:
+        name, verts, faces, uv, xo = it[:5]
+        zo = it[5] if len(it) > 5 else 0.0
         # turn the worm to face +X so a side-on camera sees its profile
-        v = np.stack([verts[:, 2] + xo, verts[:, 1], -verts[:, 0]], 1)
+        v = np.stack([verts[:, 2] + xo, verts[:, 1], -verts[:, 0] + zo], 1)
         o = C.make_object("p_" + name, v, faces, uv)
         o.data.materials.append(mat)
     C.add_ground(3.0, (0.16, 0.16, 0.17))
-    C.add_scale_bar((-0.2, 0.0, 0.2), 0.4, 0.05)
     return bpy
 
 
 def render_previews(out_dir, prev_dir, frames):
     import bpy
     faces, uvs, _ = topology()
-    pick = [("crawl0", frames["worm_crawl_00"]), ("crawl3", frames["worm_crawl_03"]),
-            ("rear5", frames["worm_rear_05"]), ("strike3", frames["worm_strike_03"]),
-            ("sleep0", frames["worm_sleep_00"])]
+    pick = [("crawl0", frames["worm_crawl_00"]), ("crawl4", frames["worm_crawl_04"]),
+            ("idle2", frames["worm_idle_02"]), ("rear5", frames["worm_rear_05"]),
+            ("strike3", frames["worm_strike_03"]), ("sleep0", frames["worm_sleep_00"])]
     # row of poses, true scale, with a ruler (dark/light = 5 cm)
-    items = [(n, v, faces, uvs, -1.1 + 0.55 * i) for i, (n, v) in enumerate(pick)]
-    preview(None, items, out_dir)
-    C.add_light("AREA", C.gltf_to_blender((0.4, 1.6, 1.2)), 90, size=1.5, target=C.gltf_to_blender((0.0, 0.1, 0.0)))
+    items = [(n, v, faces, uvs, -1.05 + 0.42 * i) for i, (n, v) in enumerate(pick)]
+    preview(items, out_dir)
+    C.add_scale_bar((-0.2, 0.0, 0.2), 0.4, 0.05)
+    C.add_light("AREA", C.gltf_to_blender((0.4, 1.6, 1.2)), 60, size=1.5, target=C.gltf_to_blender((0.0, 0.1, 0.0)))
     C.add_light("AREA", C.gltf_to_blender((-1.5, 0.8, -1.0)), 40, size=1.5, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0.0, 0.1, 0.0)))
-    C.add_camera(C.gltf_to_blender((0.0, 0.8, 3.6)), C.gltf_to_blender((0.0, 0.12, 0.0)), lens=60)
+    C.add_camera(C.gltf_to_blender((0.0, 0.8, 5.0)), C.gltf_to_blender((0.0, 0.12, 0.0)), lens=60)
     C.configure_render(1400, 520, 48)
     C.render_to(os.path.join(prev_dir, "worm_poses.png"))
 
     # close-up of a single crawling worm from a 3/4 high angle
-    preview(None, [("close", frames["worm_crawl_02"], faces, uvs, 0.0)], out_dir)
-    C.add_light("AREA", C.gltf_to_blender((0.5, 0.8, 0.6)), 25, size=0.8, target=C.gltf_to_blender((0.0, 0.03, 0.0)))
-    C.add_light("AREA", C.gltf_to_blender((-0.6, 0.4, -0.5)), 8, size=0.8, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0.0, 0.03, 0.0)))
+    preview([("close", frames["worm_crawl_02"], faces, uvs, 0.0)], out_dir)
+    C.add_light("AREA", C.gltf_to_blender((0.5, 0.8, 0.6)), 10, size=0.8, target=C.gltf_to_blender((0.0, 0.03, 0.0)))
+    C.add_light("AREA", C.gltf_to_blender((-0.6, 0.4, -0.5)), 4, size=0.8, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0.0, 0.03, 0.0)))
     C.add_camera(C.gltf_to_blender((0.28, 0.20, 0.42)), C.gltf_to_blender((0.0, 0.02, 0.0)), lens=60)
     C.configure_render(1000, 700, 64)
     C.render_to(os.path.join(prev_dir, "worm_closeup.png"))
+
+    # the 16 crawl frames, 4 x 4, seen from above at an angle: the wave must travel without a jump
+    items = []
+    for k in range(CRAWL_FRAMES):
+        items.append(("c%02d" % k, frames["worm_crawl_%02d" % k], faces, uvs, -0.75 + 0.5 * (k % 4), -0.75 + 0.5 * (k // 4)))
+    preview(items, out_dir)
+    C.add_light("AREA", C.gltf_to_blender((0.0, 2.5, 0.5)), 160, size=2.5, target=C.gltf_to_blender((0.0, 0.0, 0.0)))
+    C.add_light("AREA", C.gltf_to_blender((-1.5, 1.0, -1.0)), 40, size=1.5, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0.0, 0.0, 0.0)))
+    C.add_camera(C.gltf_to_blender((0.0, 3.0, 1.9)), C.gltf_to_blender((0.0, 0.0, 0.0)), lens=45)
+    C.configure_render(1400, 1100, 32)
+    C.render_to(os.path.join(prev_dir, "worm_crawl_sheet.png"))
 
 
 def main():
@@ -222,8 +343,10 @@ def main():
 
     faces, uvs, nverts = topology()
     frames = {}
-    for k in range(12):
+    for k in range(CRAWL_FRAMES):
         frames["worm_crawl_%02d" % k] = pose(crawl_k=k)
+    for k in range(IDLE_FRAMES):
+        frames["worm_idle_%02d" % k] = pose(idle_k=k)
     for k in range(6):
         frames["worm_rear_%02d" % k] = pose(rear=k / 5.0)
     for k in range(4):
@@ -234,14 +357,14 @@ def main():
                                              flat=0.62, sink=0.28, curl=0.03)
 
     # origin under the centre of mass: shift every frame by the same Z (rest-pose mean of the body)
-    ref = frames["worm_crawl_00"][: 1 + (RINGS - 1) * AROUND + 1]
+    ref = pose()[: 1 + (RINGS - 1) * AROUND + 1]
     zc = float(ref[:, 2].mean())
     for name in frames:
         frames[name] = frames[name] - np.array([0.0, 0.0, zc])
 
     C.check_outward(frames["worm_crawl_00"], faces, "worm")
     print("worm: %d vertices, %d triangles" % (nverts, len(faces)))
-    for name in ("worm_crawl_00", "worm_crawl_05", "worm_rear_05", "worm_strike_03", "worm_sleep_01"):
+    for name in ("worm_crawl_00", "worm_crawl_05", "worm_idle_02", "worm_rear_05", "worm_strike_03", "worm_sleep_01"):
         v = frames[name]
         print("  %s min %s max %s" % (name, np.round(v.min(0), 3), np.round(v.max(0), 3)))
 

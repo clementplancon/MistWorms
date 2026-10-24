@@ -101,6 +101,7 @@ namespace MistWorms.Tests
             s.targetId[i] = 42;
             s.pathSlot[i] = 7;
             s.animTime[i] = 9f;
+            s.stillSince[i] = -5f;
             s.Free(i);
 
             Add(s, 2f);
@@ -112,7 +113,12 @@ namespace MistWorms.Tests
             Assert.Equal(-1, s.poolIndex[i]);
             Assert.Equal(-1, s.proxyIndex[i]);
             Assert.Equal(0f, s.animTime[i]);
+            Assert.Equal(0f, s.stillSince[i]);   // Alloc's "now"
             Assert.Equal((byte)WormState.Idle, s.state[i]);
+            Assert.Equal(0f, s.lastSpeed[i]);
+            Assert.Equal(-1, s.approachRank[i]);
+            Assert.Equal(0L, s.approachTarget[i]);
+            Assert.Equal(Vector3.zero, s.approachOffset[i]);
         }
 
         [Fact]

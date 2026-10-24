@@ -291,7 +291,10 @@ def export_glb(obj, path):
 
 
 # --------------------------------------------------------------------------- preview rendering
-def make_pbr_material(name, albedo_png, normal_png, roughness=0.3, normal_strength=1.0, specular=0.5):
+def make_pbr_material(name, albedo_png, normal_png, roughness=0.3, normal_strength=1.0, specular=0.5,
+                      gloss_png=None, closest=False):
+    """gloss_png: RGBA map whose alpha is the lustre; roughness is then 1 - lustre (same convention as the game).
+    closest: nearest-neighbour sampling, like the Point filter used in game."""
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     nt = mat.node_tree
@@ -305,13 +308,26 @@ def make_pbr_material(name, albedo_png, normal_png, roughness=0.3, normal_streng
     img.colorspace_settings.name = "sRGB"
     tex = nt.nodes.new("ShaderNodeTexImage")
     tex.image = img
-    tex.interpolation = "Linear"
+    tex.interpolation = "Closest" if closest else "Linear"
     nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    if gloss_png:
+        gimg = bpy.data.images.load(gloss_png)
+        gimg.colorspace_settings.name = "Non-Color"
+        gimg.alpha_mode = "CHANNEL_PACKED"
+        gtex = nt.nodes.new("ShaderNodeTexImage")
+        gtex.image = gimg
+        gtex.interpolation = "Closest" if closest else "Linear"
+        inv = nt.nodes.new("ShaderNodeMath")
+        inv.operation = "SUBTRACT"
+        inv.inputs[0].default_value = 1.0
+        nt.links.new(gtex.outputs["Alpha"], inv.inputs[1])
+        nt.links.new(inv.outputs["Value"], bsdf.inputs["Roughness"])
     if normal_png:
         nimg = bpy.data.images.load(normal_png)
         nimg.colorspace_settings.name = "Non-Color"
         ntex = nt.nodes.new("ShaderNodeTexImage")
         ntex.image = nimg
+        ntex.interpolation = "Closest" if closest else "Linear"
         nmap = nt.nodes.new("ShaderNodeNormalMap")
         nmap.inputs["Strength"].default_value = normal_strength
         nt.links.new(ntex.outputs["Color"], nmap.inputs["Color"])

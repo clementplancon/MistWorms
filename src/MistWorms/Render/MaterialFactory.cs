@@ -19,10 +19,17 @@ namespace MistWorms.Render
         private const string WormAlbedo = "worm_albedo", WormNormal = "worm_normal";
         private const string MassAlbedo = "mass_albedo", MassNormal = "mass_normal";
         private const string NestAlbedo = "nest_albedo", NestNormal = "nest_normal";
+        private const string WormGloss = "worm_gloss";
+
+        /// <summary>_Glossiness of the worm (and the fallback value without the lustre map); the map modulates it (dump section 12: vanilla 0.54 to 0.76).</summary>
+        public const float WormGlossiness = 0.85f;
 
         public static Material Worm { get; private set; }
         public static Material Mass { get; private set; }
         public static Material Nest { get; private set; }
+
+        /// <summary>True when the worm material uses the lustre map (_UseGlossmap 1, keyword on); false in the no-map fallback.</summary>
+        public static bool WormGlossActive { get; private set; }
 
         /// <summary>Per material: whether enableInstancing read back true on a platform that supports instancing.</summary>
         public static bool WormInstancing { get; private set; }
@@ -98,10 +105,13 @@ namespace MistWorms.Render
                 ShaderSource = chosenSource;
 
                 Material template = vanilla != null && vanilla.shader == chosen ? vanilla : null;
-                Material worm = Create("MW_Worm", chosen, template, WormAlbedo, WormNormal, 0.55f, false);
+                Material worm = Create("MW_Worm", chosen, template, WormAlbedo, WormNormal, WormGlossiness, false, WormGloss);
                 Material mass = Create("MW_Mass", chosen, template, MassAlbedo, MassNormal, 0.65f, true);
                 Material nest = Create("MW_Nest", chosen, template, NestAlbedo, NestNormal, 0.3f, false);
 
+                // Custom/Creature declares no _USEGLOSSMAP_ON keyword (dump section 9): the float drives it, the keyword is only set.
+                WormGlossActive = worm.HasProperty(VanillaNames.PropUseGlossmap) && worm.GetFloat(VanillaNames.PropUseGlossmap) > 0.5f
+                                  && worm.HasProperty(VanillaNames.PropMetallicGlossMap) && worm.GetTexture(VanillaNames.PropMetallicGlossMap) != null;
                 Worm = worm;
                 Mass = mass;
                 Nest = nest;
@@ -193,7 +203,7 @@ namespace MistWorms.Render
         }
 
         private static Material Create(string name, Shader shader, Material template, string albedoName, string normalName,
-            float glossiness, bool doubleSided)
+            float glossiness, bool doubleSided, string glossMapName = null)
         {
             Texture2D albedo = AssetCatalog.Texture(albedoName) ?? throw new InvalidOperationException("missing texture " + albedoName);
             Texture2D normal = AssetCatalog.Texture(normalName) ?? throw new InvalidOperationException("missing texture " + normalName);
@@ -234,6 +244,27 @@ namespace MistWorms.Render
             m.DisableKeyword(VanillaNames.KeywordUseGlossmap);
             m.DisableKeyword(VanillaNames.KeywordSnapNoise);
 
+            // Lustre map (alpha = gloss, RGB 0 like the vanilla tick's Feasting_m): optional, falls back to a flat _Glossiness.
+            if (glossMapName != null)
+            {
+                Texture2D gloss = AssetCatalog.Texture(glossMapName);
+                if (gloss != null && m.HasProperty(VanillaNames.PropMetallicGlossMap) && m.HasProperty(VanillaNames.PropUseGlossmap))
+                {
+                    m.SetTexture(VanillaNames.PropMetallicGlossMap, gloss);
+                    SetFloat(m, VanillaNames.PropUseGlossmap, 1f);
+                    m.EnableKeyword(VanillaNames.KeywordUseGlossmap);
+                    SetFloat(m, VanillaNames.PropMetallic, 0f);
+                    SetFloat(m, VanillaNames.PropGlossiness, glossiness);
+                    Plugin.Log.LogInfo($"[Render] {name}: lustre map {glossMapName} ({gloss.width}x{gloss.height}, filter {gloss.filterMode}), _UseGlossmap=1, _Glossiness={glossiness:0.00}, _Metallic=0");
+                }
+                else
+                {
+                    SetFloat(m, VanillaNames.PropUseGlossmap, 0f);
+                    SetFloat(m, VanillaNames.PropGlossiness, WormGlossiness);
+                    Plugin.Log.LogInfo($"[Render] {name}: no lustre map ({(gloss == null ? "texture " + glossMapName + " missing" : "shader has no _MetallicGlossMap")}), _UseGlossmap=0, _Glossiness={WormGlossiness:0.00}");
+                }
+            }
+
             // The dome is seen from inside when the camera dives into it: draw both faces and flip back-face normals.
             SetFloat(m, VanillaNames.PropCull, doubleSided ? 0f : 2f);
             SetFloat(m, VanillaNames.PropTwoSidedNormals, doubleSided ? 1f : 0f);
@@ -247,6 +278,22 @@ namespace MistWorms.Render
             Plugin.Log.LogInfo($"[Render] material {name}: shader '{m.shader.name}', instancing readback={readBack}, keywords [{sb.ToString().Trim()}], queue={m.renderQueue}");
             return m;
         }
+
+#if MW_DEV
+        /// <summary>Dev (mw_gloss): switches the lustre map of the worm material and optionally its _Glossiness, live.</summary>
+        public static string DevSetGloss(bool useMap, float? glossiness)
+        {
+            Material m = Worm;
+            if (m == null) return "worm material not built";
+            Texture2D map = AssetCatalog.Texture(WormGloss);
+            if (useMap && map != null) m.SetTexture(VanillaNames.PropMetallicGlossMap, map);
+            SetFloat(m, VanillaNames.PropUseGlossmap, useMap ? 1f : 0f);
+            if (useMap) m.EnableKeyword(VanillaNames.KeywordUseGlossmap); else m.DisableKeyword(VanillaNames.KeywordUseGlossmap);
+            if (glossiness.HasValue) SetFloat(m, VanillaNames.PropGlossiness, glossiness.Value);
+            WormGlossActive = useMap && map != null;
+            return $"_UseGlossmap={Prop(m, VanillaNames.PropUseGlossmap)} _Glossiness={Prop(m, VanillaNames.PropGlossiness)} map={(m.GetTexture(VanillaNames.PropMetallicGlossMap) != null ? WormGloss : "none")}";
+        }
+#endif
 
         private static void SetFloat(Material m, string prop, float v)
         {

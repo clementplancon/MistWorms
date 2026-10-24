@@ -43,6 +43,8 @@ namespace MistWorms.Colony
         private System.Random _dropRng;      // native drops (spec §7.5): own generator so tests can seed it without touching the movement
         private WormEffects.Limiter _deathFx;
         private WormEffects.Limiter _hitFx;
+        private WormEffects.Limiter _strikeFx;
+        private WormEffects.Limiter _idleFx;
         private float _emptySince = -1f;
         private float _lastTickTime;
         private bool _registeredWithRenderer;
@@ -190,6 +192,7 @@ namespace MistWorms.Colony
             try
             {
                 Tick();
+                UpdateIdleSounds(Time.time);
             }
             catch (Exception e)
             {
@@ -242,6 +245,10 @@ namespace MistWorms.Colony
             if (Store == null || (uint)i >= (uint)Store.Capacity || !Store.alive[i]) return;
             Vector3 where = Store.pos[i];
             ReleasePath(i);
+            ResetIdleSound(i);
+#if MW_DEV
+            RecordDeath(i, withDrops);
+#endif
             Store.Free(i);
 
             // A disabled colony (simulation error) gives nothing (spec §9.3).
@@ -259,6 +266,67 @@ namespace MistWorms.Colony
         }
 
 #if MW_DEV
+        // Frame detail of the simulation (plan 4A-3 fix 3): counters of the frame in progress and the three worst frames since the reset.
+        private int _framePaths, _frameApproach, _frameQueries, _frameStrikes;
+        private float _frameStrikeFxMs, _frameStrikeBiteMs;
+        private int _strikesSoFar;
+        private bool _frameFirstSessionStrike;
+
+        /// <summary>Strikes since the game was loaded, all colonies (the first one pays for the first vanilla Damage() and the JIT).</summary>
+        private static int s_sessionStrikes;
+
+        /// <summary>Cost of the frame holding the first strike of the session (-1 = not seen by this colony), left out of <see cref="PeakMsWithoutFirstStrike"/>.</summary>
+        public float FirstSessionStrikeMs { get; private set; } = -1f;
+
+        /// <summary>Worst simulation frame since the last reset, not counting the frame of the session's first strike.</summary>
+        public float PeakMsWithoutFirstStrike { get; private set; }
+
+        /// <summary>Why the worms died since the last <see cref="ResetCounters"/> (at most 20 lines): the hit that killed, or the reason of a removal without drops.</summary>
+        public readonly List<string> DeathCauses = new List<string>();
+        private string _lastKillCause;
+
+        private void RecordDeath(int i, bool withDrops)
+        {
+            if (DeathCauses.Count >= 20) { _lastKillCause = null; return; }
+            Vector3 p = Store.pos[i];
+            DeathCauses.Add(withDrops
+                ? $"worm {i} killed by {_lastKillCause ?? "an unknown hit"}"
+                : $"worm {i} removed without drops at {p} (in box {InBox(p)}, state {(WormState)Store.state[i]})");
+            _lastKillCause = null;
+        }
+        public readonly string[] WorstFrames = new string[3];
+        private readonly float[] _worstMs = new float[3];
+
+        private void RecordFrame(float now, int steps, bool gridRebuilt)
+        {
+            float ms = LastSimMs;
+            if (_frameFirstSessionStrike) FirstSessionStrikeMs = ms;
+            else if (ms > PeakMsWithoutFirstStrike) PeakMsWithoutFirstStrike = ms;
+            _frameFirstSessionStrike = false;
+            int slot = -1;
+            for (int k = 0; k < 3; k++)
+                if (ms > _worstMs[k]) { slot = k; break; }
+            if (slot >= 0)
+            {
+                for (int k = 2; k > slot; k--) { _worstMs[k] = _worstMs[k - 1]; WorstFrames[k] = WorstFrames[k - 1]; }
+                _worstMs[slot] = ms;
+                WorstFrames[slot] = $"{ms:0.00} ms at t={now:0.00}: {steps} steps, {_framePaths} path requests, {_frameApproach} approach evaluations, " +
+                                    $"{_frameQueries} grid queries, {_frameStrikes} strikes (sound/effect {_frameStrikeFxMs:0.00} ms, bite {_frameStrikeBiteMs:0.00} ms, " +
+                                    $"strike number {_strikesSoFar + 1} of the run), grid rebuilt={gridRebuilt}, alive {Store.AliveCount}";
+            }
+            _strikesSoFar += _frameStrikes;
+            _framePaths = _frameApproach = _frameQueries = _frameStrikes = 0;
+            _frameStrikeFxMs = _frameStrikeBiteMs = 0f;
+        }
+
+        /// <summary>Forgets the peak and the worst frames (the scenario calls it after its own spawn frame and the second after it).</summary>
+        public void ResetSimPeaks()
+        {
+            MaxSimMs = 0f;
+            PeakMsWithoutFirstStrike = 0f;
+            for (int k = 0; k < 3; k++) { _worstMs[k] = 0f; WorstFrames[k] = null; }
+        }
+
         /// <summary>Restarts the drop generator from <paramref name="seed"/> (WormDrops.SeedForTests).</summary>
         public void ReseedDrops(int seed) => _dropRng = new System.Random(seed);
 #endif
@@ -282,7 +350,8 @@ namespace MistWorms.Colony
         // ------------------------------------------------------------------ rendering (spec §12.1)
 
         private const float StrikeDuration = 0.25f;   // spec §3.1
-        private const float CrawlPhaseStep = 1.7f;
+        private const float CrawlPhaseStep = 6.1f;     // frames between two worms of the 16 frame crawl (about the golden fraction of the cycle)
+        private const float IdlePhaseStep = 0.9f;      // frames between two worms of the 8 frame idle
         private const float SleepPhaseStep = 0.7f;
 
         /// <summary>Position of worm <paramref name="i"/> interpolated between its last two simulation steps (render and hit proxy).</summary>
@@ -312,8 +381,11 @@ namespace MistWorms.Colony
                 float interval = s.simInterval[i];
                 Vector3 p = InterpolatedPos(i, now);
 
+                // Look variation, stable for a given worm: scale and a roll around the body axis (render only, the proxy keeps its size).
+                WormMath.Variation(i, s.generation[i], out float scale, out float rollDeg);
                 Quaternion rot = Quaternion.FromToRotation(Vector3.up, s.groundNormal[i])
-                                 * Quaternion.Euler(0f, s.heading[i] * Mathf.Rad2Deg, 0f);
+                                 * Quaternion.Euler(0f, s.heading[i] * Mathf.Rad2Deg, 0f)
+                                 * Quaternion.AngleAxis(rollDeg, Vector3.forward);
 
                 WormAnim anim = WormAnim.Crawl;
                 int frame;
@@ -345,12 +417,20 @@ namespace MistWorms.Colony
                         break;
                     }
                     default:
-                        // animTime only advances while the worm really moves, so a resting worm holds its pose.
-                        frame = sink.FrameAt(anim, s.animTime[i], i * CrawlPhaseStep);
+                        if (WormMath.UseIdlePose(now, s.stillSince[i]))
+                        {
+                            anim = WormAnim.Idle;
+                            frame = sink.FrameAt(anim, now, i * IdlePhaseStep);
+                        }
+                        else
+                        {
+                            // animTime only advances while the worm really moves.
+                            frame = sink.FrameAt(anim, s.animTime[i], i * CrawlPhaseStep);
+                        }
                         break;
                 }
 
-                Matrix4x4 m = Matrix4x4.TRS(p, rot, Vector3.one);
+                Matrix4x4 m = Matrix4x4.TRS(p, rot, new Vector3(scale, scale, scale));
                 sink.AddWorm(anim, frame, m);
             }
         }

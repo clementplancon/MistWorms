@@ -1,26 +1,111 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace MistWorms.Colony
 {
     /// <summary>
-    /// Vanilla effects played for a worm (spec §12.4): the death puff and a light hit splash. Both are fire-and-forget prefab instances
-    /// created on the colony owner only; the prefabs' own TimedDestruction removes them. Phase 8 decides how other peers see them
-    /// (a prefab that carries a ZNetView is replicated by the game by itself, the scale is not).
+    /// Vanilla effects and sounds played for a worm (spec §12.3, §12.4; phase 4A-2): green blood on a hit and on death, plus
+    /// a few wet sounds. Everything is a local clone of a vanilla prefab, made once: it is built disabled under a hidden holder,
+    /// its ZNetView is removed before any activation (so the game never registers a network object), and each play is an
+    /// instance of that template (the prefab's own TimedDestruction removes it). Nothing here is replicated: hits play on the
+    /// peer that lands them (see <c>WormColony.ReceiveWormHit</c>), the death and strike sounds on the colony owner until phase 8.
     /// </summary>
     internal static class WormEffects
     {
         /// <summary>At most this many of each effect per second and per colony (spec §12.4).</summary>
         public const int MaxPerSecond = 10;
 
-        /// <summary>The tick's death effect is sized for a 1.2 m creature; a worm is 0.4 m (decisions.md 53, to judge in game).</summary>
-        public const float DeathScale = 0.4f;
-        public const float HitScale = 0.4f;
+        /// <summary>
+        /// Spatial scale applied to the particle systems when the template is built (the seeker's effects are sized for a 2 m creature, the
+        /// target jet is about 0.3 m): sizes, speeds, gravity, shape and forces. The instance transform stays at 1.
+        /// </summary>
+        public const float HitScale = 0.35f;
+        public const float DeathScale = 0.45f;
 
-        private static GameObject s_death;
-        private static bool s_deathResolved;
-        private static GameObject s_hit;
-        private static bool s_hitResolved;
+        /// <summary>Burst and emission counts of a small mob (the death has about 1.5 times the hit).</summary>
+        public const float HitCountFactor = 0.3f;
+        public const float DeathCountFactor = 0.45f;
+
+        /// <summary>Particle size caps in metres (spec §12.4: 1 to 3 cm particles), the ground decal excepted.</summary>
+        public const float HitMaxParticleSize = 0.05f;
+        public const float DeathMaxParticleSize = 0.08f;
+
+        /// <summary>Particle caps (maxParticles) and the ground decal size in metres.</summary>
+        public const int HitMaxParticles = 30;
+        public const int DeathMaxParticles = 60;
+        public const float HitDecalSize = 0.25f;
+        public const float DeathDecalSize = 0.4f;
+        /// <summary>Range bounded by construction (every system but the decals): life time cap in seconds and speed limit in m/s, with its damping.</summary>
+        public const float HitMaxLifetime = 0.5f;
+        public const float DeathMaxLifetime = 0.8f;
+        public const float HitSpeedLimit = 1.0f;
+        public const float DeathSpeedLimit = 0.8f;
+        public const float HitSpeedDampen = 0.6f;
+        public const float DeathSpeedDampen = 1.0f;      // immediate clamp
+        public const float HitShapeFactor = 1f;          // extra factor on the emission shape radius and scale
+        public const float DeathShapeFactor = 0.5f;
+
+        /// <summary>Systems (by name) switched off in both templates when a measure shows they still fly too far (clouds, smoke...). Empty until V08 names one.</summary>
+        private static readonly string[] DisabledSystems = { };
+
+        private static readonly string[] DecalNames = { "blood_decal", "blob_splat (1)" };
+
+        /// <summary>Sounds farther than this from the local player are not instantiated at all.</summary>
+        public const float SoundRange = 30f;
+
+        private const int MaxAttempts = 5;           // a prefab missing from ZNetScene is looked for again this many times
+        private const float RetryInterval = 1f;
+        private const string HolderName = "MW_FxTemplates";
+
+        /// <summary>Acid yellow-green of the worm's blood (spec §12.4): the two ends of the start colour gradient, alpha kept from the original.</summary>
+        private static readonly Color BloodGreenA = new Color(0.62f, 0.90f, 0.14f, 1f);
+        private static readonly Color BloodGreenB = new Color(0.40f, 0.78f, 0.10f, 1f);
+
+        /// <summary>One template: where it comes from, how it is prepared, and its resolution state.</summary>
+        private sealed class Slot
+        {
+            public readonly string What;
+            public readonly string[] Names;            // tried in order; the first one is the wanted prefab, the others the old behaviour
+            public readonly Action<GameObject> Prepare;
+            public GameObject Template;
+            public string Source;
+            public int Attempts;
+            public bool GaveUp;
+            public float NextTry;
+
+            public Slot(string what, string[] names, Action<GameObject> prepare)
+            {
+                What = what;
+                Names = names;
+                Prepare = prepare;
+            }
+
+            public void Reset()
+            {
+                if (Template != null) Object.Destroy(Template);
+                Template = null;
+                Source = null;
+                Attempts = 0;
+                GaveUp = false;
+                NextTry = 0f;
+            }
+        }
+
+        private static readonly Slot s_hit = new Slot("hit effect", new[] { VanillaNames.FxSeekerHurt, VanillaNames.FxTickBloodHit }, PrepareHit);
+        private static readonly Slot s_death = new Slot("death effect", new[] { VanillaNames.FxSeekerDeath, VanillaNames.VfxWormDeath, VanillaNames.FxBabySeekerDeath }, PrepareDeath);
+        private static readonly Slot s_hitSound = new Slot("hit sound", new[] { VanillaNames.SfxTickHurt }, null);
+        private static readonly Slot s_deathSound = new Slot("death sound", new[] { VanillaNames.SfxLeechDeath }, null);
+        private static readonly Slot s_strikeSound = new Slot("strike sound", new[] { VanillaNames.SfxTickAttackJump }, null);
+        private static readonly Slot s_idleSound = new Slot("idle sound", new[] { VanillaNames.SfxTickIdle }, null);
+        private static readonly Slot[] s_all = { s_hit, s_death, s_hitSound, s_deathSound, s_strikeSound, s_idleSound };
+
+        private static GameObject s_holder;
         private static ZNetScene s_scene;   // prefabs belong to a session: resolve again when the scene is replaced
+
+        /// <summary>Number of particle systems recoloured in the death template, and the pieces removed (log and dev assertions).</summary>
+        public static int DeathRecolored { get; private set; }
 
         /// <summary>Rate limiter state of one colony and one effect.</summary>
         public struct Limiter
@@ -41,65 +126,420 @@ namespace MistWorms.Colony
             }
         }
 
-        private static void CheckScene()
+        /// <summary>
+        /// Builds every template now and instantiates each once, disabled, then destroys the instance, so the first strike or hit of a fight does
+        /// not pay for the first use (called once per colony at its first tick). Nothing is played.
+        /// </summary>
+        public static void Prewarm()
         {
-            if (s_scene == ZNetScene.instance) return;
-            s_scene = ZNetScene.instance;
-            s_deathResolved = false;
-            s_hitResolved = false;
-            s_death = null;
-            s_hit = null;
+            try
+            {
+                foreach (Slot slot in s_all)
+                {
+                    GameObject template = Resolve(slot);
+                    if (template == null) continue;
+                    GameObject probe = Object.Instantiate(template, Vector3.zero, Quaternion.identity);   // inactive, like its template
+                    Object.Destroy(probe);
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.LogException("WormEffects.Prewarm", e);
+            }
+        }
+
+        // ------------------------------------------------------------------ plays
+
+        /// <summary>Green splash and hurt sound at <paramref name="position"/>, played by the peer that landed the hit.</summary>
+        public static void PlayHit(ref Limiter limiter, Vector3 position, float now)
+        {
+            if (!limiter.Allow(now)) return;
+            SpawnFx(s_hit, position);
+            SpawnSound(s_hitSound, position);
         }
 
         public static void PlayDeath(ref Limiter limiter, Vector3 position, float now)
         {
-            CheckScene();
-            if (!s_deathResolved)
-            {
-                s_deathResolved = true;
-                s_death = ResolveDeath();
-            }
-            Spawn(s_death, ref limiter, position, DeathScale, now);
+            if (!limiter.Allow(now)) return;
+            SpawnFx(s_death, position);
+            SpawnSound(s_deathSound, position);
         }
 
-        public static void PlayHit(ref Limiter limiter, Vector3 position, float now)
+        public static void PlayStrike(ref Limiter limiter, Vector3 position, float now)
         {
-            CheckScene();
-            if (!s_hitResolved)
-            {
-                s_hitResolved = true;
-                s_hit = Find(VanillaNames.FxTickBloodHit);
-                if (s_hit == null) Plugin.Log.LogWarning($"[Effects] {VanillaNames.FxTickBloodHit} not found: worms show no hit splash");
-            }
-            Spawn(s_hit, ref limiter, position, HitScale, now);
+            if (!limiter.Allow(now)) return;
+            SpawnSound(s_strikeSound, position);
         }
 
-        private static GameObject ResolveDeath()
+        public static void PlayIdle(ref Limiter limiter, Vector3 position, float now)
         {
-            // Preferred tick death; a ragdoll in the effect would leave a corpse, so then the baby seeker's is used (spec §12.4, plan B4).
-            foreach (string name in new[] { VanillaNames.VfxWormDeath, VanillaNames.FxBabySeekerDeath })
+            if (!limiter.Allow(now)) return;
+            SpawnSound(s_idleSound, position);
+        }
+
+        private static void SpawnFx(Slot slot, Vector3 position)
+        {
+            GameObject template = Resolve(slot);
+            if (template == null) return;
+            GameObject fx = Object.Instantiate(template, position, Quaternion.identity);   // inactive, like its template
+            fx.SetActive(true);
+#if MW_DEV
+            LastFx = fx;
+#endif
+        }
+
+        private static void SpawnSound(Slot slot, Vector3 position)
+        {
+            if (Application.isBatchMode) return;
+            Player listener = Player.m_localPlayer;
+            if (listener == null || (listener.transform.position - position).sqrMagnitude > SoundRange * SoundRange) return;
+            GameObject template = Resolve(slot);
+            if (template == null) return;
+            Object.Instantiate(template, position, Quaternion.identity).SetActive(true);
+        }
+
+        // ------------------------------------------------------------------ templates
+
+        private static void CheckScene()
+        {
+            if (s_scene == ZNetScene.instance) return;
+            s_scene = ZNetScene.instance;
+            foreach (Slot slot in s_all) slot.Reset();
+        }
+
+        /// <summary>The disabled template of <paramref name="slot"/>, built on first use; null while the prefab is not available (a log line says so once it gives up).</summary>
+        private static GameObject Resolve(Slot slot)
+        {
+            CheckScene();
+            if (slot.Template != null) return slot.Template;   // Unity null: a destroyed template is rebuilt
+            ZNetScene scene = ZNetScene.instance;
+            if (scene == null || slot.GaveUp) return null;     // no scene yet: not an attempt
+            float now = Time.unscaledTime;
+            if (now < slot.NextTry) return null;
+            slot.NextTry = now + RetryInterval;
+
+            for (int k = 0; k < slot.Names.Length; k++)
             {
-                GameObject prefab = Find(name);
+                string name = slot.Names[k];
+                GameObject prefab = scene.GetPrefab(name);
                 if (prefab == null) continue;
                 if (prefab.GetComponentInChildren<Ragdoll>(true) != null)
                 {
                     Plugin.Log.LogWarning($"[Effects] {name} carries a Ragdoll, skipped");
                     continue;
                 }
-                Plugin.Log.LogInfo($"[Effects] death effect {name}: ZNetView {(prefab.GetComponent<ZNetView>() != null ? "yes (replicated by the game)" : "no (local only)")}, scale {DeathScale}");
-                return prefab;
+                try
+                {
+                    slot.Template = Build(prefab, slot);
+                    slot.Source = name;
+                    Plugin.Log.LogInfo($"[Effects] {slot.What}: template from {name}{(k > 0 ? " (fallback, " + slot.Names[0] + " missing)" : string.Empty)}, no ZNetView, scale {ScaleOf(slot)}");
+                    return slot.Template;
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogException("WormEffects.Build " + name, e);
+                }
             }
-            Plugin.Log.LogWarning("[Effects] no usable death effect prefab: worms die silently");
+
+            slot.Attempts++;
+            if (slot.Attempts >= MaxAttempts)
+            {
+                slot.GaveUp = true;
+                Plugin.Log.LogWarning($"[Effects] {slot.What}: none of [{string.Join(", ", slot.Names)}] is available after {slot.Attempts} tries; nothing will be played");
+            }
             return null;
         }
 
-        private static GameObject Find(string name) => ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(name) : null;
+        private static string ScaleOf(Slot slot) =>
+            slot == s_hit ? HitScale.ToString("0.00") : slot == s_death ? DeathScale.ToString("0.00") : "n/a";
 
-        private static void Spawn(GameObject prefab, ref Limiter limiter, Vector3 position, float scale, float now)
+        /// <summary>
+        /// Clones <paramref name="prefab"/> under a hidden holder, so no Awake runs, removes every ZNetView, applies the slot's
+        /// preparation and leaves the clone disabled.
+        /// </summary>
+        private static GameObject Build(GameObject prefab, Slot slot)
         {
-            if (prefab == null || !limiter.Allow(now)) return;
-            GameObject fx = Object.Instantiate(prefab, position, Quaternion.identity);
-            if (fx != null) fx.transform.localScale = prefab.transform.localScale * scale;
+            if (s_holder == null)
+            {
+                s_holder = new GameObject(HolderName);
+                s_holder.SetActive(false);
+                Object.DontDestroyOnLoad(s_holder);
+            }
+            GameObject clone = Object.Instantiate(prefab, s_holder.transform);
+            clone.name = "MW_" + prefab.name;
+            foreach (ZNetView view in clone.GetComponentsInChildren<ZNetView>(true)) Object.DestroyImmediate(view);
+            slot.Prepare?.Invoke(clone);
+            clone.SetActive(false);
+            return clone;
         }
+
+        // ---- preparation of the seeker effects
+
+        private static void PrepareHit(GameObject clone)
+        {
+            RemoveChildren(clone, new[] { VanillaNames.FxChildSkinflakes });
+            Tint(clone);
+            Shrink(clone, HitScale, HitCountFactor, HitMaxParticleSize, HitMaxParticles, HitDecalSize, HitMaxLifetime, HitSpeedLimit, HitSpeedDampen, HitShapeFactor);
+        }
+
+        private static void PrepareDeath(GameObject clone)
+        {
+            RemoveChildren(clone, VanillaNames.FxSeekerDeathPieces);
+            // The seeker's own death sounds are not wanted: the worm plays its own (sfx_leech_death).
+            foreach (ZSFX sfx in clone.GetComponentsInChildren<ZSFX>(true)) Object.DestroyImmediate(sfx);
+            foreach (AudioSource source in clone.GetComponentsInChildren<AudioSource>(true)) Object.DestroyImmediate(source);
+
+            DeathRecolored = Tint(clone);
+            Shrink(clone, DeathScale, DeathCountFactor, DeathMaxParticleSize, DeathMaxParticles, DeathDecalSize, DeathMaxLifetime, DeathSpeedLimit, DeathSpeedDampen, DeathShapeFactor);
+        }
+
+        // ---- scaling of the particle systems
+
+        /// <summary>
+        /// Scales every particle system of <paramref name="root"/> for a small creature: scaling mode Local (the transform is left alone, so
+        /// nothing is scaled twice), start size (capped), speed, gravity, shape, the velocity and force modules, burst and rate counts
+        /// (<paramref name="countFactor"/>) and maxParticles; ground decals get the fixed <paramref name="decalSize"/>.
+        /// </summary>
+        private static void Shrink(GameObject root, float k, float countFactor, float maxSize, int maxParticles, float decalSize, float maxLifetime, float speedLimit, float dampen, float shapeFactor)
+        {
+            List<ParticleSystem> systems = CollectSystems(root);   // sub-emitters included, each processed once
+            foreach (ParticleSystem ps in systems)
+            {
+                bool decal = Array.IndexOf(DecalNames, ps.name) >= 0;
+
+                ParticleSystem.MainModule main = ps.main;
+                main.scalingMode = ParticleSystemScalingMode.Local;
+                if (decal)
+                {
+                    main.startSize = new ParticleSystem.MinMaxCurve(decalSize);
+                }
+                else if (main.startSize3D)
+                {
+                    main.startSizeX = Cap(Mul(main.startSizeX, k), maxSize);
+                    main.startSizeY = Cap(Mul(main.startSizeY, k), maxSize);
+                    main.startSizeZ = Cap(Mul(main.startSizeZ, k), maxSize);
+                }
+                else
+                {
+                    main.startSize = Cap(Mul(main.startSize, k), maxSize);
+                }
+                main.startSpeed = Mul(main.startSpeed, k);
+                if (!decal) main.startLifetime = Cap(main.startLifetime, maxLifetime);
+                if (Array.IndexOf(DisabledSystems, ps.name) >= 0) ps.gameObject.SetActive(false);
+                main.gravityModifier = Mul(main.gravityModifier, k);
+
+                ParticleSystem.ShapeModule shape = ps.shape;
+                if (shape.enabled)
+                {
+                    shape.radius *= k * shapeFactor;
+                    shape.length *= k;
+                    shape.scale *= k * shapeFactor;
+                    shape.position *= k;
+                    shape.randomPositionAmount *= k;
+                }
+
+                ParticleSystem.VelocityOverLifetimeModule vel = ps.velocityOverLifetime;
+                if (vel.enabled)
+                {
+                    vel.x = Mul(vel.x, k);
+                    vel.y = Mul(vel.y, k);
+                    vel.z = Mul(vel.z, k);
+                    vel.radial = Mul(vel.radial, k);
+                }
+                ParticleSystem.LimitVelocityOverLifetimeModule limit = ps.limitVelocityOverLifetime;
+                if (limit.enabled)
+                {
+                    limit.limit = Mul(limit.limit, k);
+                    limit.limitX = Mul(limit.limitX, k);
+                    limit.limitY = Mul(limit.limitY, k);
+                    limit.limitZ = Mul(limit.limitZ, k);
+                }
+                if (!decal)
+                {
+                    limit.enabled = true;
+                    limit.separateAxes = false;
+                    limit.limit = new ParticleSystem.MinMaxCurve(speedLimit);
+                    limit.dampen = dampen;
+                }
+                ParticleSystem.ForceOverLifetimeModule force = ps.forceOverLifetime;
+                if (force.enabled)
+                {
+                    force.x = Mul(force.x, k);
+                    force.y = Mul(force.y, k);
+                    force.z = Mul(force.z, k);
+                }
+
+                ParticleSystem.NoiseModule noise = ps.noise;
+                if (noise.enabled)
+                {
+                    noise.strength = Mul(noise.strength, k);
+                    if (noise.separateAxes)
+                    {
+                        noise.strengthX = Mul(noise.strengthX, k);
+                        noise.strengthY = Mul(noise.strengthY, k);
+                        noise.strengthZ = Mul(noise.strengthZ, k);
+                    }
+                    noise.positionAmount = Mul(noise.positionAmount, k);
+                }
+                ParticleSystem.InheritVelocityModule inherit = ps.inheritVelocity;
+                if (inherit.enabled) inherit.curve = Mul(inherit.curve, k);
+                ParticleSystem.TrailModule trails = ps.trails;
+                if (trails.enabled) trails.widthOverTrail = Mul(trails.widthOverTrail, k);
+                ParticleSystem.CollisionModule collision = ps.collision;
+                if (collision.enabled) collision.bounce = Mul(collision.bounce, k);
+
+                ParticleSystem.EmissionModule emission = ps.emission;
+                var bursts = new ParticleSystem.Burst[emission.burstCount];
+                emission.GetBursts(bursts);
+                for (int b = 0; b < bursts.Length; b++) bursts[b].count = Count(bursts[b].count, countFactor);
+                emission.SetBursts(bursts);
+                emission.rateOverTime = Mul(emission.rateOverTime, countFactor);
+            }
+
+            // One particle budget for the whole effect, sub-emitters included: the systems share maxParticles.
+            int emitting = 0;
+            foreach (ParticleSystem ps in systems) if (ps.main.maxParticles > 0) emitting++;
+            int each = Mathf.Max(1, maxParticles / Mathf.Max(1, emitting));
+            foreach (ParticleSystem ps in systems)
+            {
+                ParticleSystem.MainModule main = ps.main;
+                if (main.maxParticles > each) main.maxParticles = each;
+            }
+        }
+
+        private static ParticleSystem.MinMaxCurve Mul(ParticleSystem.MinMaxCurve c, float k)
+        {
+            switch (c.mode)
+            {
+                case ParticleSystemCurveMode.Constant:
+                    c.constant *= k;
+                    break;
+                case ParticleSystemCurveMode.TwoConstants:
+                    c.constantMin *= k;
+                    c.constantMax *= k;
+                    break;
+                default:
+                    c.curveMultiplier *= k;
+                    break;
+            }
+            return c;
+        }
+
+        private static ParticleSystem.MinMaxCurve Cap(ParticleSystem.MinMaxCurve c, float cap)
+        {
+            switch (c.mode)
+            {
+                case ParticleSystemCurveMode.Constant:
+                    c.constant = Mathf.Min(c.constant, cap);
+                    break;
+                case ParticleSystemCurveMode.TwoConstants:
+                    c.constantMin = Mathf.Min(c.constantMin, cap);
+                    c.constantMax = Mathf.Min(c.constantMax, cap);
+                    break;
+                default:
+                    c.curveMultiplier = Mathf.Min(c.curveMultiplier, cap);   // curves are normalised to 0..1 in the seeker effects
+                    break;
+            }
+            return c;
+        }
+
+        /// <summary>Burst count times <paramref name="f"/>, at least 1 particle for a constant count.</summary>
+        private static ParticleSystem.MinMaxCurve Count(ParticleSystem.MinMaxCurve c, float f)
+        {
+            c = Mul(c, f);
+            switch (c.mode)
+            {
+                case ParticleSystemCurveMode.Constant:
+                    c.constant = Mathf.Max(1f, Mathf.Round(c.constant));
+                    break;
+                case ParticleSystemCurveMode.TwoConstants:
+                    c.constantMin = Mathf.Max(1f, Mathf.Round(c.constantMin));
+                    c.constantMax = Mathf.Max(c.constantMin, Mathf.Round(c.constantMax));
+                    break;
+            }
+            return c;
+        }
+
+        /// <summary>Destroys every descendant (root excluded) whose name is in <paramref name="names"/>.</summary>
+        private static void RemoveChildren(GameObject root, string[] names)
+        {
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (t == null || t == root.transform) continue;   // a child of an already destroyed object reads as null
+                if (Array.IndexOf(names, t.name) >= 0) Object.DestroyImmediate(t.gameObject);
+            }
+        }
+
+        /// <summary>Every particle system of <paramref name="root"/> and the sub-emitters they reference, each once.</summary>
+        private static List<ParticleSystem> CollectSystems(GameObject root)
+        {
+            var list = new List<ParticleSystem>(root.GetComponentsInChildren<ParticleSystem>(true));
+            var seen = new HashSet<ParticleSystem>(list);
+            for (int n = 0; n < list.Count; n++)
+            {
+                ParticleSystem.SubEmittersModule sub = list[n].subEmitters;
+                for (int k = 0; k < sub.subEmittersCount; k++)
+                {
+                    ParticleSystem child = sub.GetSubEmitterSystem(k);
+                    if (child != null && seen.Add(child)) list.Add(child);
+                }
+            }
+            return list;
+        }
+
+        /// <summary>Gives every blood system the acid green start colour (once, at build); returns the number of systems recoloured.</summary>
+        private static int Tint(GameObject root)
+        {
+            List<ParticleSystem> systems = CollectSystems(root);
+            foreach (ParticleSystem ps in systems)
+            {
+                ParticleSystem.MainModule main = ps.main;
+                ParticleSystem.MinMaxGradient g = main.startColor;
+                float alphaA = 1f, alphaB = 1f;
+                switch (g.mode)
+                {
+                    case ParticleSystemGradientMode.Color:
+                        alphaA = alphaB = g.color.a;
+                        break;
+                    case ParticleSystemGradientMode.TwoColors:
+                        alphaA = g.colorMin.a;
+                        alphaB = g.colorMax.a;
+                        break;
+                }
+                Color a = BloodGreenA; a.a = alphaA;
+                Color b = BloodGreenB; b.a = alphaB;
+                main.startColor = new ParticleSystem.MinMaxGradient(a, b);
+            }
+            return systems.Count;
+        }
+
+#if MW_DEV
+        /// <summary>The last visual effect instance played (V08 measures its particles).</summary>
+        public static GameObject LastFx { get; private set; }
+
+        /// <summary>Builds the hit and death templates now (dev scenarios); true when both exist.</summary>
+        public static bool EnsureTemplates(out GameObject hit, out GameObject death, out string hitSource, out string deathSource)
+        {
+            s_hit.NextTry = 0f;
+            s_death.NextTry = 0f;
+            hit = Resolve(s_hit);
+            death = Resolve(s_death);
+            hitSource = s_hit.Source;
+            deathSource = s_death.Source;
+            return hit != null && death != null;
+        }
+
+        /// <summary>Builds every sound template now and returns the names that could not be resolved.</summary>
+        public static string MissingSounds()
+        {
+            string missing = string.Empty;
+            foreach (Slot slot in new[] { s_hitSound, s_deathSound, s_strikeSound, s_idleSound })
+            {
+                slot.NextTry = 0f;
+                if (Resolve(slot) == null) missing += (missing.Length > 0 ? ", " : string.Empty) + slot.Names[0];
+            }
+            return missing;
+        }
+#endif
     }
 }

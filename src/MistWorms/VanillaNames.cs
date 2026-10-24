@@ -90,6 +90,7 @@ namespace MistWorms
         public const string PropEmissionColor = "_EmissionColor";      // confirmed (assembly_utils ShaderProps)
         public const string PropMetallic = "_Metallic";                // confirmed (dump L325)
         public const string PropGlossiness = "_Glossiness";            // confirmed (dump L325)
+        public const string PropMetallicGlossMap = "_MetallicGlossMap"; // lustre map: alpha = gloss (dump section 12, Feasting_m)
         public const string PropUseGlossmap = "_UseGlossmap";          // confirmed (dump L325); keyword _USEGLOSSMAP_ON on SeekerBrood
         public const string PropBumpScale = "_BumpScale";              // confirmed (dump L325)
         public const string PropTwoSidedNormals = "_TwoSidedNormals";  // confirmed (dump L325); keyword _TWOSIDEDNORMALS_ON on every creature
@@ -108,6 +109,14 @@ namespace MistWorms
 
         // ---- Hierarchy and console ----
         public const string VisualChild = "Visual";                    // confirmed (Character.cs:671): child holding renderers and Animator
+#if MW_DEV
+        // Dev scenarios only (V07): vanilla light sources. The dump (2026-10-24) lists no piece prefab names, so these are
+        // the usual vanilla names, and the scenario falls back to a substring search of the ZNetScene prefabs and logs what it finds.
+        public const string PieceGroundTorch = "piece_groundtorch";
+        public const string DvergrLampSearch = "dvergr";       // prefab name must contain this and one of DvergrLampKinds (case insensitive)
+        public static readonly string[] DvergrLampPrefabs = { "piece_dvergr_lantern", "piece_dvergr_lantern_pole", "dvergrprops_lantern_standing" }; // tried in order: the first whose instance has an active Light
+        public static readonly string[] DvergrLampKinds = { "lantern", "lamp", "light" };
+#endif
         public const string CmdTimeOfDay = "tod";                      // confirmed (Terminal.cs:1830): "tod <0..1>" or -1 to release
 
         // ---- Physics layers (spec §18 hitbox fallback, §8.3 floor raycasts) ----
@@ -143,6 +152,14 @@ namespace MistWorms
         public const string FxBabySeekerHurt = "fx_babyseeker_hurt";       // confirmed (dump L156)
         public const string SfxBabySeekerIdle = "sfx_baby_seeker_idle";    // to confirm: referenced by SeekerBrood (dump L161) but absent from the sfx_* list (L514)
         public const string FxEggSplash = "fx_egg_splash";                 // confirmed (dump L355, L552): nest destruction effect
+
+        // Green blood and wet sounds (phase 4A-2, dump sections 10 and 11, all in ZNetScene).
+        public const string FxSeekerHurt = "fx_seeker_hurt";               // confirmed (dump L2410): green splash, no sound
+        public const string FxSeekerDeath = "fx_seeker_death";             // confirmed (dump L2402): red root, green splash, scavenger pieces
+        public const string SfxLeechDeath = "sfx_leech_death";             // confirmed (dump section 11): Blood_Splat_Gib05-07, short and wet
+        // Child objects of the seeker effects that the worm does not want (dump L2403-2409, L2415).
+        public const string FxChildSkinflakes = "skinflakes";
+        public static readonly string[] FxSeekerDeathPieces = { "Legs", "Wings", "Carapace", FxChildSkinflakes };
 
         // ---- Sounds (spec §12.3). Values marked "chosen from dump B.2" exist in the 1.0.20 dump; the others are absent from it. ----
         public const string SfxWormIdle = "sfx_tick_idle";             // confirmed (dump L281), also the placeholder choice

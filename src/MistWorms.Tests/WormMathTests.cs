@@ -135,5 +135,177 @@ namespace MistWorms.Tests
             Assert.Equal(5f, WormMath.SimRate(false, 31f * 31f, 20f, 5f));
             Assert.Equal(5f, WormMath.SimRate(false, float.MaxValue, 20f, 5f));
         }
+
+        [Fact]
+        public void IdlePoseStartsAfterTheDelay()
+        {
+            Assert.False(WormMath.UseIdlePose(10.2f, 10f));    // 0.2 s still
+            Assert.True(WormMath.UseIdlePose(10.31f, 10f));
+            Assert.False(WormMath.UseIdlePose(10f, 10f));      // just moved
+        }
+
+        [Fact]
+        public void VariationIsStableAndBounded()
+        {
+            int different = 0;
+            for (int slot = 0; slot < 500; slot++)
+            {
+                WormMath.Variation(slot, 3, out float scale, out float roll);
+                WormMath.Variation(slot, 3, out float scale2, out float roll2);
+                Assert.Equal(scale, scale2);
+                Assert.Equal(roll, roll2);
+                Assert.InRange(scale, 0.9f, 1.1f);
+                Assert.InRange(roll, -8f, 8f);
+                WormMath.Variation(slot, 4, out float scale3, out _);
+                if (scale3 != scale) different++;
+            }
+            Assert.True(different > 450, "a reused slot (new generation) must get a new look");
+        }
+
+        [Fact]
+        public void VariationCoversTheWholeRange()
+        {
+            float minS = 9f, maxS = 0f, minR = 99f, maxR = -99f;
+            for (int slot = 0; slot < 2000; slot++)
+            {
+                WormMath.Variation(slot, 1, out float s, out float r);
+                minS = Math.Min(minS, s); maxS = Math.Max(maxS, s);
+                minR = Math.Min(minR, r); maxR = Math.Max(maxR, r);
+            }
+            Assert.True(minS < 0.92f && maxS > 1.08f);
+            Assert.True(minR < -6.5f && maxR > 6.5f);
+        }
+
+        // ---- group behaviour (plan 4A-3)
+
+        [Fact]
+        public void ApproachAngleStartsAtTheBaseAndAdvancesByTheGoldenAngle()
+        {
+            Assert.Equal(0.3f, WormMath.ApproachAngle(0, 0.3f), 4);
+            float one = WormMath.WrapPi(WormMath.ApproachAngle(1, 0.3f) - 0.3f);
+            Assert.Equal(137.5f * Mathf.Deg2Rad, one, 4);
+            float two = WormMath.WrapPi(WormMath.ApproachAngle(2, 0.3f) - 0.3f);
+            Assert.Equal(WormMath.WrapPi(275f * Mathf.Deg2Rad), two, 4);   // 275 degrees = -85
+        }
+
+        [Fact]
+        public void ApproachAnglesOfThirtyRanksAreWellSpread()
+        {
+            var angles = new float[30];
+            for (int r = 0; r < 30; r++) angles[r] = WormMath.ApproachAngle(r, 1.1f);
+            float minGap = 99f;
+            for (int a = 0; a < 30; a++)
+                for (int b = a + 1; b < 30; b++)
+                    minGap = Math.Min(minGap, Math.Abs(WormMath.WrapPi(angles[a] - angles[b])));
+            Assert.True(minGap > 3f * Mathf.Deg2Rad, "no two of 30 places closer than 3 degrees, got " + minGap * Mathf.Rad2Deg);
+            // Large ranks stay exact (no float drift of rank x 137.5).
+            Assert.Equal(WormMath.ApproachAngle(1, 0f), WormMath.ApproachAngle(721, 0f), 3);   // 720 x 137.5 = 275 turns
+        }
+
+        [Fact]
+        public void BodyMidIsBehindTheHead()
+        {
+            WormMath.BodyMid(1f, 2f, 0f, out float mx, out float mz);          // heading +z
+            Assert.Equal(1f, mx, 4);
+            Assert.Equal(2f - WormMath.BodyMidOffset, mz, 4);
+            WormMath.BodyMid(0f, 0f, (float)Math.PI / 2f, out mx, out mz);     // heading +x
+            Assert.Equal(-WormMath.BodyMidOffset, mx, 4);
+            Assert.Equal(0f, mz, 4);
+        }
+
+        [Theory]
+        [InlineData(0f, 0.5f, 0f, true)]        // straight ahead, 0.5 m, same heading
+        [InlineData(0f, 0.7f, 0f, false)]       // too far
+        [InlineData(0f, -0.4f, 0f, false)]      // behind
+        [InlineData(0.3f, 0.4f, 0f, false)]     // atan(0.3 / 0.4) = 36.9 degrees: outside the 30 degree cone
+        [InlineData(0.2f, 0.4f, 0f, true)]      // 26.6 degrees: inside
+        public void IsAheadInFileCone(float dx, float dz, float otherHeading, bool expected)
+        {
+            Assert.Equal(expected, WormMath.IsAheadInFile(0f, dx, dz, otherHeading));
+        }
+
+        [Fact]
+        public void IsAheadInFileNeedsTheSameDirection()
+        {
+            Assert.True(WormMath.IsAheadInFile(0f, 0.1f, 0.5f, 40f * Mathf.Deg2Rad));    // 11 degrees off, 40 degrees apart
+            Assert.False(WormMath.IsAheadInFile(0f, 0.1f, 0.5f, 50f * Mathf.Deg2Rad));   // 50 degrees apart
+            Assert.False(WormMath.IsAheadInFile(0f, 0f, 0.5f, (float)Math.PI));          // coming head on
+            Assert.False(WormMath.IsAheadInFile(0f, 0f, 0f, 0f));                        // stacked: handled by the separation
+        }
+
+        [Fact]
+        public void IsAheadInFileFollowsTheHeading()
+        {
+            float h = (float)Math.PI / 2f;   // facing +x
+            Assert.True(WormMath.IsAheadInFile(h, 0.5f, 0f, h));
+            Assert.False(WormMath.IsAheadInFile(h, 0f, 0.5f, h));
+        }
+
+        [Fact]
+        public void FileSpeedCapIsTheLeaderPlusFivePercentWithAFloor()
+        {
+            Assert.Equal(2.1f, WormMath.FileSpeedCap(2f, 0.2f), 4);
+            Assert.Equal(0.2f, WormMath.FileSpeedCap(0f, 0.2f), 4);
+        }
+
+        [Fact]
+        public void RingsFillOneAfterTheOther()
+        {
+            const float inner = 1.08f;
+            int c0 = WormMath.RingCapacity(0, inner), c1 = WormMath.RingCapacity(1, inner);
+            Assert.Equal(19, c0);   // floor(2 pi 1.08 / 0.35)
+            Assert.Equal(26, c1);   // floor(2 pi 1.48 / 0.35)
+            Assert.Equal(0, WormMath.ApproachPlace(0, 0f, inner, out _, out float r0));
+            Assert.Equal(1.08f, r0, 4);
+            Assert.Equal(0, WormMath.ApproachPlace(c0 - 1, 0f, inner, out _, out _));
+            Assert.Equal(1, WormMath.ApproachPlace(c0, 0f, inner, out _, out float r1));
+            Assert.Equal(1.48f, r1, 4);
+            Assert.Equal(2, WormMath.ApproachPlace(c0 + c1, 0f, inner, out _, out float r2));
+            Assert.Equal(1.88f, r2, 4);
+        }
+
+        [Fact]
+        public void ThirtyWormsKeepAtLeastTheRingSpacingApart()
+        {
+            const float inner = 1.08f;
+            var pts = new Vector2[30];
+            for (int rank = 0; rank < 30; rank++)
+            {
+                WormMath.ApproachPlace(rank, 0.7f, inner, out float a, out float r);
+                pts[rank] = new Vector2(Mathf.Sin(a), Mathf.Cos(a)) * r;
+            }
+            float min = 99f;
+            for (int i = 0; i < 30; i++)
+                for (int j = i + 1; j < 30; j++) min = Math.Min(min, Vector2.Distance(pts[i], pts[j]));
+            Assert.True(min >= 0.3f, "closest two of 30 places: " + min);
+        }
+
+        [Fact]
+        public void PartialRingIsSpreadAroundTheTarget()
+        {
+            // The first 8 places of ring 0 (golden order) leave no gap wider than 120 degrees.
+            var angles = new System.Collections.Generic.List<float>();
+            for (int rank = 0; rank < 8; rank++)
+            {
+                WormMath.ApproachPlace(rank, 0f, 1.08f, out float a, out _);
+                angles.Add((a * Mathf.Rad2Deg + 360f) % 360f);
+            }
+            angles.Sort();
+            float widest = 360f - angles[angles.Count - 1] + angles[0];
+            for (int i = 1; i < angles.Count; i++) widest = Math.Max(widest, angles[i] - angles[i - 1]);
+            Assert.True(widest < 120f, "widest gap " + widest);
+        }
+
+        [Fact]
+        public void GoldenStepIsCoprime()
+        {
+            for (int cap = 3; cap < 80; cap++)
+            {
+                int step = WormMath.GoldenStep(cap);
+                var seen = new bool[cap];
+                for (int k = 0; k < cap; k++) seen[(int)((long)k * step % cap)] = true;
+                Assert.DoesNotContain(false, seen);   // every place is reached exactly once
+            }
+        }
     }
 }
