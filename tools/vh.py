@@ -250,7 +250,14 @@ def cmd_nest(a: argparse.Namespace) -> int:
 
 
 def cmd_state(a: argparse.Namespace) -> int:
-    emit(Bridge(a.port).get("/state"))
+    query = {"worms": "1"} if a.worms else None
+    emit(Bridge(a.port).get("/state", query=query))
+    return 0
+
+
+def cmd_freeze(a: argparse.Namespace) -> int:
+    # The mw_freeze console command owns the switch; the bridge only relays it.
+    emit(Bridge(a.port).post("/console", {"cmd": f"mw_freeze {a.mode}"}))
     return 0
 
 
@@ -523,10 +530,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     add("tp-mine", cmd_tp_mine, "teleport into the closest infested mine")
 
-    sp = add("spawn", cmd_spawn, "spawn N virtual worms in front of the player")
+    sp = add("spawn", cmd_spawn, "spawn N virtual worms on the floor around the player")
     sp.add_argument("n", type=int)
-    sp.add_argument("--radius", type=float)
-    sp.add_argument("--state")
+    sp.add_argument("--radius", type=float, help="disc radius in metres (default 4)")
+    sp.add_argument("--state", help="Idle (default), Sleeping, Hunting, Fleeing...")
     sp.add_argument("--nest-index", type=int)
     sp.add_argument("--force", action="store_true", help="ignore population caps")
 
@@ -537,7 +544,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp = add("nest", cmd_nest, "create a nest in front of the player")
     sp.add_argument("--force", action="store_true")
 
-    add("state", cmd_state, "GET /state")
+    sp = add("state", cmd_state, "GET /state: colonies, worms per state, player health and gear")
+    sp.add_argument("--worms", action="store_true", help="also list every worm (index, position, state, hp)")
+
+    sp = add("freeze", cmd_freeze, "stop or resume the simulation of every colony (mw_freeze)")
+    sp.add_argument("mode", choices=["on", "off"])
     add("perf", cmd_perf, "GET /perf")
 
     sp = add("shot", cmd_shot, "take a screenshot into docs/shots")

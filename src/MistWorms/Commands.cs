@@ -17,12 +17,13 @@ namespace MistWorms
         {
             CommandManager.Instance.AddConsoleCommand(new VersionCommand());
 #if MW_DEV
-            CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_spawn", "<n> [radius] - spawn n virtual worms around the player", 3));
+            CommandManager.Instance.AddConsoleCommand(new SpawnCommand());
+            CommandManager.Instance.AddConsoleCommand(new KillCommand());
+            CommandManager.Instance.AddConsoleCommand(new StateCommand());
+            CommandManager.Instance.AddConsoleCommand(new TpMineCommand());
+            CommandManager.Instance.AddConsoleCommand(new FreezeCommand());
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_mass", "<n> - spawn a writhing mass of n worms in front of the player", 4));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_nest", "- place a worm nest in front of the player", 7));
-            CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_kill", "- kill every virtual worm, mass and nest nearby", 3));
-            CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_state", "- print colony, mass and player state", 3, cheat: false));
-            CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_tpmine", "- teleport into the closest infested mine", 3));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_wake", "- wake every dormant group of the current mine", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_calm", "- send every active group of the current mine back to dormancy", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_perf", "- print simulation/render/network timings", 8, cheat: false));
@@ -96,6 +97,120 @@ namespace MistWorms
             protected override void Execute(string[] args, Terminal context)
             {
                 Print(context, $"{_name}: not implemented yet (phase {_phase})");
+            }
+        }
+
+        private sealed class SpawnCommand : MWCommand
+        {
+            public override string Name => "mw_spawn";
+            public override string Help => "[dev] <n> [radius=4] [state=Idle] [force] - spawn n virtual worms on the floor around the player";
+            public override bool IsCheat => true;
+
+            public override List<string> CommandOptionList() => Enum.GetNames(typeof(Colony.WormState)).ToList();
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                if (args.Length == 0 || !int.TryParse(args[0], out int n) || n < 1)
+                {
+                    Print(context, "usage: mw_spawn <n> [radius] [state] [force]");
+                    return;
+                }
+
+                float radius = 4f;
+                var state = Colony.WormState.Idle;
+                bool force = false;
+                for (int i = 1; i < args.Length; i++)
+                {
+                    if (string.Equals(args[i], "force", StringComparison.OrdinalIgnoreCase)) force = true;
+                    else if (float.TryParse(args[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float r)) radius = Math.Max(0.5f, r);
+                    else if (!Enum.TryParse(args[i], true, out state))
+                    {
+                        Print(context, $"mw_spawn: unknown state '{args[i]}' (known: {string.Join(", ", Enum.GetNames(typeof(Colony.WormState)))})");
+                        return;
+                    }
+                }
+
+                int created = Dev.ColonyDev.Spawn(n, radius, state, force, out Colony.WormColony colony, out string how);
+                Print(context, $"mw_spawn: created {created}/{n} {state} worms in {how} colony {colony.ZdoId} (alive {colony.Store.AliveCount})");
+            }
+        }
+
+        private sealed class KillCommand : MWCommand
+        {
+            public override string Name => "mw_kill";
+            public override string Help => "[dev] - kill every virtual worm without drops and remove the test colonies";
+            public override bool IsCheat => true;
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                int worms = Dev.ColonyDev.KillAll(out int colonies);
+                Print(context, $"mw_kill: {worms} worms removed, {colonies} test colonies destroyed");
+            }
+        }
+
+        private sealed class StateCommand : MWCommand
+        {
+            public override string Name => "mw_state";
+            public override string Help => "[dev] - print every loaded colony: owner, worms per state, box, simulation cost";
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                List<string> lines = Dev.ColonyDev.Summary();
+                if (lines.Count == 0) Print(context, "mw_state: no colony loaded");
+                foreach (string line in lines) Print(context, "mw_state: " + line);
+            }
+        }
+
+        private sealed class FreezeCommand : MWCommand
+        {
+            public override string Name => "mw_freeze";
+            public override string Help => "[dev] [on|off] - stop (or resume) the simulation of every colony; worms stay where they are";
+            public override bool IsCheat => true;
+
+            public override List<string> CommandOptionList() => new List<string> { "on", "off" };
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                if (args.Length > 0)
+                {
+                    string a = args[0].ToLowerInvariant();
+                    if (a == "on" || a == "1" || a == "true") Colony.WormColony.Frozen = true;
+                    else if (a == "off" || a == "0" || a == "false") Colony.WormColony.Frozen = false;
+                    else
+                    {
+                        Print(context, "usage: mw_freeze [on|off]");
+                        return;
+                    }
+                }
+                else
+                {
+                    Colony.WormColony.Frozen = !Colony.WormColony.Frozen;
+                }
+                Print(context, $"mw_freeze: simulation {(Colony.WormColony.Frozen ? "frozen" : "running")}");
+            }
+        }
+
+        private sealed class TpMineCommand : MWCommand
+        {
+            public override string Name => "mw_tpmine";
+            public override string Help => "[dev] - teleport into the closest infested mine (up to 90 s)";
+            public override bool IsCheat => true;
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                var result = new Dev.TpMineResult();
+                Dev.DevBridge.Host.StartCoroutine(Run(result, context));
+                Print(context, "mw_tpmine: started");
+            }
+
+            private static System.Collections.IEnumerator Run(Dev.TpMineResult result, Terminal context)
+            {
+                Exception failure = null;
+                yield return Dev.SafeCoroutine.Run(Dev.DevWorld.TpMine(result, msg => Print(context, "mw_tpmine: " + msg)), e => failure = e);
+                if (failure != null) Plugin.LogException("mw_tpmine", failure);
+                Print(context, result.Ok
+                    ? $"mw_tpmine: inside {result.Location}, {result.RoomCount} rooms, {result.Seconds:0.0} s"
+                    : $"mw_tpmine: failed: {failure?.Message ?? result.Error}");
             }
         }
 

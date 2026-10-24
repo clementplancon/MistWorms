@@ -98,6 +98,39 @@ namespace MistWorms.Dev.Scenarios
             return lines;
         }
 
+        // ---------------------------------------------------------------- world navigation
+
+        /// <summary>Outcome of the last <see cref="TpMine"/>.</summary>
+        public TpMineResult LastTpMine { get; private set; }
+
+        /// <summary>Outcome of the last <see cref="MoveToOpenGround"/>.</summary>
+        public OpenGroundResult LastOpenGround { get; private set; }
+
+        /// <summary>Enters the closest infested mine (spec §15.3) and records the "tp_mine" assertion; the player ends in god and ghost mode.</summary>
+        public IEnumerator TpMine()
+        {
+            var result = new TpMineResult();
+            LastTpMine = result;
+            yield return DevWorld.TpMine(result, Log);
+            Assert("tp_mine", result.Ok, $"inside a mine within 90 s", result.Ok
+                ? (object)$"{result.Location}, {result.RoomCount} rooms, {result.Seconds:0.0} s"
+                : result.Error);
+        }
+
+        /// <summary>
+        /// Teleports the player onto flat open ground with <paramref name="clearRadius"/> metres of nothing around (see
+        /// <see cref="DevWorld.MoveToOpenGround"/>) and records the "open_ground_found" assertion. <paramref name="accept"/> adds a
+        /// scenario specific test on the candidate ground point.
+        /// </summary>
+        public IEnumerator MoveToOpenGround(float clearRadius = 5f, Func<Vector3, bool> accept = null)
+        {
+            var result = new OpenGroundResult();
+            LastOpenGround = result;
+            yield return DevWorld.MoveToOpenGround(clearRadius, accept, result, Log);
+            Assert("open_ground_found", result.Found, true,
+                result.Found ? (object)$"{result.Spot} after {result.Tested} candidates, {result.Hops} hops" : result.Error);
+        }
+
         // ---------------------------------------------------------------- waiting
 
         /// <summary>Waits real seconds (unaffected by time scale or pause).</summary>

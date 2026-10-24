@@ -60,6 +60,9 @@ namespace MistWorms.Render
         /// <summary>Frame counter at which <see cref="Last"/> was produced; lets callers wait for a fresh frame.</summary>
         public static int LastFrame { get; private set; }
 
+        /// <summary>The renderer if it already exists; unlike <see cref="Instance"/> never creates one (safe in OnDestroy at shutdown).</summary>
+        public static WormRenderer Existing => s_instance;
+
         public static WormRenderer Instance
         {
             get

@@ -74,33 +74,38 @@ namespace MistWorms.Dev.Scenarios
                     clutterHidden = true;
                 }
 
-                // Clear spot: no trees, rocks, bushes or pieces around the subject and the camera.
+                // Clear spot: no trees, rocks, bushes or pieces around the subject and the camera. The spiral search and the
+                // teleport are the shared helper (ScenarioContext.MoveToOpenGround); the subject and camera requirements of
+                // this scenario are passed to it as an extra test on the player's ground point.
                 Player player = Player.m_localPlayer;
                 float subjectDistance = distanceParam > 0f ? distanceParam : DevPreview.DefaultDistance(kind, n);
                 float estSize = EstimateSize(kind, n);
                 float estCamDist = CameraDistance(estSize);
-                bool found = TryFindClearSpot(player, subjectDistance, estSize, estCamDist, out Vector3 spot, out int tested);
-                ctx.Assert("clear_spot_found", found, true, found ? $"{spot} after {tested} candidates" : $"none among {tested} candidates");
-                if (!found) yield break;
+                Vector3 fwd = player.transform.forward;
+                fwd.y = 0f;
+                fwd = fwd.sqrMagnitude > 1e-4f ? fwd.normalized : Vector3.forward;
+                int solid = SolidMask();
+                int terrain = LayerMask.GetMask("terrain");
+                float water = ZoneSystem.instance != null ? ZoneSystem.instance.m_waterLevel + 0.5f : float.MinValue;
+                float subjectRadius = Mathf.Max(ClearRadius, estSize * 0.5f);
+                var own = new HashSet<Collider>(player.GetComponentsInChildren<Collider>(true));
 
-                if ((spot - player.transform.position).sqrMagnitude > 0.25f)
+                bool AcceptSpot(Vector3 pg)
                 {
-                    Quaternion rot = player.transform.rotation;
-                    bool started = false;
-                    float deadline = Time.realtimeSinceStartup + 15f;
-                    while (!started && Time.realtimeSinceStartup < deadline)
+                    Vector3 subject = pg + fwd * subjectDistance;
+                    if (!Ground(subject, terrain, out Vector3 sg) || sg.y <= water) return false;
+                    if (!Free(sg, subjectRadius, solid, own)) return false;
+                    for (int c = 0; c < Yaws.Length; c++)
                     {
-                        started = player.TeleportTo(spot, rot, false);
-                        if (!started) yield return ctx.Wait(0.5f);
+                        Vector3 camXz = sg + Quaternion.AngleAxis(Yaws[c], Vector3.up) * -fwd * estCamDist;
+                        if (!Ground(camXz, terrain, out Vector3 cg) || !Free(cg, ClearRadius, solid, own)) return false;
                     }
-                    ctx.Assert("teleport_started", started, true, started ? "ok" : "refused (cooldown or busy)");
-                    if (!started) yield break;
-                    yield return ctx.Wait(0.5f);
-                    yield return ctx.WaitUntil(() => Player.m_localPlayer != null && !Player.m_localPlayer.IsTeleporting(), 30f, "teleport_done");
-                    if (ctx.LastWaitTimedOut) yield break;
-                    yield return ctx.Wait(1f);
-                    player = Player.m_localPlayer;
+                    return true;
                 }
+
+                yield return ctx.MoveToOpenGround(1f, AcceptSpot);
+                if (!ctx.LastOpenGround.Found) yield break;
+                player = Player.m_localPlayer;
 
                 // Player out of frame: hide its renderers during the shots.
                 foreach (Renderer r in player.GetComponentsInChildren<Renderer>(true))
@@ -180,49 +185,7 @@ namespace MistWorms.Dev.Scenarios
             DevCamera.Free(pos, look);
         }
 
-        // ---------------------------------------------------------------- clear spot search
-
-        private static bool TryFindClearSpot(Player player, float subjectDistance, float size, float camDist, out Vector3 spot, out int tested)
-        {
-            spot = default;
-            tested = 0;
-            Vector3 centre = player.transform.position;
-            Vector3 fwd = player.transform.forward;
-            fwd.y = 0f;
-            fwd = fwd.sqrMagnitude > 1e-4f ? fwd.normalized : Vector3.forward;
-            int solid = SolidMask();
-            int terrain = LayerMask.GetMask("terrain");
-            float water = ZoneSystem.instance != null ? ZoneSystem.instance.m_waterLevel + 0.5f : float.MinValue;
-            float subjectRadius = Mathf.Max(ClearRadius, size * 0.5f);
-            var own = new HashSet<Collider>(player.GetComponentsInChildren<Collider>(true));
-
-            for (int ring = 0; ring <= 8; ring++)
-            {
-                int steps = ring == 0 ? 1 : 12;
-                for (int k = 0; k < steps; k++)
-                {
-                    float ang = k * Mathf.PI * 2f / steps;
-                    Vector3 p = centre + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * (ring * 10f);
-                    tested++;
-                    if (!Ground(p, terrain, out Vector3 pg)) continue;
-                    if (pg.y <= water) continue;
-
-                    Vector3 subject = pg + fwd * subjectDistance;
-                    if (!Ground(subject, terrain, out Vector3 sg) || sg.y <= water) continue;
-
-                    bool ok = Free(pg, 1f, solid, own) && Free(sg, subjectRadius, solid, own);
-                    for (int c = 0; ok && c < Yaws.Length; c++)
-                    {
-                        Vector3 camXz = sg + Quaternion.AngleAxis(Yaws[c], Vector3.up) * -fwd * camDist;
-                        ok = Ground(camXz, terrain, out Vector3 cg) && Free(cg, ClearRadius, solid, own);
-                    }
-                    if (!ok) continue;
-                    spot = pg + Vector3.up * 0.1f;
-                    return true;
-                }
-            }
-            return false;
-        }
+        // ---------------------------------------------------------------- clear spot tests (the search itself is DevWorld.MoveToOpenGround)
 
         /// <summary>Terrain point under the xz of <paramref name="p"/> when the slope is gentle.</summary>
         private static bool Ground(Vector3 p, int terrainMask, out Vector3 ground)

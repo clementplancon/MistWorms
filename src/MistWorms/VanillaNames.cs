@@ -117,7 +117,11 @@ namespace MistWorms
         public const string LayerStaticSolid = "static_solid";    // confirmed
         public const string LayerPiece = "piece";                 // confirmed
         public const string LayerTerrain = "terrain";             // confirmed
-        public const string LayerCharacterNoenv = "character_noenv";   // confirmed (index 27): alternative proxy layer to hitbox
+        // Masks of the worm simulation = the lists of BaseAI.m_solidRayMask / m_viewBlockMask.
+        public const string LayerDefaultSmall = "Default_small";  // confirmed (BaseAI.cs:221-222)
+        public const string LayerVehicle = "vehicle";             // confirmed (BaseAI.cs:221-222)
+        public const string LayerViewblock = "viewblock";         // confirmed (BaseAI.cs:222): view mask only
+        public const string LayerCharacterNoenv ="character_noenv";   // confirmed (index 27): alternative proxy layer to hitbox
         public const string LayerCharacterTrigger = "character_trigger"; // confirmed: EffectArea (fire) overlap layer
         public const string LayerInstanceRenderer = "InstanceRenderer";  // confirmed: vanilla InstanceRenderer draws on it
 

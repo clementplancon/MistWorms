@@ -27,12 +27,9 @@ namespace MistWorms.Dev
         // Routes the spec defines whose behaviour depends on systems built in later phases (§16).
         private static readonly Dictionary<string, int> PlannedRoutes = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            { "/spawn", 3 },
             { "/hit", 3 },
             { "/attack", 3 },
-            { "/state", 3 },
             { "/mass", 4 },
-            { "/tp-mine", 7 },
             { "/nest", 7 },
             { "/perf", 8 },
         };
@@ -248,6 +245,17 @@ namespace MistWorms.Dev
                     req.RequireMethod("POST");
                     PlayerRoute(req, reply);
                     return null;
+                case "/spawn":
+                    req.RequireMethod("POST");
+                    SpawnRoute(req, reply);
+                    return null;
+                case "/state":
+                    req.RequireMethod("GET");
+                    StateRoute(req, reply);
+                    return null;
+                case "/tp-mine":
+                    req.RequireMethod("POST");
+                    return TpMineRoute(reply);
                 case "/time":
                     req.RequireMethod("POST");
                     TimeRoute(req, reply);
@@ -327,7 +335,7 @@ namespace MistWorms.Dev
                 // Colony ownership arrives in phase 3; until then the host owns everything.
                 { "owner", isServer },
                 { "peers", znet != null ? znet.GetPeerConnections() : 0 },
-                { "colonies", 0 },
+                { "colonies", Colony.ColonyRegistry.All.Count },
                 { "fps", Host.AverageFps },
                 { "gameTime", znet != null ? (object)znet.GetTimeSeconds() : null },
                 { "day", EnvMan.instance != null ? (object)EnvMan.instance.GetDay() : null },
@@ -435,6 +443,90 @@ namespace MistWorms.Dev
                 { "position", player != null ? (object)player.transform.position : null },
                 { "ready", IsReady(player) },
             };
+        }
+
+        /// <summary>{n, radius = 4, state = Idle, force}: virtual worms on the floor around the player (see ColonyDev.Spawn).</summary>
+        private static void SpawnRoute(BridgeRequest req, BridgeReply reply)
+        {
+            RequirePlayer();
+            int n = MiniJson.GetInt(req.Body, "n", 1);
+            if (n < 1) throw new BridgeException(400, "'n' must be at least 1");
+            float radius = Mathf.Max(0.5f, MiniJson.GetFloat(req.Body, "radius", 4f));
+            string stateName = MiniJson.GetString(req.Body, "state") ?? "Idle";
+            if (!Enum.TryParse(stateName, true, out Colony.WormState state))
+                throw new BridgeException(400, $"unknown state '{stateName}' (known: {string.Join(", ", Enum.GetNames(typeof(Colony.WormState)))})");
+            bool force = MiniJson.GetBool(req.Body, "force");
+
+            int created;
+            Colony.WormColony colony;
+            string how;
+            try { created = ColonyDev.Spawn(n, radius, state, force, out colony, out how); }
+            catch (InvalidOperationException e) { throw new BridgeException(409, e.Message); }
+
+            reply.Body = new Dictionary<string, object>
+            {
+                { "requested", n },
+                { "created", created },
+                { "state", state.ToString() },
+                { "colony", colony.ZdoId.ToString() },
+                { "colonyKind", colony.Kind.ToString() },
+                { "colonySource", how },
+                { "alive", colony.Store.AliveCount },
+            };
+        }
+
+        /// <summary>GET /state[?worms=1]: colonies (and optionally every worm) plus the local player's health and gear.</summary>
+        private static void StateRoute(BridgeRequest req, BridgeReply reply)
+        {
+            string worms = req.Query?["worms"];
+            bool includeWorms = worms == "1" || string.Equals(worms, "true", StringComparison.OrdinalIgnoreCase);
+
+            var colonies = new List<object>();
+            foreach (Colony.WormColony c in Colony.ColonyRegistry.All)
+                if (c != null) colonies.Add(ColonyDev.ColonyJson(c, includeWorms));
+
+            object playerJson = null;
+            Player player = Player.m_localPlayer;
+            if (player != null)
+            {
+                var inventory = new List<object>();
+                foreach (ItemDrop.ItemData item in player.GetInventory().GetAllItems())
+                {
+                    inventory.Add(new Dictionary<string, object>
+                    {
+                        { "prefab", item.m_dropPrefab != null ? item.m_dropPrefab.name : null },
+                        { "durability", item.m_durability },
+                        { "max", item.GetMaxDurability() },
+                        { "equipped", item.m_equipped },
+                    });
+                }
+                playerJson = new Dictionary<string, object>
+                {
+                    { "pos", player.transform.position },
+                    { "hp", player.GetHealth() },
+                    { "maxHp", player.GetMaxHealth() },
+                    { "god", player.InGodMode() },
+                    { "ghost", player.InGhostMode() },
+                    { "inventory", inventory },
+                };
+            }
+
+            reply.Body = new Dictionary<string, object>
+            {
+                { "colonies", colonies },
+                { "frozen", Colony.WormColony.Frozen },
+                { "player", playerJson },
+            };
+        }
+
+        /// <summary>Enters the closest infested mine (spec §15.3). The reply is sent when the dungeon is loaded or the 90 s budget ends.</summary>
+        private static IEnumerator TpMineRoute(BridgeReply reply)
+        {
+            RequirePlayer();
+            var result = new TpMineResult();
+            yield return DevWorld.TpMine(result, msg => Plugin.Log.LogInfo($"[tp-mine] {msg}"));
+            reply.Status = result.Ok ? 200 : 504;
+            reply.Body = result.ToJson();
         }
 
         private static void PlayerRoute(BridgeRequest req, BridgeReply reply)

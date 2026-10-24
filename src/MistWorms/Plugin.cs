@@ -6,6 +6,7 @@ using HarmonyLib;
 using Jotunn.Managers;
 using Jotunn.Utils;
 using MistWorms.Assets;
+using MistWorms.Colony;
 using MistWorms.Config;
 using MistWorms.Localization;
 using MistWorms.Render;
@@ -54,6 +55,10 @@ namespace MistWorms
         private void OnVanillaPrefabsAvailable()
         {
             PrefabManager.OnVanillaPrefabsAvailable -= OnVanillaPrefabsAvailable;
+
+            // Before any zone loads, on every peer: a server that meets an unknown prefab hash destroys the ZDO.
+            ColonyPrefab.Register();
+
             try
             {
                 // Visuals are client-only; a dedicated server never renders.
@@ -67,7 +72,7 @@ namespace MistWorms
             {
                 LogException("Plugin.OnVanillaPrefabsAvailable", e);
             }
-            // Phase 3+: prefab registration (MW_WritheMass, MW_WormNest, MW_WormColony), status effects.
+            // Phase 4+: prefab registration (MW_WritheMass, MW_WormNest), status effects.
         }
 
         private void OnDestroy()
