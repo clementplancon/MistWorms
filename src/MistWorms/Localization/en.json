@@ -1,0 +1,14 @@
+{
+  "mw_worm": "Mist Worm",
+  "mw_mass": "Writhing Mass",
+  "mw_mass_count": "{0} ({1})",
+  "mw_nest": "Worm Nest",
+  "mw_se_infested_name": "Infested",
+  "mw_se_infested_desc": "Worms cover you. Speed reduced, your equipment is being eaten.",
+  "mw_text_eq": "Gear -{0}",
+  "mw_cmd_version_help": "Prints the MistWorms version and build type.",
+  "mw_cmd_version_output": "{0} {1} ({2}), Valheim {3}",
+  "mw_cmd_build_dev": "dev build",
+  "mw_cmd_build_release": "release build",
+  "mw_cmd_error": "MistWorms command failed: {0}"
+}

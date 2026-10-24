@@ -1,0 +1,14 @@
+{
+  "mw_worm": "Ver des brumes",
+  "mw_mass": "Amas grouillant",
+  "mw_mass_count": "{0} ({1})",
+  "mw_nest": "Nid de vers",
+  "mw_se_infested_name": "Infesté",
+  "mw_se_infested_desc": "Des vers vous recouvrent. Vitesse réduite, votre équipement est dévoré.",
+  "mw_text_eq": "Équipement -{0}",
+  "mw_cmd_version_help": "Affiche la version de MistWorms et le type de build.",
+  "mw_cmd_version_output": "{0} {1} ({2}), Valheim {3}",
+  "mw_cmd_build_dev": "build de développement",
+  "mw_cmd_build_release": "build de publication",
+  "mw_cmd_error": "Échec de la commande MistWorms : {0}"
+}

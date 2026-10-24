@@ -1,0 +1,22 @@
+# Build output
+bin/
+obj/
+*.user
+.vs/
+.vscode/
+dist/
+*.zip
+
+# Game assemblies and decompiled sources are never committed (copyright)
+reference/decompiled/
+reference/game-dlls/
+
+# Python
+__pycache__/
+*.pyc
+
+# Blender backups
+*.blend1
+
+# Harness output (screenshots are regenerated; the report itself is committed)
+docs/shots/

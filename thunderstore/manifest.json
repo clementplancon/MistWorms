@@ -1,0 +1,10 @@
+{
+  "name": "MistWorms",
+  "version_number": "0.1.0",
+  "website_url": "",
+  "description": "Mist Worms infest the Mistlands mines: harmless alone, they swarm into a Writhing Mass that engulfs you and devours your gear before your health. Fire repels them, area weapons kill them by the dozen.",
+  "dependencies": [
+    "denikson-BepInExPack_Valheim-5.4.2351",
+    "ValheimModding-Jotunn-2.30.2"
+  ]
+}

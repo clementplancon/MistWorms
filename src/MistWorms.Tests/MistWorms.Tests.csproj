@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Out-of-game tests (spec §15.6). net472 runs on the machine's .NET Framework 4.8 through 'dotnet test'. -->
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>MistWorms.Tests</AssemblyName>
+    <RootNamespace>MistWorms.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Configurations>Debug;Release</Configurations>
+    <!-- Unity and the game assemblies reference newer framework facades than net472 declares. -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MistWorms\MistWorms.csproj" />
+  </ItemGroup>
+
+  <!-- Same set as the plugin, but copied next to the tests (Private=true) so the CLR can load them.
+       Not publicized: tests only touch MistWorms' own public/internal API (InternalsVisibleTo). -->
+  <ItemGroup>
+    <Reference Include="assembly_valheim"><HintPath>$(GameDlls)assembly_valheim.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="assembly_utils"><HintPath>$(GameDlls)assembly_utils.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="assembly_guiutils"><HintPath>$(GameDlls)assembly_guiutils.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="BepInEx"><HintPath>$(GameDlls)BepInEx.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(GameDlls)0Harmony.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="Jotunn"><HintPath>$(GameDlls)Jotunn.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(GameDlls)UnityEngine.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(GameDlls)UnityEngine.CoreModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(GameDlls)UnityEngine.PhysicsModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.AnimationModule"><HintPath>$(GameDlls)UnityEngine.AnimationModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.AudioModule"><HintPath>$(GameDlls)UnityEngine.AudioModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.AIModule"><HintPath>$(GameDlls)UnityEngine.AIModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.ImageConversionModule"><HintPath>$(GameDlls)UnityEngine.ImageConversionModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.ScreenCaptureModule"><HintPath>$(GameDlls)UnityEngine.ScreenCaptureModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.ParticleSystemModule"><HintPath>$(GameDlls)UnityEngine.ParticleSystemModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.UI"><HintPath>$(GameDlls)UnityEngine.UI.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.UIModule"><HintPath>$(GameDlls)UnityEngine.UIModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(GameDlls)UnityEngine.IMGUIModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(GameDlls)UnityEngine.InputLegacyModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.TextRenderingModule"><HintPath>$(GameDlls)UnityEngine.TextRenderingModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule"><HintPath>$(GameDlls)UnityEngine.JSONSerializeModule.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="Unity.TextMeshPro"><HintPath>$(GameDlls)Unity.TextMeshPro.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="System.Runtime.Serialization" />
+  </ItemGroup>
+
+</Project>
