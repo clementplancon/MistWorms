@@ -218,6 +218,32 @@ def cmd_mass(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_preview(a: argparse.Namespace) -> int:
+    body: dict[str, Any] = {"kind": a.kind}
+    if a.n is not None:
+        body["n"] = a.n
+    if a.anim:
+        body["anim"] = a.anim
+    if a.count is not None:
+        body["count"] = a.count
+    if a.compare:
+        body["compare"] = a.compare
+    if a.distance is not None:
+        body["distance"] = a.distance
+    emit(Bridge(a.port).post("/preview", body))
+    return 0
+
+
+def cmd_camera(a: argparse.Namespace) -> int:
+    body: dict[str, Any] = {"mode": a.mode}
+    if a.pos:
+        body["pos"] = a.pos
+    if a.look_at:
+        body["lookAt"] = a.look_at
+    emit(Bridge(a.port).post("/camera", body))
+    return 0
+
+
 def cmd_nest(a: argparse.Namespace) -> int:
     emit(Bridge(a.port).post("/nest", {"force": True} if a.force else {}))
     return 0
@@ -464,6 +490,19 @@ def build_parser() -> argparse.ArgumentParser:
         sp = sub.add_parser(name, help=help_text, parents=[common])
         sp.set_defaults(fn=fn)
         return sp
+
+    sp = add("preview", cmd_preview, "show a static worm / mass / nest preview next to the player")
+    sp.add_argument("kind", choices=["worm", "mass", "nest", "clear"])
+    sp.add_argument("--n", type=int, help="mass size (kind=mass)")
+    sp.add_argument("--anim", help="worm animation: crawl, rear, strike, sleep")
+    sp.add_argument("--count", type=int)
+    sp.add_argument("--compare", help="vanilla prefab shown beside the subject, e.g. Tick")
+    sp.add_argument("--distance", type=float)
+
+    sp = add("camera", cmd_camera, "free camera (bridge /camera)")
+    sp.add_argument("mode", nargs="?", choices=["free", "follow"], default="free")
+    sp.add_argument("--pos", type=float, nargs=3, metavar=("X", "Y", "Z"))
+    sp.add_argument("--look-at", type=float, nargs=3, metavar=("X", "Y", "Z"))
 
     sp = add("launch", cmd_launch, "start the dev game copy (tools/run-game.ps1)")
     sp.add_argument("--world", default="MWTest")

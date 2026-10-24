@@ -82,6 +82,30 @@ namespace MistWorms
         public const string PropMainTex = "_MainTex";   // confirmed: ShaderProps._MainTex (assembly_utils)
         public const string PropBumpMap = "_BumpMap";   // confirmed (dump L325: property of Custom/Creature)
         public const string PropColor = "_Color";       // confirmed: ShaderProps._Color (assembly_utils); per-instance tint (spec §12.1)
+        // Custom/Creature properties and keywords (dump L325 property list, dump L136-253 keyword column).
+        public const string PropEmissionMap = "_EmissionMap";          // confirmed (dump L325)
+        public const string PropEmissionColor = "_EmissionColor";      // confirmed (assembly_utils ShaderProps)
+        public const string PropMetallic = "_Metallic";                // confirmed (dump L325)
+        public const string PropGlossiness = "_Glossiness";            // confirmed (dump L325)
+        public const string PropUseGlossmap = "_UseGlossmap";          // confirmed (dump L325); keyword _USEGLOSSMAP_ON on SeekerBrood
+        public const string PropBumpScale = "_BumpScale";              // confirmed (dump L325)
+        public const string PropTwoSidedNormals = "_TwoSidedNormals";  // confirmed (dump L325); keyword _TWOSIDEDNORMALS_ON on every creature
+        public const string PropCull = "_Cull";                        // confirmed (dump L325): 0 = double sided
+        public const string PropHue = "_Hue";                          // confirmed (LevelEffects.cs:72-78)
+        public const string PropSaturation = "_Saturation";            // confirmed (LevelEffects.cs:72-78)
+        public const string PropValue = "_Value";                      // confirmed (LevelEffects.cs:72-78)
+        public const string PropUseStyles = "_UseStyles";              // confirmed (dump L325)
+        public const string PropNoiseGlowEnabled = "_NoiseGlowEnabled"; // confirmed (dump L325)
+        public const string PropAddRain = "_AddRain";                  // confirmed (dump L325)
+        public const string PropSnowCover = "_SnowCover";              // confirmed (dump L325)
+        public const string KeywordNormalMap = "_NORMALMAP";           // Standard-style keyword, harmless when the shader does not declare it
+        public const string KeywordTwoSidedNormals = "_TWOSIDEDNORMALS_ON"; // confirmed (dump L134, L169, L210)
+        public const string KeywordUseGlossmap = "_USEGLOSSMAP_ON";    // confirmed (dump L169)
+        public const string KeywordSnapNoise = "_SNAPNOISETOPIXEL_ON"; // confirmed (dump L134)
+
+        // ---- Hierarchy and console ----
+        public const string VisualChild = "Visual";                    // confirmed (Character.cs:671): child holding renderers and Animator
+        public const string CmdTimeOfDay = "tod";                      // confirmed (Terminal.cs:1830): "tod <0..1>" or -1 to release
 
         // ---- Physics layers (spec §18 hitbox fallback, §8.3 floor raycasts) ----
         // All names below appear in vanilla LayerMask.GetMask lists; the collision matrix itself is runtime data.

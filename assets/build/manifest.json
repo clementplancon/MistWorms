@@ -1,0 +1,643 @@
+{
+ "version": 1,
+ "generator": "Blender 4.5.5 + assets/blender/*.py",
+ "seed": 20261024,
+ "animations": {
+  "worm_crawl": {
+   "frames": 12,
+   "fps": 12,
+   "loop": true
+  },
+  "worm_rear": {
+   "frames": 6,
+   "fps": 10,
+   "loop": false
+  },
+  "worm_strike": {
+   "frames": 4,
+   "fps": 16,
+   "loop": false
+  },
+  "worm_sleep": {
+   "frames": 4,
+   "fps": 4,
+   "loop": true
+  },
+  "mass_boil": {
+   "frames": 8,
+   "fps": 8,
+   "loop": true
+  },
+  "nest_idle": {
+   "frames": 1,
+   "fps": 0,
+   "loop": false
+  }
+ },
+ "meshes": [
+  {
+   "name": "worm_crawl_00",
+   "file": "worm_crawl_00.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.05005,
+    0.00026,
+    -0.18886
+   ],
+   "boundsMax": [
+    0.05166,
+    0.07178,
+    0.20675
+   ]
+  },
+  {
+   "name": "worm_crawl_01",
+   "file": "worm_crawl_01.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.04642,
+    0.00023,
+    -0.18883
+   ],
+   "boundsMax": [
+    0.04722,
+    0.07257,
+    0.2074
+   ]
+  },
+  {
+   "name": "worm_crawl_02",
+   "file": "worm_crawl_02.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.04806,
+    0.00024,
+    -0.18867
+   ],
+   "boundsMax": [
+    0.0433,
+    0.07232,
+    0.20716
+   ]
+  },
+  {
+   "name": "worm_crawl_03",
+   "file": "worm_crawl_03.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.05423,
+    0.00026,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.0472,
+    0.07605,
+    0.20628
+   ]
+  },
+  {
+   "name": "worm_crawl_04",
+   "file": "worm_crawl_04.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.05787,
+    0.00024,
+    -0.18857
+   ],
+   "boundsMax": [
+    0.05054,
+    0.07746,
+    0.20551
+   ]
+  },
+  {
+   "name": "worm_crawl_05",
+   "file": "worm_crawl_05.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.06119,
+    0.00018,
+    -0.18873
+   ],
+   "boundsMax": [
+    0.05368,
+    0.07425,
+    0.20523
+   ]
+  },
+  {
+   "name": "worm_crawl_06",
+   "file": "worm_crawl_06.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.06156,
+    0.00016,
+    -0.18885
+   ],
+   "boundsMax": [
+    0.0568,
+    0.07541,
+    0.2054
+   ]
+  },
+  {
+   "name": "worm_crawl_07",
+   "file": "worm_crawl_07.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.05912,
+    0.00017,
+    -0.18882
+   ],
+   "boundsMax": [
+    0.05607,
+    0.07421,
+    0.20562
+   ]
+  },
+  {
+   "name": "worm_crawl_08",
+   "file": "worm_crawl_08.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.05125,
+    0.00021,
+    -0.18868
+   ],
+   "boundsMax": [
+    0.05753,
+    0.06925,
+    0.20554
+   ]
+  },
+  {
+   "name": "worm_crawl_09",
+   "file": "worm_crawl_09.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.05552,
+    0.00026,
+    -0.18855
+   ],
+   "boundsMax": [
+    0.0571,
+    0.06759,
+    0.20528
+   ]
+  },
+  {
+   "name": "worm_crawl_10",
+   "file": "worm_crawl_10.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.0531,
+    0.00029,
+    -0.18859
+   ],
+   "boundsMax": [
+    0.05496,
+    0.06941,
+    0.20529
+   ]
+  },
+  {
+   "name": "worm_crawl_11",
+   "file": "worm_crawl_11.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.05223,
+    0.00032,
+    -0.18875
+   ],
+   "boundsMax": [
+    0.05412,
+    0.06887,
+    0.20583
+   ]
+  },
+  {
+   "name": "worm_rear_00",
+   "file": "worm_rear_00.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.0363,
+    0.00034,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.0363,
+    0.06595,
+    0.20653
+   ]
+  },
+  {
+   "name": "worm_rear_01",
+   "file": "worm_rear_01.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.0363,
+    0.00034,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.0363,
+    0.12765,
+    0.19939
+   ]
+  },
+  {
+   "name": "worm_rear_02",
+   "file": "worm_rear_02.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.0363,
+    0.00034,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.0363,
+    0.17992,
+    0.17015
+   ]
+  },
+  {
+   "name": "worm_rear_03",
+   "file": "worm_rear_03.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.0363,
+    0.00034,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.0363,
+    0.21936,
+    0.11988
+   ]
+  },
+  {
+   "name": "worm_rear_04",
+   "file": "worm_rear_04.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.0363,
+    0.00034,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.0363,
+    0.25712,
+    0.05993
+   ]
+  },
+  {
+   "name": "worm_rear_05",
+   "file": "worm_rear_05.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.0363,
+    0.00034,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.0363,
+    0.27408,
+    0.00114
+   ]
+  },
+  {
+   "name": "worm_strike_00",
+   "file": "worm_strike_00.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.0363,
+    0.00034,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.0363,
+    0.26362,
+    0.04573
+   ]
+  },
+  {
+   "name": "worm_strike_01",
+   "file": "worm_strike_01.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.03499,
+    0.00034,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.03499,
+    0.21386,
+    0.17959
+   ]
+  },
+  {
+   "name": "worm_strike_02",
+   "file": "worm_strike_02.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.03489,
+    0.00034,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.03489,
+    0.15061,
+    0.28987
+   ]
+  },
+  {
+   "name": "worm_strike_03",
+   "file": "worm_strike_03.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.03478,
+    0.00034,
+    -0.18853
+   ],
+   "boundsMax": [
+    0.03478,
+    0.06298,
+    0.35653
+   ]
+  },
+  {
+   "name": "worm_sleep_00",
+   "file": "worm_sleep_00.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.02696,
+    -0.0095,
+    -0.18861
+   ],
+   "boundsMax": [
+    0.0615,
+    0.03389,
+    0.20897
+   ]
+  },
+  {
+   "name": "worm_sleep_01",
+   "file": "worm_sleep_01.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.02864,
+    -0.00997,
+    -0.18861
+   ],
+   "boundsMax": [
+    0.06307,
+    0.03559,
+    0.20891
+   ]
+  },
+  {
+   "name": "worm_sleep_02",
+   "file": "worm_sleep_02.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.02696,
+    -0.0095,
+    -0.18861
+   ],
+   "boundsMax": [
+    0.0615,
+    0.03389,
+    0.20897
+   ]
+  },
+  {
+   "name": "worm_sleep_03",
+   "file": "worm_sleep_03.glb",
+   "vertices": 455,
+   "triangles": 766,
+   "boundsMin": [
+    -0.02528,
+    -0.00902,
+    -0.18861
+   ],
+   "boundsMax": [
+    0.05992,
+    0.0322,
+    0.20903
+   ]
+  },
+  {
+   "name": "mass_boil_00",
+   "file": "mass_boil_00.glb",
+   "vertices": 1151,
+   "triangles": 2200,
+   "boundsMin": [
+    -1.03257,
+    -0.05,
+    -0.99676
+   ],
+   "boundsMax": [
+    1.05987,
+    1.08941,
+    1.01088
+   ]
+  },
+  {
+   "name": "mass_boil_01",
+   "file": "mass_boil_01.glb",
+   "vertices": 1151,
+   "triangles": 2200,
+   "boundsMin": [
+    -1.04719,
+    -0.05,
+    -1.01727
+   ],
+   "boundsMax": [
+    1.04432,
+    1.09169,
+    1.0146
+   ]
+  },
+  {
+   "name": "mass_boil_02",
+   "file": "mass_boil_02.glb",
+   "vertices": 1151,
+   "triangles": 2200,
+   "boundsMin": [
+    -1.08105,
+    -0.05,
+    -0.99717
+   ],
+   "boundsMax": [
+    1.01101,
+    1.08528,
+    1.0031
+   ]
+  },
+  {
+   "name": "mass_boil_03",
+   "file": "mass_boil_03.glb",
+   "vertices": 1151,
+   "triangles": 2200,
+   "boundsMin": [
+    -1.06024,
+    -0.05,
+    -1.00844
+   ],
+   "boundsMax": [
+    1.00797,
+    1.07627,
+    0.9998
+   ]
+  },
+  {
+   "name": "mass_boil_04",
+   "file": "mass_boil_04.glb",
+   "vertices": 1151,
+   "triangles": 2200,
+   "boundsMin": [
+    -1.05382,
+    -0.05,
+    -1.00188
+   ],
+   "boundsMax": [
+    1.01424,
+    1.06381,
+    1.00772
+   ]
+  },
+  {
+   "name": "mass_boil_05",
+   "file": "mass_boil_05.glb",
+   "vertices": 1151,
+   "triangles": 2200,
+   "boundsMin": [
+    -1.02649,
+    -0.05,
+    -0.99516
+   ],
+   "boundsMax": [
+    1.03043,
+    1.07541,
+    1.006
+   ]
+  },
+  {
+   "name": "mass_boil_06",
+   "file": "mass_boil_06.glb",
+   "vertices": 1151,
+   "triangles": 2200,
+   "boundsMin": [
+    -1.00981,
+    -0.05,
+    -0.99137
+   ],
+   "boundsMax": [
+    1.03618,
+    1.06729,
+    1.00859
+   ]
+  },
+  {
+   "name": "mass_boil_07",
+   "file": "mass_boil_07.glb",
+   "vertices": 1151,
+   "triangles": 2200,
+   "boundsMin": [
+    -1.01433,
+    -0.05,
+    -0.9926
+   ],
+   "boundsMax": [
+    1.04873,
+    1.08529,
+    1.00913
+   ]
+  },
+  {
+   "name": "nest_idle",
+   "file": "nest_idle.glb",
+   "vertices": 1433,
+   "triangles": 1972,
+   "boundsMin": [
+    -0.43001,
+    -0.012,
+    -0.48029
+   ],
+   "boundsMax": [
+    0.48402,
+    0.482,
+    0.42831
+   ]
+  }
+ ],
+ "textures": [
+  {
+   "name": "worm_albedo",
+   "file": "worm_albedo.png",
+   "width": 512,
+   "height": 512,
+   "linear": false
+  },
+  {
+   "name": "worm_normal",
+   "file": "worm_normal.png",
+   "width": 512,
+   "height": 512,
+   "linear": true
+  },
+  {
+   "name": "mass_albedo",
+   "file": "mass_albedo.png",
+   "width": 1024,
+   "height": 1024,
+   "linear": false
+  },
+  {
+   "name": "mass_normal",
+   "file": "mass_normal.png",
+   "width": 1024,
+   "height": 1024,
+   "linear": true
+  },
+  {
+   "name": "nest_albedo",
+   "file": "nest_albedo.png",
+   "width": 1024,
+   "height": 1024,
+   "linear": false
+  },
+  {
+   "name": "nest_normal",
+   "file": "nest_normal.png",
+   "width": 1024,
+   "height": 1024,
+   "linear": true
+  }
+ ]
+}

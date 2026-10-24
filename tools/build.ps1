@@ -82,7 +82,11 @@ function Deploy-Plugin([string]$gameDir) {
     else { Write-Warning "No localization folder at $locSrc" }
 
     if (Test-Path $assetsBuild) {
-        Copy-Item $assetsBuild (Join-Path $dest 'assets') -Recurse
+        # assets/build/previews/ holds dev-only reference renders; never ship them.
+        $assetsDest = Join-Path $dest 'assets'
+        New-Item -ItemType Directory -Force $assetsDest | Out-Null
+        Get-ChildItem $assetsBuild -Force | Where-Object { $_.Name -ne 'previews' } |
+            ForEach-Object { Copy-Item $_.FullName $assetsDest -Recurse -Force }
     } else {
         Write-Warning 'assets/build/ does not exist yet (phase 2: tools/build-assets.ps1); deployed without assets.'
     }

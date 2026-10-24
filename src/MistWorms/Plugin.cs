@@ -5,8 +5,11 @@ using BepInEx.Logging;
 using HarmonyLib;
 using Jotunn.Managers;
 using Jotunn.Utils;
+using MistWorms.Assets;
 using MistWorms.Config;
 using MistWorms.Localization;
+using MistWorms.Render;
+using UnityEngine;
 
 namespace MistWorms
 {
@@ -32,6 +35,8 @@ namespace MistWorms
             PluginDir = Path.GetDirectoryName(Info.Location);
 
             MWConfig.Bind(Config);
+            bool assetsOk = AssetCatalog.Load(Path.Combine(PluginDir, "assets"));
+            if (!assetsOk) Log.LogError("MistWorms visuals disabled: " + AssetCatalog.Error);
             MWLocalization.Load(PluginDir);
             Commands.Register();
 
@@ -49,7 +54,20 @@ namespace MistWorms
         private void OnVanillaPrefabsAvailable()
         {
             PrefabManager.OnVanillaPrefabsAvailable -= OnVanillaPrefabsAvailable;
-            // Phase 2+: AssetCatalog, prefab registration (MW_WritheMass, MW_WormNest, MW_WormColony), status effects.
+            try
+            {
+                // Visuals are client-only; a dedicated server never renders.
+                if (AssetCatalog.IsReady && !Application.isBatchMode)
+                {
+                    if (!MaterialFactory.Build()) Log.LogError("[Render] " + MaterialFactory.Error);
+                    else _ = WormRenderer.Instance; // creates the singleton
+                }
+            }
+            catch (Exception e)
+            {
+                LogException("Plugin.OnVanillaPrefabsAvailable", e);
+            }
+            // Phase 3+: prefab registration (MW_WritheMass, MW_WormNest, MW_WormColony), status effects.
         }
 
         private void OnDestroy()

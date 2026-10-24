@@ -29,6 +29,7 @@ namespace MistWorms
             CommandManager.Instance.AddConsoleCommand(new ScenarioCommand());
             CommandManager.Instance.AddConsoleCommand(new ScenariosCommand());
             CommandManager.Instance.AddConsoleCommand(new DumpCommand());
+            CommandManager.Instance.AddConsoleCommand(new PreviewCommand());
 #endif
         }
 
@@ -139,6 +140,56 @@ namespace MistWorms
                 Print(context, names.Count == 0
                     ? "mw_scenarios: none registered"
                     : $"mw_scenarios ({names.Count}): {string.Join(", ", names)}");
+            }
+        }
+
+        private sealed class PreviewCommand : MWCommand
+        {
+            public override string Name => "mw_preview";
+            public override string Help => "[dev] worm [anim] [count] | mass <n> [compare=<prefab>] | nest | clear - static render preview in front of the player";
+            public override bool IsCheat => true;
+
+            public override List<string> CommandOptionList() => new List<string> { "worm", "mass", "nest", "clear" };
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                if (args.Length == 0)
+                {
+                    Print(context, "usage: mw_preview worm [anim] [count] | mass <n> [compare=<prefab>] | nest | clear");
+                    return;
+                }
+
+                string kind = args[0].ToLowerInvariant();
+                string anim = null;
+                string compare = null;
+                int count = 1;
+                int n = 10;
+                var positional = new List<string>();
+                for (int i = 1; i < args.Length; i++)
+                {
+                    if (args[i].StartsWith("compare=", StringComparison.OrdinalIgnoreCase)) compare = args[i].Substring("compare=".Length);
+                    else positional.Add(args[i]);
+                }
+
+                if (kind == "worm")
+                {
+                    // Either "worm <anim> <count>" or "worm <count>".
+                    foreach (string p in positional)
+                    {
+                        if (int.TryParse(p, out int c)) count = c;
+                        else anim = p;
+                    }
+                }
+                else if (kind == "mass" && positional.Count > 0 && !int.TryParse(positional[0], out n))
+                {
+                    Print(context, "mw_preview mass: <n> must be a number");
+                    return;
+                }
+
+                string error = Dev.Preview.DevPreview.Run(kind, n, anim, count, compare, 0f);
+                Print(context, error != null
+                    ? $"mw_preview: {error}"
+                    : $"mw_preview {kind}: ok ({Dev.Preview.DevPreview.Instance.Warning ?? "no warning"})");
             }
         }
 

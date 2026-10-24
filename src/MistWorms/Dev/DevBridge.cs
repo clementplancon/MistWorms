@@ -27,7 +27,6 @@ namespace MistWorms.Dev
         // Routes the spec defines whose behaviour depends on systems built in later phases (§16).
         private static readonly Dictionary<string, int> PlannedRoutes = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            { "/camera", 2 },
             { "/spawn", 3 },
             { "/hit", 3 },
             { "/attack", 3 },
@@ -274,6 +273,14 @@ namespace MistWorms.Dev
                 case "/dump":
                     req.RequireMethod("POST");
                     DumpRoute(req, reply);
+                    return null;
+                case "/preview":
+                    req.RequireMethod("POST");
+                    PreviewRoute(req, reply);
+                    return null;
+                case "/camera":
+                    req.RequireMethod("POST");
+                    CameraRoute(req, reply);
                     return null;
                 case "/quit":
                     req.RequireMethod("POST");
@@ -565,6 +572,59 @@ namespace MistWorms.Dev
             catch (InvalidOperationException e) { throw new BridgeException(409, e.Message); }
 
             reply.Body = new Dictionary<string, object> { { "id", id }, { "name", ScenarioRunner.Get(id)?.Name ?? name }, { "status", "running" } };
+        }
+
+        private static void PreviewRoute(BridgeRequest req, BridgeReply reply)
+        {
+            string kind = req.String("kind");
+            if (string.IsNullOrWhiteSpace(kind)) throw new BridgeException(400, "missing 'kind' (worm, mass, nest, clear)");
+
+            string error = Preview.DevPreview.Run(kind, MiniJson.GetInt(req.Body, "n", 10), req.String("anim"),
+                MiniJson.GetInt(req.Body, "count", 1), req.String("compare"), MiniJson.GetFloat(req.Body, "distance", 0f));
+            if (error != null) throw new BridgeException(409, error);
+
+            var body = Preview.DevPreview.Instance.Describe();
+            body["stats"] = Preview.DevPreview.Describe(Render.WormRenderer.Last);
+            reply.Body = body;
+        }
+
+        /// <summary>mode "free": pos + lookAt (or neither to freeze the current pose); mode "follow": back to vanilla.</summary>
+        private static void CameraRoute(BridgeRequest req, BridgeReply reply)
+        {
+            string mode = (req.String("mode") ?? "free").ToLowerInvariant();
+            if (mode == "follow")
+            {
+                Preview.DevCamera.Follow();
+            }
+            else if (mode == "free")
+            {
+                List<object> pos = MiniJson.GetList(req.Body, "pos");
+                List<object> look = MiniJson.GetList(req.Body, "lookAt");
+                if (pos == null && look == null) Preview.DevCamera.FreezeHere();
+                else if (pos == null || look == null || pos.Count != 3 || look.Count != 3)
+                    throw new BridgeException(400, "'pos' and 'lookAt' must both be [x,y,z]");
+                else Preview.DevCamera.Free(ToVector(pos), ToVector(look));
+            }
+            else
+            {
+                throw new BridgeException(400, $"unknown camera mode '{mode}' (free, follow)");
+            }
+
+            reply.Body = new Dictionary<string, object>
+            {
+                { "mode", Preview.DevCamera.Active ? "free" : "follow" },
+                { "position", Preview.DevCamera.Position },
+            };
+        }
+
+        private static Vector3 ToVector(List<object> v)
+        {
+            float F(object o)
+            {
+                try { return Convert.ToSingle(o, CultureInfo.InvariantCulture); }
+                catch (Exception) { throw new BridgeException(400, "vector components must be numbers"); }
+            }
+            return new Vector3(F(v[0]), F(v[1]), F(v[2]));
         }
 
         private static void DumpRoute(BridgeRequest req, BridgeReply reply)
