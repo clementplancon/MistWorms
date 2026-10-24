@@ -154,10 +154,11 @@ namespace MistWorms.Dev
             return player.StartAttack(null, false);
         }
 
-        /// <summary>mw_kill: removes every worm without drops and destroys the test colonies. Returns (worms, colonies destroyed).</summary>
-        public static int KillAll(out int coloniesDestroyed)
+        /// <summary>mw_kill: removes every worm without drops, destroys the test colonies and every mass. Returns the worms removed.</summary>
+        public static int KillAll(out int coloniesDestroyed, out int massesDestroyed)
         {
             coloniesDestroyed = 0;
+            massesDestroyed = MassDev.KillAll();
             int worms = 0;
             var snapshot = new List<WormColony>(ColonyRegistry.All);
             foreach (WormColony colony in snapshot)
@@ -303,6 +304,7 @@ namespace MistWorms.Dev
                 sb.Append($" box={c.BoxCenter} +-{c.BoxHalfSize} sim={c.AvgSimMs:0.00}ms (max {c.MaxSimMs:0.00})");
                 lines.Add(sb.ToString());
             }
+            lines.AddRange(MassDev.Summary());
             return lines;
         }
     }

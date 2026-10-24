@@ -47,6 +47,48 @@ namespace MistWorms.Tests
             Assert.Equal(2.0f, s.z);
         }
 
+        [Fact]
+        public void HitSphereIsNineTenthsOfTheRadiusAtFourTenthsOfItsHeight()
+        {
+            Assert.Equal(1.8f, MassMath.HitRadius(2.0f), 5);
+            Assert.Equal(0.8f, MassMath.HitCenterHeight(2.0f), 5);
+        }
+
+        [Fact]
+        public void RadiusSmoothingReachesNinetyFivePercentInThreeTenthsOfASecond()
+        {
+            float shown = 1f;
+            for (int i = 0; i < 30; i++) shown = MassMath.SmoothRadius(shown, 2f, 0.01f);   // 0.3 s at 100 Hz
+            Assert.InRange(shown, 1.94f, 1.96f);
+        }
+
+        [Fact]
+        public void RadiusSmoothingNeverOvershootsNorJumpsWithBigFrames()
+        {
+            Assert.True(MassMath.SmoothRadius(1f, 2f, 10f) <= 2f);
+            Assert.Equal(1f, MassMath.SmoothRadius(1f, 2f, 0f));
+            Assert.True(MassMath.SmoothRadius(2f, 1f, 0.016f) < 2f);
+        }
+
+        [Theory]
+        [InlineData(1, 1f)]
+        [InlineData(10, 1f)]
+        [InlineData(40, 0.25f)]
+        [InlineData(100, 0.1f)]
+        [InlineData(200, 0.1f)]
+        public void KnockbackFactorIsTenOverNClamped(int n, float expected)
+        {
+            Assert.Equal(expected, MassMath.KnockbackFactor(n, 0.1f), 5);
+        }
+
+        [Fact]
+        public void KnockbackFactorFollowsTheConfiguredMinimum()
+        {
+            Assert.Equal(0.05f, MassMath.KnockbackFactor(200, 0.05f), 5);
+            Assert.Equal(0.3f, MassMath.KnockbackFactor(200, 0.3f), 5);
+            Assert.Equal(1f, MassMath.KnockbackFactor(0, 0.1f), 5);
+        }
+
         [Theory]
         [InlineData(0, 12, 12f, true, 0f, 0)]
         [InlineData(1, 12, 12f, true, 0f, 12 % 12)]

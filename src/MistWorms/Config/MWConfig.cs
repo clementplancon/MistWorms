@@ -241,6 +241,10 @@ namespace MistWorms.Config
             public static ConfigEntry<float> DetachDistance;
             public static ConfigEntry<float> DetachDelay;
             public static ConfigEntry<float> KnockbackMinFactor;
+            public static ConfigEntry<float> StreamHeightFactor;
+            public static ConfigEntry<float> StreamLengthPerWorm;
+            public static ConfigEntry<float> StreamMaxLength;
+            public static ConfigEntry<float> RegroupRadius;
 
             internal static void Bind()
             {
@@ -279,6 +283,14 @@ namespace MistWorms.Config
 
                 KnockbackMinFactor = Synced(S, nameof(KnockbackMinFactor), 0.1f,
                     "Lower bound of the knockback multiplier clamp(10 / n, value, 1).", F(0f, 1f));
+                StreamHeightFactor = Synced(S, nameof(StreamHeightFactor), 0.4f,
+                    "Height of a mass flowing through a narrow passage, as a fraction of its dome height (spec §4.7).", F(0.1f, 1f));
+                StreamLengthPerWorm = Synced(S, nameof(StreamLengthPerWorm), 0.08f,
+                    "Metres of ribbon per worm of a flowing mass, up to StreamMaxLength.", F(0.01f, 0.5f));
+                StreamMaxLength = Synced(S, nameof(StreamMaxLength), 6f,
+                    "Longest ribbon of a flowing mass, in metres.", F(1f, 20f));
+                RegroupRadius = Synced(S, nameof(RegroupRadius), 30f,
+                    "Radius in metres within which fleeing worms look for a group to regroup with (spec §4.4).", F(5f, 100f));
             }
         }
 
@@ -334,6 +346,7 @@ namespace MistWorms.Config
             public static ConfigEntry<float> TamedWeight;
             public static ConfigEntry<float> CreatureWeight;
             public static ConfigEntry<float> StructureWeight;
+            public static ConfigEntry<string> ExcludedPrefabs;
             public static ConfigEntry<bool> WakeOnlyByPlayers;
             public static ConfigEntry<float> ActiveRadius;
             public static ConfigEntry<float> CalmDelay;
@@ -354,6 +367,8 @@ namespace MistWorms.Config
                     "Distance weight of wild creatures in target choice.", F(0.1f, 5f));
                 StructureWeight = Synced(S, nameof(StructureWeight), 1.5f,
                     "Distance weight of structures in target choice.", F(0.1f, 5f));
+                ExcludedPrefabs = Synced(S, nameof(ExcludedPrefabs), "SW_DivineWhale",
+                    "Comma separated prefab names that worms and masses never target (SkyWhale compatibility, spec §10.4).");
                 WakeOnlyByPlayers = Synced(S, nameof(WakeOnlyByPlayers), true,
                     "Only players can wake a dormant nest group; creatures fighting sleeping worms wake nothing.");
                 ActiveRadius = Synced(S, nameof(ActiveRadius), 45f,

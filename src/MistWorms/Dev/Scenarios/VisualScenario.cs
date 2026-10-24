@@ -2,7 +2,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using MistWorms.Assets;
+using MistWorms.Config;
 using MistWorms.Dev.Preview;
+using MistWorms.Mass;
 using MistWorms.Render;
 using UnityEngine;
 
@@ -35,6 +37,9 @@ namespace MistWorms.Dev.Scenarios
         protected virtual float WormSpacing => 0.5f;
 
         protected virtual bool TopShot => false;
+
+        /// <summary>A "mass" subject is a real MW_WritheMass (AI frozen, no colony) rather than the static dome of the preview (phase 4B-1).</summary>
+        protected virtual bool UseRealMass => true;
 
         /// <summary>Minimum height of the subject ground above the water level (m).</summary>
         protected virtual float MinHeightAboveWater => 0.5f;
@@ -132,10 +137,12 @@ namespace MistWorms.Dev.Scenarios
                 }
 
                 DevPreview.Instance.WormSpacing = WormSpacing;
+                DevPreview.Instance.RealMass = kind == "mass" && UseRealMass;
                 string error = DevPreview.Run(kind, n, anim, count, compare, distanceParam);
                 ctx.Assert("preview_created", error == null, "no error", error ?? "ok");
                 if (error != null) yield break;
                 DevPreview preview = DevPreview.Instance;
+                if (DevPreview.Instance.RealMass) AssertRealMass(ctx, preview, n);
                 if (preview.Warning != null) ctx.Log("preview warning: " + preview.Warning);
                 if (kind == "mass") ctx.Log($"mass n={preview.MassN} radius={preview.MassRadius:0.00} m, dome height {preview.MassRadius * MassMath.DomeHeightFactor:0.00} m");
 
@@ -176,12 +183,30 @@ namespace MistWorms.Dev.Scenarios
                 if (clutterHidden && ClutterSystem.instance != null) ClutterSystem.instance.enabled = true;
                 if (timeForced && TimeOfDay != 0.5f) ctx.Console($"{VanillaNames.CmdTimeOfDay} -1");
                 DevPreview.Instance.WormSpacing = 0.5f;
+                DevPreview.Instance.RealMass = false;
                 if (!keep)
                 {
                     DevCamera.Follow();
                     DevPreview.Instance.Clear();
                 }
             }
+        }
+
+        /// <summary>The subject is a real, valid mass of the asked size with exactly n x Worm.Health, and what the camera sees is its own visual.</summary>
+        private static void AssertRealMass(ScenarioContext ctx, DevPreview preview, int n)
+        {
+            WritheMassState mass = preview.RealMassState;
+            bool ok = mass != null && mass.Valid;
+            ctx.Assert("real_mass_created", ok, "a valid MW_WritheMass", ok ? mass.ZdoId.ToString() : "none");
+            if (!ok) return;
+
+            int expectedN = Mathf.Min(n < 1 ? 10 : n, MWConfig.Mass.MaxCount.Value);
+            float expectedHp = expectedN * MWConfig.Worm.Health.Value;
+            ctx.Assert("real_mass_count", mass.N == expectedN, expectedN, mass.N);
+            ctx.Assert("real_mass_health", Mathf.Abs(mass.Health - expectedHp) < 0.01f && Mathf.Abs(mass.Character.GetMaxHealth() - expectedHp) < 0.01f,
+                $"{expectedHp:0.#} / {expectedHp:0.#}", $"{mass.Health:0.#} / {mass.Character.GetMaxHealth():0.#}");
+            ctx.Assert("real_mass_has_visual", mass.GetComponent<WritheMassVisual>() != null, true, mass.GetComponent<WritheMassVisual>() != null);
+            ctx.Log($"real mass {mass.ZdoId}: n={mass.N}, name '{mass.Character.GetHoverName()}', hit sphere {(mass.TryGetHitSphere(out _, out float hr) ? hr.ToString("0.00") : "none")} m");
         }
 
         /// <summary>Places the camera at the yaw, nudging by +20 degrees (up to 6 tries) while the line to the subject is blocked.</summary>

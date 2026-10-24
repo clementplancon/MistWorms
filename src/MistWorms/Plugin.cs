@@ -59,6 +59,7 @@ namespace MistWorms
 
             // Before any zone loads, on every peer: a server that meets an unknown prefab hash destroys the ZDO.
             ColonyPrefab.Register();
+            Mass.MassPrefab.Register();
 
             try
             {
@@ -83,7 +84,7 @@ namespace MistWorms
             {
                 LogException("Plugin.OnVanillaPrefabsAvailable", e);
             }
-            // Phase 4+: prefab registration (MW_WritheMass, MW_WormNest), status effects.
+            // Later phases: prefab registration (MW_WormNest), status effects.
         }
 
         private void OnDestroy()

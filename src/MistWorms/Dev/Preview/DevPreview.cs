@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using MistWorms.Assets;
 using MistWorms.Config;
+using MistWorms.Mass;
 using MistWorms.Render;
 using UnityEngine;
 
@@ -36,6 +37,7 @@ namespace MistWorms.Dev.Preview
         private Quaternion _nestRot;
         private GameObject _dummy;
         private bool _registered;
+        private WritheMassState _realMass;
 
         public string Kind { get; private set; } = "none";
         public int MassN { get; private set; }
@@ -52,6 +54,13 @@ namespace MistWorms.Dev.Preview
         public bool Active => Kind != "none";
         /// <summary>Distance between worms of a worm preview (m); set before Show.</summary>
         public float WormSpacing { get; set; } = 0.5f;
+        /// <summary>
+        /// Set before Show: a "mass" preview creates a real <c>MW_WritheMass</c> (AI frozen, no colony) instead of drawing the dome and its worms
+        /// itself (plan 4B-1 point 8). The renderer then shows it through its own <see cref="WritheMassVisual"/>.
+        /// </summary>
+        public bool RealMass { get; set; }
+        /// <summary>The real mass of the current preview, or null.</summary>
+        public WritheMassState RealMassState => _realMass;
         /// <summary>Largest dimension of the subject (dome diameter, comparison creature, worm row), for camera framing.</summary>
         public float Size => Radius * 2f;
 
@@ -69,6 +78,8 @@ namespace MistWorms.Dev.Preview
             Kind = "none";
             if (_dummy != null) UnityEngine.Object.Destroy(_dummy);
             _dummy = null;
+            if (_realMass != null) MassDev.Destroy(_realMass);
+            _realMass = null;
             if (_registered && WormRenderer.Instance != null) WormRenderer.Instance.Unregister(this);
             _registered = false;
         }
@@ -226,11 +237,21 @@ namespace MistWorms.Dev.Preview
             Vector3 scale = MassMath.DomeScale(r);
             MassN = n;
             MassRadius = r;
-            _hasDome = true;
-            _dome = Matrix4x4.TRS(origin, Quaternion.identity, scale);
 
-            // Surface worms on a Fibonacci spiral over the dome (spec §12.1), crawling, oriented tangent to the surface.
-            int visible = Mathf.Min(n, MWConfig.Performance.MaxVisibleSurfaceWorms.Value);
+            int visible = 0;
+            if (RealMass)
+            {
+                // A real creature: its own visual draws the dome and the surface worms (WritheMassVisual), no colony, AI frozen.
+                _realMass = MassDev.SpawnAt(origin, n, ZDOID.None, freezeAI: true);
+                if (_realMass == null) return "could not create the real mass (MW_WritheMass not registered, or no floor under the preview)";
+            }
+            else
+            {
+                _hasDome = true;
+                _dome = Matrix4x4.TRS(origin, Quaternion.identity, scale);
+                // Surface worms on a Fibonacci spiral over the dome (spec §12.1), crawling, oriented tangent to the surface.
+                visible = Mathf.Min(n, MWConfig.Performance.MaxVisibleSurfaceWorms.Value);
+            }
             for (int i = 0; i < visible; i++)
             {
                 float y = 1f - (i + 0.5f) / visible * 0.95f; // unit-hemisphere height; stops short of the skirt

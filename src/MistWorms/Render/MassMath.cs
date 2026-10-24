@@ -26,6 +26,38 @@ namespace MistWorms.Render
 
         public static Vector3 DomeScale(float radius) =>
             new Vector3(radius, DomeHeightFactor * radius, radius);
+
+        /// <summary>Hit sphere radius of a mass in dome form, as a fraction of r(n) (spec §4.5, decisions.md 78).</summary>
+        public const float HitRadiusFactor = 0.9f;
+
+        /// <summary>Height of the hit sphere centre above the mass root, as a fraction of r(n).</summary>
+        public const float HitCenterHeightFactor = 0.4f;
+
+        /// <summary>Time constant of the displayed radius (spec §4.5): about 95 % of a change is shown after this long.</summary>
+        public const float RadiusSmoothSeconds = 0.3f;
+
+        public static float HitRadius(float radius) => HitRadiusFactor * radius;
+
+        public static float HitCenterHeight(float radius) => HitCenterHeightFactor * radius;
+
+        /// <summary>
+        /// One frame of the radius smoothing: exponential approach of <paramref name="shown"/> to <paramref name="target"/>, 95 % done
+        /// after <see cref="RadiusSmoothSeconds"/>. Never overshoots; a non positive dt changes nothing.
+        /// </summary>
+        public static float SmoothRadius(float shown, float target, float dt)
+        {
+            if (dt <= 0f) return shown;
+            float k = 1f - (float)Math.Exp(-3.0 * dt / RadiusSmoothSeconds);
+            return shown + (target - shown) * k;
+        }
+
+        /// <summary>Knockback multiplier of a mass of <paramref name="n"/> worms: clamp(10 / n, min, 1) (spec §4.8).</summary>
+        public static float KnockbackFactor(int n, float min)
+        {
+            float f = 10f / (n < 1 ? 1 : n);
+            if (f < min) f = min;
+            return f > 1f ? 1f : f;
+        }
     }
 
     /// <summary>Flipbook frame selection (spec §12.1), pure so it can be tested.</summary>

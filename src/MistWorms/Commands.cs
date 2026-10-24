@@ -23,7 +23,7 @@ namespace MistWorms
             CommandManager.Instance.AddConsoleCommand(new TpMineCommand());
             CommandManager.Instance.AddConsoleCommand(new FreezeCommand());
             CommandManager.Instance.AddConsoleCommand(new GlossCommand());
-            CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_mass", "<n> - spawn a writhing mass of n worms in front of the player", 4));
+            CommandManager.Instance.AddConsoleCommand(new MassCommand());
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_nest", "- place a worm nest in front of the player", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_wake", "- wake every dormant group of the current mine", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_calm", "- send every active group of the current mine back to dormancy", 7));
@@ -136,16 +136,50 @@ namespace MistWorms
             }
         }
 
+        private sealed class MassCommand : MWCommand
+        {
+            public override string Name => "mw_mass";
+            public override string Help => "[dev] <n> [nocolony] [frozen] - spawn a writhing mass of n worms in front of the player, attached to the local colony (created if needed)";
+            public override bool IsCheat => true;
+
+            public override List<string> CommandOptionList() => new List<string> { "nocolony", "frozen" };
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                if (args.Length == 0 || !int.TryParse(args[0], out int n) || n < 1)
+                {
+                    Print(context, "usage: mw_mass <n> [nocolony] [frozen]");
+                    return;
+                }
+
+                bool withColony = true, frozen = false;
+                for (int i = 1; i < args.Length; i++)
+                {
+                    if (string.Equals(args[i], "nocolony", StringComparison.OrdinalIgnoreCase)) withColony = false;
+                    else if (string.Equals(args[i], "frozen", StringComparison.OrdinalIgnoreCase)) frozen = true;
+                    else
+                    {
+                        Print(context, $"mw_mass: unknown option '{args[i]}' (nocolony, frozen)");
+                        return;
+                    }
+                }
+
+                Mass.WritheMassState mass = Dev.MassDev.SpawnInFront(n, withColony, out Colony.WormColony colony, out string how);
+                mass.FreezeAI = frozen;
+                Print(context, $"mw_mass: mass {mass.ZdoId} of {mass.N} worms (hp {mass.Health:0.#}, radius {mass.TargetRadius:0.00} m), {(colony != null ? how + " colony " + colony.ZdoId : "no colony")}");
+            }
+        }
+
         private sealed class KillCommand : MWCommand
         {
             public override string Name => "mw_kill";
-            public override string Help => "[dev] - kill every virtual worm without drops and remove the test colonies";
+            public override string Help => "[dev] - kill every virtual worm without drops, remove the test colonies and every mass";
             public override bool IsCheat => true;
 
             protected override void Execute(string[] args, Terminal context)
             {
-                int worms = Dev.ColonyDev.KillAll(out int colonies);
-                Print(context, $"mw_kill: {worms} worms removed, {colonies} test colonies destroyed");
+                int worms = Dev.ColonyDev.KillAll(out int colonies, out int masses);
+                Print(context, $"mw_kill: {worms} worms removed, {colonies} test colonies and {masses} masses destroyed");
             }
         }
 

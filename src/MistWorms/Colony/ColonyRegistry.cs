@@ -18,6 +18,18 @@ namespace MistWorms.Colony
 
         public static void Remove(WormColony colony) => s_all.Remove(colony);
 
+        /// <summary>The loaded colony whose network object has this id, or null (a mass finds its colony through it).</summary>
+        public static WormColony FindById(ZDOID id)
+        {
+            if (id == ZDOID.None) return null;
+            for (int i = 0; i < s_all.Count; i++)
+            {
+                WormColony c = s_all[i];
+                if (c != null && c.ZdoId == id) return c;
+            }
+            return null;
+        }
+
         /// <summary>The colony whose box contains <paramref name="pos"/>, or null (spec §8.4).</summary>
         public static WormColony FindFor(Vector3 pos)
         {

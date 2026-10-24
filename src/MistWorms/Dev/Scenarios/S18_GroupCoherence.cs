@@ -133,7 +133,7 @@ namespace MistWorms.Dev.Scenarios
             WormColony colony = ColonyDev.FindOrCreateColony(player, out string how);
             if (!ctx.Assert(tag + "_colony", colony != null, true, how)) yield break;
 
-            if (corridor) ClearCreatures(ctx, player);
+            ClearCreatures(ctx, player);   // also in the open: the Plains send goblins that hit the worms (a_no_deaths)
             if (corridor) PickMinePositions(player, colony, wanted, positions);
             else PickOpenPositions(player, colony, wanted, positions);
             ctx.Assert(tag + "_worms_placed", positions.Count == wanted, wanted, positions.Count);
@@ -182,6 +182,10 @@ namespace MistWorms.Dev.Scenarios
             var occupied = new bool[sectors];
 
             long pairsTotal = 0, pairsGood = 0;
+            // Pairs that are too close in the steady part, by the states of the two worms (smaller state first) and by approach ring of each worm
+            // (ring 0 = the inner ring, -1 = no rank): who overlaps whom.
+            var closeByState = new int[8, 8];
+            var closeByRing = new int[8];
             float worstSample = 1f;
             int blocked = 0, unreachableStuck = 0, groundViolations = 0, wallViolations = 0, boxViolations = 0;
             float lastCoverage = 0f, bestCoverage = 0f;
@@ -272,6 +276,13 @@ namespace MistWorms.Dev.Scenarios
                             if (d >= NeighborDistance) continue;
                             pairs++;
                             if (d > MinMiddleGap) good++;
+                            else if (elapsed >= SteadyAfter)
+                            {
+                                int si = store.state[i], sj = store.state[j];
+                                closeByState[Mathf.Min(si, sj) & 7, Mathf.Max(si, sj) & 7]++;
+                                closeByRing[RingOf(store, i, colony)]++;
+                                closeByRing[RingOf(store, j, colony)]++;
+                            }
                         }
                     }
                     if (elapsed >= SteadyAfter && pairs > 0)
@@ -355,6 +366,14 @@ namespace MistWorms.Dev.Scenarios
             float fraction = pairsTotal > 0 ? pairsGood / (float)pairsTotal : 0f;
             int strikes = colony.StrikesLanded + colony.StrikesMissed;
             Vector3 drift = player.transform.position - playerStart;
+            var close = new System.Text.StringBuilder();
+            for (int a = 0; a < 8; a++)
+                for (int b = a; b < 8; b++)
+                    if (closeByState[a, b] > 0) close.Append($" {(WormState)a}+{(WormState)b}={closeByState[a, b]}");
+            var rings = new System.Text.StringBuilder();
+            for (int r = 0; r < 8; r++)
+                if (closeByRing[r] > 0) rings.Append($" {(r == 7 ? "no rank" : "ring " + r)}={closeByRing[r]}");
+            ctx.Log($"{tag}: pairs too close ({pairsTotal - pairsGood}) by states:{(close.Length > 0 ? close.ToString() : " none")}; worm sides by approach ring:{(rings.Length > 0 ? rings.ToString() : " none")}");
             ctx.Log($"{tag}: pairs {pairsGood}/{pairsTotal} = {fraction * 100f:0.0} % (worst sample {worstSample * 100f:0.0} %), coverage final {lastCoverage:0} deg (best {bestCoverage:0}), " +
                     $"{lastNear} worms within {SectorRadius:0} m, strikes {colony.StrikesLanded} landed / {colony.StrikesMissed} missed, " +
                     $"sim avg {colony.AvgSimMs:0.000} ms / max {colony.MaxSimMs:0.000} ms");
@@ -368,6 +387,9 @@ namespace MistWorms.Dev.Scenarios
             foreach (string cause in colony.DeathCauses) ctx.Log($"{tag}: death cause: {cause}");
             ctx.Assert(tag + "_pairs_apart", pairsTotal > 0 && fraction >= MinPairFraction, $">= {MinPairFraction * 100f:0} % of {pairsTotal} neighbouring pairs > {MinMiddleGap} m apart", $"{fraction * 100f:0.0} %");
             ctx.Assert(tag + "_player_alive", !player.IsDead(), true, !player.IsDead());
+            ctx.Log($"{tag}: approach places: {colony.ApproachEvaluations} evaluations, first place invalid {colony.ApproachFirstInvalid} " +
+                    $"({(colony.ApproachEvaluations > 0 ? colony.ApproachFirstInvalid * 100f / colony.ApproachEvaluations : 0f):0.0} %), rescued by a later place {colony.ApproachRescued}, " +
+                    $"none valid (aims at the target) {colony.ApproachNoPlace}");
             ctx.Log($"{tag}: player pinned every {PairInterval} s; largest drift between two pins {maxDrift:0.00} m (informative), final {drift.magnitude:0.00} m");
             ctx.Assert(tag + "_worms_struck", strikes > 0, "> 0 strikes", strikes);
             ctx.Assert(tag + "_colony_not_disabled", !colony.Disabled, "enabled", colony.Disabled ? colony.DisabledReason : "enabled");
@@ -411,12 +433,22 @@ namespace MistWorms.Dev.Scenarios
         /// Removes the vanilla non player, untamed creatures within 40 m (a mine has some: their attacks reach our hit proxies and kill worms). The
         /// ones this peer does not own are claimed first.
         /// </summary>
-        private static void ClearCreatures(ScenarioContext ctx, Player player)
+        /// <summary>Approach ring (0-6) of worm <paramref name="i"/>, 7 when it has no rank.</summary>
+        private static int RingOf(WormStore store, int i, WormColony colony)
+        {
+            int rank = store.approachRank[i];
+            if (rank < 0) return 7;
+            int ring = WormMath.ApproachPlace(rank, 0f, MWConfig.Worm.CobraRange.Value * 0.9f, out _, out _);
+            return Mathf.Min(ring, 6);
+        }
+
+        internal static void ClearCreatures(ScenarioContext ctx, Player player)
         {
             var found = new List<Character>();
             foreach (Character c in Character.GetAllCharacters())
             {
                 if (c == null || c.IsPlayer() || c.IsTamed()) continue;
+                if (Mass.WritheMassState.TryGet(c, out _)) continue;     // ours (MW_ prefabs) are not vanilla creatures
                 if ((c.transform.position - player.transform.position).sqrMagnitude > CreatureClearRadius * CreatureClearRadius) continue;
                 found.Add(c);
             }

@@ -148,6 +148,7 @@ namespace MistWorms.Colony
             _rng = new System.Random(Environment.TickCount ^ GetInstanceID());
             _dropRng = WormDrops.NewRng(GetInstanceID());
             _nview.Register<int, int, ZPackage>(MWNames.RpcWormHit, RPC_WormHit);
+            _nview.Register<ZDOID, int, Vector3, ZPackage>(MWNames.RpcMassDissolve, RPC_MassDissolve);
             InitPaths();
 
             ZDO zdo = _nview.GetZDO();

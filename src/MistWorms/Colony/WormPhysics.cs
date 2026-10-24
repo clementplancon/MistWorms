@@ -28,6 +28,7 @@ namespace MistWorms.Colony
         public const float FallProbe = 20f;
 
         private static int s_solid;
+        private static int s_characterSolid;
         private static int s_viewBlock;
 
         /// <summary>BaseAI.m_solidRayMask (BaseAI.cs:221).</summary>
@@ -37,6 +38,26 @@ namespace MistWorms.Colony
             {
                 if (s_solid == 0) Init();
                 return s_solid;
+            }
+        }
+
+        /// <summary>
+        /// <see cref="SolidMask"/> without the layers the <c>character</c> layer does not collide with in the project: what a creature body can
+        /// really stand on. A sampled "floor" on another layer (small props, vehicles) is not a floor for a mass: it would fall through it.
+        /// </summary>
+        public static int CharacterSolidMask
+        {
+            get
+            {
+                if (s_characterSolid == 0)
+                {
+                    int character = LayerMask.NameToLayer(VanillaNames.LayerCharacter);
+                    int mask = SolidMask;
+                    for (int layer = 0; layer < 32; layer++)
+                        if ((mask & (1 << layer)) != 0 && character >= 0 && Physics.GetIgnoreLayerCollision(character, layer)) mask &= ~(1 << layer);
+                    s_characterSolid = mask != 0 ? mask : SolidMask;
+                }
+                return s_characterSolid;
             }
         }
 

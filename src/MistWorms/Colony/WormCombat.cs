@@ -25,6 +25,11 @@ namespace MistWorms.Colony
         public int StrikesLanded { get; private set; }
         public int StrikesMissed { get; private set; }
         // Hunting path requests (plan 4B uses the vanilla pathfinder too): a route is complete when it ends at the goal (1 m horizontally, 1.5 m vertically).
+        // Approach places (plan 4A-3): evaluations, first place invalid, rescued by a later place, none valid (aims at the target).
+        public int ApproachEvaluations { get; private set; }
+        public int ApproachFirstInvalid { get; private set; }
+        public int ApproachRescued { get; private set; }
+        public int ApproachNoPlace { get; private set; }
         public int PathRequests { get; private set; }
         public int PathComplete { get; private set; }
         public int PathPartial { get; private set; }
@@ -48,6 +53,7 @@ namespace MistWorms.Colony
             StrikesLanded = 0;
             StrikesMissed = 0;
             PathRequests = PathComplete = PathPartial = PathFailed = 0;
+            ApproachEvaluations = ApproachFirstInvalid = ApproachRescued = ApproachNoPlace = 0;
             DeathCauses.Clear();
             LastStrikeGap = -1f;
         }

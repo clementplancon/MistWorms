@@ -214,6 +214,10 @@ def cmd_mass(a: argparse.Namespace) -> int:
     body: dict[str, Any] = {"n": a.n}
     if a.force:
         body["force"] = True
+    if a.no_colony:
+        body["colony"] = False
+    if a.freeze:
+        body["freeze"] = True
     emit(Bridge(a.port).post("/mass", body))
     return 0
 
@@ -568,9 +572,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--nest-index", type=int)
     sp.add_argument("--force", action="store_true", help="ignore population caps")
 
-    sp = add("mass", cmd_mass, "create a mass of N worms in front of the player")
+    sp = add("mass", cmd_mass, "create a real writhing mass of N worms in front of the player, attached to the local colony")
     sp.add_argument("n", type=int)
     sp.add_argument("--force", action="store_true")
+    sp.add_argument("--no-colony", action="store_true", help="no colony: the mass cannot dissolve into worms")
+    sp.add_argument("--freeze", action="store_true", help="freeze the AI of this mass")
 
     sp = add("nest", cmd_nest, "create a nest in front of the player")
     sp.add_argument("--force", action="store_true")

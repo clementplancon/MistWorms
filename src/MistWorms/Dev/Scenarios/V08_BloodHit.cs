@@ -117,6 +117,15 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert("death_recolored", WormEffects.DeathRecolored > 0, "> 0 systems", WormEffects.DeathRecolored);
                 ctx.Assert("death_pieces_removed", death.GetComponentsInChildren<ZSFX>(true).Length == 0 && FindChild(death, "Carapace") == null, true,
                     $"zsfx={death.GetComponentsInChildren<ZSFX>(true).Length} carapace={(FindChild(death, "Carapace") != null)}");
+                // The vanilla effect that real seekers play must be untouched by our templates (nothing of the ZNetScene is ever modified).
+                foreach (string vanillaFx in new[] { VanillaNames.FxSeekerDeath, VanillaNames.FxSeekerHurt })
+                {
+                    bool intact = WormEffects.VanillaIntact(vanillaFx, out string intactDetail);
+                    ctx.Assert("vanilla_prefab_untouched_" + vanillaFx, intact, "same network view, Legs/Wings/Carapace and start colour as before the first template", intactDetail);
+                }
+                bool counted = WormEffects.VanillaCounts(VanillaNames.FxSeekerDeath, out int views, out int legs, out int wings, out int carapace);
+                ctx.Assert("vanilla_death_prefab_keeps_its_pieces", counted && views > 0 && legs > 0 && wings > 0 && carapace > 0, "ZNetView, Legs, Wings and Carapace all present",
+                    $"znetviews {views}, Legs {legs}, Wings {wings}, Carapace {carapace}");
                 string missing = WormEffects.MissingSounds();
                 ctx.Assert("sounds_resolved", missing.Length == 0, "none missing", missing.Length == 0 ? "ok" : missing);
 

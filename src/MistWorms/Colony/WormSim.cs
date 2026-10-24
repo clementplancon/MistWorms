@@ -27,7 +27,7 @@ namespace MistWorms.Colony
         // Group behaviour of free worms (spec §3.3, §11.1; plan 4A-3). One grid query per worm and step feeds all of it.
         private const float SeparationRadius = 0.3f;       // between body middles
         private const int SeparationNeighbors = 6;
-        private const float SeparationWeight = 1f;
+        private const float SeparationWeight = 1.5f;
         private const float SeparationQueryRadius = SeparationRadius + 2f * WormMath.BodyMidOffset; // head distance that can still mean middles < 0.3 m apart
         private const int NeighborQueryCount = 8;          // the 6 separation neighbours plus 2 for cohesion and alignment
         private const float NeighborMaxDy = 1.5f;
@@ -41,7 +41,10 @@ namespace MistWorms.Colony
         private const float ApproachRangeFactor = 0.9f;    // point = target + direction x CobraRange x 0.9
         private const float ApproachReach = 0.3f;          // a hunter strikes only once this close to its place...
         private const float ApproachPatience = 4f;         // ...or after this long in Hunting without getting there (anti-blocking)
+        private const float WindupNudgeSpeed = 0.35f;      // m/s of the sideways slide of a worm in its windup
+        private const float WindupNudgeMinPush = 0.05f;    // separation push (a unit is a worm on top of another) under which it stays still
         private const float RecoverSpeedFactor = 0.3f;     // a worm recovering from a strike shuffles to its place at this share of the speed
+        private const int ApproachTries = 8;              // places tried in order before aiming at the target itself
         private const float ApproachMaxDy = 0.6f;          // floor of the point within this of the target's feet
         private const float GridInterval = 0.1f;
         private const float StuckWindow = 3f;              // spec §11.1: no 0.5 m of progress in 3 s
@@ -328,19 +331,35 @@ namespace MistWorms.Colony
                 s.approachNext[i] = now + ApproachInterval;
                 s.approachOffset[i] = Vector3.zero;
                 s.approachMode[i] = 2;
-                WormMath.ApproachPlace(s.approachRank[i], s.approachBase[i], MWConfig.Worm.CobraRange.Value * ApproachRangeFactor, out float a, out float radius);
-                Vector3 point = tp + new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * radius;
-#if MW_DEV
-                _frameApproach++;
-#endif
-                if (Physics.Raycast(point + Vector3.up, Vector3.down, out RaycastHit floor, 2.5f, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore)
-                    && Mathf.Abs(floor.point.y - tp.y) <= ApproachMaxDy
-                    && !Physics.Linecast(tp + Vector3.up * WormPhysics.WallHeight, floor.point + Vector3.up * WormPhysics.WallHeight,
-                        WormPhysics.SolidMask, QueryTriggerInteraction.Ignore))
+                // The place of the rank; when it is not valid (no floor, wall, a step too high on uneven ground) the following places of the
+                // order are tried (the rest of the ring, then the next ring), up to ApproachTries, instead of aiming at the target. The rank stays.
+                for (int attempt = 0; attempt < ApproachTries; attempt++)
                 {
-                    s.approachOffset[i] = floor.point - tp;
-                    s.approachMode[i] = 1;
+                    WormMath.ApproachPlace(s.approachRank[i] + attempt, s.approachBase[i], MWConfig.Worm.CobraRange.Value * ApproachRangeFactor, out float a, out float radius);
+                    Vector3 point = tp + new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * radius;
+#if MW_DEV
+                    _frameApproach++;
+                    if (attempt == 0) ApproachEvaluations++;
+#endif
+                    if (Physics.Raycast(point + Vector3.up, Vector3.down, out RaycastHit floor, 2.5f, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore)
+                        && Mathf.Abs(floor.point.y - tp.y) <= ApproachMaxDy
+                        && !Physics.Linecast(tp + Vector3.up * WormPhysics.WallHeight, floor.point + Vector3.up * WormPhysics.WallHeight,
+                            WormPhysics.SolidMask, QueryTriggerInteraction.Ignore))
+                    {
+                        s.approachOffset[i] = floor.point - tp;
+                        s.approachMode[i] = 1;
+#if MW_DEV
+                        if (attempt > 0) ApproachRescued++;
+#endif
+                        break;
+                    }
+#if MW_DEV
+                    if (attempt == 0) ApproachFirstInvalid++;
+#endif
                 }
+#if MW_DEV
+                if (s.approachMode[i] == 2) ApproachNoPlace++;
+#endif
             }
             return tp + s.approachOffset[i];
         }
@@ -368,6 +387,7 @@ namespace MistWorms.Colony
                 Vector3 d = target.transform.position - s.pos[i];
                 s.heading[i] = WormMath.TurnToward(s.heading[i], WormMath.HeadingOf(d.x, d.z),
                     MWConfig.Worm.TurnSpeed.Value * Mathf.Deg2Rad * dt);
+                WindupNudge(i, target, now, dt);
             }
 
             if (FireCheck(i, false)) { SetState(i, WormState.Fleeing, now); return; }
@@ -386,6 +406,31 @@ namespace MistWorms.Colony
         /// Recovery of a strike: the worm shuffles toward its place at 0.3 x the speed, steering only by its place and the separation (it
         /// moves off a neighbour it overlaps), and never leaves the cobra range. The windup stays motionless.
         /// </summary>
+        /// <summary>
+        /// A worm winding up does not crawl, so the separation could not act on it and its neighbours kept overlapping it (S18 a). It may slide
+        /// sideways away from the neighbours, slowly, without turning (the heading stays on the target) and never out of cobra range.
+        /// </summary>
+        private void WindupNudge(int i, Player target, float now, float dt)
+        {
+            WormStore s = Store;
+            Vector3 pos = s.pos[i];
+            Vector3 push = GroupSteer(i, pos, s.heading[i], out _);
+            push.y = 0f;
+            if (push.sqrMagnitude < WindupNudgeMinPush * WindupNudgeMinPush) return;
+
+            StepResult result = WormPhysics.TryStep(pos, push.normalized * (WindupNudgeSpeed * dt), out Vector3 newPos, out Vector3 newNormal);
+            if (result != StepResult.Moved || !InBox(newPos)) return;
+            s.pos[i] = newPos;
+            if (SurfaceDistance(i, target) > MWConfig.Worm.CobraRange.Value)
+            {
+                s.pos[i] = pos;
+                return;
+            }
+            s.groundNormal[i] = Vector3.Lerp(s.groundNormal[i], newNormal, 0.35f).normalized;
+            s.lastSpeed[i] = dt > 1e-4f ? (newPos - pos).magnitude / dt : 0f;
+            s.nextGroundTime[i] = now + GroundInterval;
+        }
+
         private void RecoverMove(int i, Player target, float now, float dt)
         {
             WormStore s = Store;

@@ -228,6 +228,9 @@ namespace MistWorms.Colony
                     Plugin.Log.LogWarning($"[Effects] {name} carries a Ragdoll, skipped");
                     continue;
                 }
+#if MW_DEV
+                Snapshot(prefab);
+#endif
                 try
                 {
                     slot.Template = Build(prefab, slot);
@@ -265,12 +268,32 @@ namespace MistWorms.Colony
                 s_holder.SetActive(false);
                 Object.DontDestroyOnLoad(s_holder);
             }
+            // A template is always a copy that lives under our own holder, never an object of the ZNetScene: everything the preparation changes
+            // (pieces removed, sizes, colours) must stay out of the vanilla prefab, whose effect real seekers keep playing.
             GameObject clone = Object.Instantiate(prefab, s_holder.transform);
+            if (ReferenceEquals(clone, prefab) || clone.GetInstanceID() == prefab.GetInstanceID() || !clone.transform.IsChildOf(s_holder.transform))
+                throw new InvalidOperationException($"template of {prefab.name} is not a copy under the holder");
             clone.name = "MW_" + prefab.name;
             foreach (ZNetView view in clone.GetComponentsInChildren<ZNetView>(true)) Object.DestroyImmediate(view);
             slot.Prepare?.Invoke(clone);
             clone.SetActive(false);
+
+            // Checked, not assumed: a template that still has a network view or the pieces it should have lost is thrown away.
+            int views = clone.GetComponentsInChildren<ZNetView>(true).Length;
+            if (views != 0 || (slot == s_death && (clone.GetComponentsInChildren<ZSFX>(true).Length != 0 || FindByName(clone, "Carapace") != null)))
+            {
+                string detail = $"{prefab.name}: znetviews {views}, zsfx {clone.GetComponentsInChildren<ZSFX>(true).Length}, carapace {FindByName(clone, "Carapace") != null}, clone id {clone.GetInstanceID()}, prefab id {prefab.GetInstanceID()}";
+                Object.DestroyImmediate(clone);
+                throw new InvalidOperationException("template not clean after preparation (" + detail + ")");
+            }
             return clone;
+        }
+
+        private static Transform FindByName(GameObject root, string name)
+        {
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+                if (t != null && t.name == name) return t;
+            return null;
         }
 
         // ---- preparation of the seeker effects
@@ -481,7 +504,14 @@ namespace MistWorms.Colony
                 for (int k = 0; k < sub.subEmittersCount; k++)
                 {
                     ParticleSystem child = sub.GetSubEmitterSystem(k);
-                    if (child != null && seen.Add(child)) list.Add(child);
+                    if (child == null || !seen.Add(child)) continue;
+                    // A sub-emitter that is not part of the copy would be an object of the vanilla prefab (or of another asset): left alone.
+                    if (!child.transform.IsChildOf(root.transform))
+                    {
+                        Plugin.Log.LogWarning($"[Effects] sub-emitter {child.name} of {list[n].name} is outside the template {root.name}: not modified");
+                        continue;
+                    }
+                    list.Add(child);
                 }
             }
             return list;
@@ -514,6 +544,69 @@ namespace MistWorms.Colony
         }
 
 #if MW_DEV
+        // What a vanilla effect prefab looks like before any template is made from it, to prove later that nothing of it was changed (V08).
+        private sealed class PrefabState
+        {
+            public int NetViews, Legs, Wings, Carapace;
+            public Color RootStartMin, RootStartMax;
+            public string Describe() => $"znetviews {NetViews}, Legs {Legs}, Wings {Wings}, Carapace {Carapace}, root start colour {RootStartMin}/{RootStartMax}";
+        }
+
+        private static readonly Dictionary<string, PrefabState> s_snapshots = new Dictionary<string, PrefabState>();
+
+        private static PrefabState Read(GameObject prefab)
+        {
+            var state = new PrefabState { NetViews = prefab.GetComponentsInChildren<ZNetView>(true).Length };
+            foreach (Transform t in prefab.GetComponentsInChildren<Transform>(true))
+            {
+                if (t == null) continue;
+                if (t.name == "Legs") state.Legs++;
+                else if (t.name == "Wings") state.Wings++;
+                else if (t.name == "Carapace") state.Carapace++;
+            }
+            ParticleSystem root = prefab.GetComponent<ParticleSystem>() ?? prefab.GetComponentInChildren<ParticleSystem>(true);
+            if (root != null)
+            {
+                ParticleSystem.MinMaxGradient g = root.main.startColor;
+                state.RootStartMin = g.mode == ParticleSystemGradientMode.TwoColors ? g.colorMin : g.color;
+                state.RootStartMax = g.mode == ParticleSystemGradientMode.TwoColors ? g.colorMax : g.color;
+            }
+            return state;
+        }
+
+        private static void Snapshot(GameObject prefab)
+        {
+            if (!s_snapshots.ContainsKey(prefab.name)) s_snapshots[prefab.name] = Read(prefab);
+        }
+
+        /// <summary>
+        /// True when the vanilla prefab <paramref name="name"/> still looks like it did when the first template was made from it (V08): same
+        /// network view, same Legs, Wings and Carapace, same start colour on its first particle system.
+        /// </summary>
+        public static bool VanillaIntact(string name, out string detail)
+        {
+            detail = null;
+            GameObject prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(name) : null;
+            if (prefab == null) { detail = name + " is not in the ZNetScene"; return false; }
+            if (!s_snapshots.TryGetValue(name, out PrefabState before)) { detail = "no snapshot (no template was ever made from it)"; return false; }
+            PrefabState now = Read(prefab);
+            bool same = now.NetViews == before.NetViews && now.Legs == before.Legs && now.Wings == before.Wings && now.Carapace == before.Carapace
+                        && now.RootStartMin == before.RootStartMin && now.RootStartMax == before.RootStartMax;
+            detail = same ? "unchanged: " + now.Describe() : $"CHANGED: before [{before.Describe()}], now [{now.Describe()}]";
+            return same;
+        }
+
+        /// <summary>Current network views and Legs, Wings, Carapace counts of the vanilla prefab (V08 asserts the seeker death effect still has them all).</summary>
+        public static bool VanillaCounts(string name, out int views, out int legs, out int wings, out int carapace)
+        {
+            views = legs = wings = carapace = 0;
+            GameObject prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(name) : null;
+            if (prefab == null) return false;
+            PrefabState now = Read(prefab);
+            views = now.NetViews; legs = now.Legs; wings = now.Wings; carapace = now.Carapace;
+            return true;
+        }
+
         /// <summary>The last visual effect instance played (V08 measures its particles).</summary>
         public static GameObject LastFx { get; private set; }
 

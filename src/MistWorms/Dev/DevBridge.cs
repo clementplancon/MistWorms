@@ -27,7 +27,6 @@ namespace MistWorms.Dev
         // Routes the spec defines whose behaviour depends on systems built in later phases (§16).
         private static readonly Dictionary<string, int> PlannedRoutes = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            { "/mass", 4 },
             { "/nest", 7 },
             { "/perf", 8 },
         };
@@ -246,6 +245,10 @@ namespace MistWorms.Dev
                 case "/spawn":
                     req.RequireMethod("POST");
                     SpawnRoute(req, reply);
+                    return null;
+                case "/mass":
+                    req.RequireMethod("POST");
+                    MassRoute(req, reply);
                     return null;
                 case "/state":
                     req.RequireMethod("GET");
@@ -481,6 +484,29 @@ namespace MistWorms.Dev
             };
         }
 
+        /// <summary>{n, colony = true, freeze = false}: a writhing mass of n worms in front of the player, attached to the local colony (see MassDev).</summary>
+        private static void MassRoute(BridgeRequest req, BridgeReply reply)
+        {
+            RequirePlayer();
+            int n = MiniJson.GetInt(req.Body, "n", 10);
+            if (n < 1) throw new BridgeException(400, "'n' must be at least 1");
+            bool withColony = !MiniJson.Has(req.Body, "colony") || MiniJson.GetBool(req.Body, "colony");
+            bool freeze = MiniJson.GetBool(req.Body, "freeze");
+
+            Mass.WritheMassState mass;
+            Colony.WormColony colony;
+            string how;
+            try { mass = MassDev.SpawnInFront(n, withColony, out colony, out how); }
+            catch (InvalidOperationException e) { throw new BridgeException(409, e.Message); }
+            mass.FreezeAI = freeze;
+
+            Dictionary<string, object> body = MassDev.Json(mass);
+            body["requested"] = n;
+            body["colonySource"] = how;
+            body["colonyKind"] = colony != null ? colony.Kind.ToString() : null;
+            reply.Body = body;
+        }
+
         /// <summary>GET /state[?worms=1]: colonies (and optionally every worm) plus the local player's health and gear.</summary>
         private static void StateRoute(BridgeRequest req, BridgeReply reply)
         {
@@ -520,6 +546,7 @@ namespace MistWorms.Dev
             reply.Body = new Dictionary<string, object>
             {
                 { "colonies", colonies },
+                { "masses", MassDev.JsonList() },
                 { "frozen", Colony.WormColony.Frozen },
                 { "proxyLayer", Colony.ProxyLayer.LayerName },
                 { "bites", BitesJson() },
