@@ -110,6 +110,7 @@ namespace MistWorms.Tests
             Assert.Equal(-1, s.pathSlot[i]);
             Assert.Equal(-1, s.nestIndex[i]);
             Assert.Equal(-1, s.poolIndex[i]);
+            Assert.Equal(-1, s.proxyIndex[i]);
             Assert.Equal(0f, s.animTime[i]);
             Assert.Equal((byte)WormState.Idle, s.state[i]);
         }

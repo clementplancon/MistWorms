@@ -12,5 +12,9 @@ namespace MistWorms
         public const string ZdoKind = "mw_kind";               // int: WormColony.ColonyKind
         public const string ZdoBoxCenter = "mw_box_c";         // Vector3, world space (spec §8.4)
         public const string ZdoBoxExtents = "mw_box_e";        // Vector3, half size
+
+        // RPC names (spec §11.3). Part of the wire protocol: never rename after release.
+        public const string RpcWormHit = "MW_WormHit";         // ZNetView RPC to the colony owner: int slot, int generation, ZPackage HitData
+        public const string RpcWormBite = "MW_WormBite";       // routed RPC to the owner of the bitten player: ZDOID, durability, health damage, point, dir
     }
 }

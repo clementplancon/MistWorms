@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using BepInEx;
+using MistWorms.Colony;
 using MistWorms.Config;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -894,6 +895,10 @@ namespace MistWorms.Dev
                 MaskRow("Aoe.m_rayMask (hitProps part)", -1, VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, "Default_small", VanillaNames.LayerPiece, VanillaNames.LayerHitbox, VanillaNames.LayerCharacterNoenv, "vehicle"),
                 MaskRow("Aoe.m_rayMask (hitTerrain part)", -1, VanillaNames.LayerTerrain),
             });
+
+            ProxyLayer.Resolve();
+            sb.AppendLine("### Worm proxy layer (phase 3)").AppendLine();
+            sb.AppendLine($"{ProxyLayer.Report}. `Physics.GetIgnoreLayerCollision` read at runtime; see decisions.md 47.").AppendLine();
 
             sb.AppendLine("### Attack setup of a few vanilla items").AppendLine();
             var rows = new List<object[]>();

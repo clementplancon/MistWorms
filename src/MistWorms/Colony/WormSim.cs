@@ -300,11 +300,6 @@ namespace MistWorms.Colony
             }
         }
 
-        /// <summary>The strike lands now. Phase 3B: sphere test in front of the head, damage or durability bite.</summary>
-        private void OnStrike(int i, float now)
-        {
-        }
-
         private void LoseTarget(int i, float now)
         {
             ClearTarget(i);

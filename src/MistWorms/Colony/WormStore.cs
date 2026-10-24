@@ -31,6 +31,7 @@ namespace MistWorms.Colony
         public readonly int[] poolIndex;          // -1 in phase 3 (loot pool arrives in phase 6)
         public readonly bool[] alive;
         public readonly ushort[] generation;      // bumped on every reuse of the slot (proxies, phase 3B)
+        public readonly int[] proxyIndex;         // pool index of the hit proxy attached to the slot, -1 = none (owned by ProxyManager)
 
         // ---- movement and wandering
         public readonly Vector3[] home;
@@ -81,6 +82,7 @@ namespace MistWorms.Colony
             poolIndex = new int[capacity];
             alive = new bool[capacity];
             generation = new ushort[capacity];
+            proxyIndex = new int[capacity];
 
             home = new Vector3[capacity];
             wanderGoal = new Vector3[capacity];
@@ -135,6 +137,7 @@ namespace MistWorms.Colony
             targetKind[i] = (byte)TargetKind.None;
             targetId[i] = 0;
             poolIndex[i] = -1;
+            proxyIndex[i] = -1;
 
             home[i] = position;
             wanderGoal[i] = position;

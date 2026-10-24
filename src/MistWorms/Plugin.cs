@@ -45,6 +45,7 @@ namespace MistWorms
             _harmony.PatchAll(typeof(Plugin).Assembly);
 
             PrefabManager.OnVanillaPrefabsAvailable += OnVanillaPrefabsAvailable;
+            ItemManager.OnItemsRegistered += Drops.BaitWeightsInit.OnItemsRegistered;
 
 #if MW_DEV
             Dev.DevBootstrap.Init(this);
@@ -58,6 +59,16 @@ namespace MistWorms
 
             // Before any zone loads, on every peer: a server that meets an unknown prefab hash destroys the ZDO.
             ColonyPrefab.Register();
+
+            try
+            {
+                // Hit proxies are client side and need no asset: a dedicated server has no local player to hit anything.
+                if (!Application.isBatchMode) _ = ProxyManager.Instance;
+            }
+            catch (Exception e)
+            {
+                LogException("Plugin.ProxyManager", e);
+            }
 
             try
             {

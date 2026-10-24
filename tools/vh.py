@@ -261,6 +261,37 @@ def cmd_freeze(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_hit(a: argparse.Namespace) -> int:
+    damage: dict[str, float] = {}
+    for item in a.damage:
+        key, sep, value = item.partition("=")
+        if not sep:
+            raise VhError(f"damage '{item}' must look like slash=35", 2)
+        damage[key] = float(value)
+    body: dict[str, Any] = {"damage": damage}
+    if ":" in a.target:
+        body["targetZdoid"] = a.target  # a vanilla object by ZDOID (user:id)
+    else:
+        try:
+            body["worm"] = int(a.target)
+        except ValueError:
+            raise VhError(f"target '{a.target}' is neither a worm index nor a ZDOID (user:id)", 2) from None
+    if a.colony:
+        body["colony"] = a.colony
+    if a.point:
+        body["point"] = a.point
+    emit(Bridge(a.port).post("/hit", body))
+    return 0
+
+
+def cmd_attack(a: argparse.Namespace) -> int:
+    body: dict[str, Any] = {"weapon": a.weapon}
+    if a.look_at:
+        body["lookAt"] = a.look_at
+    emit(Bridge(a.port).post("/attack", body))
+    return 0
+
+
 def cmd_perf(a: argparse.Namespace) -> int:
     emit(Bridge(a.port).get("/perf"))
     return 0
@@ -550,6 +581,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp = add("freeze", cmd_freeze, "stop or resume the simulation of every colony (mw_freeze)")
     sp.add_argument("mode", choices=["on", "off"])
     add("perf", cmd_perf, "GET /perf")
+
+    sp = add("hit", cmd_hit, "inject a vanilla HitData on a worm (bridge /hit)")
+    sp.add_argument("target", help="worm slot index (see state --worms), or a ZDOID user:id for any vanilla object")
+    sp.add_argument("damage", nargs="+", metavar="TYPE=AMOUNT", help="e.g. slash=35 fire=10")
+    sp.add_argument("--colony", help="colony ZDOID when several are loaded")
+    sp.add_argument("--point", type=float, nargs=3, metavar=("X", "Y", "Z"))
+
+    sp = add("attack", cmd_attack, "equip a weapon and start a real melee attack (bridge /attack)")
+    sp.add_argument("weapon", help="item prefab, e.g. SwordBronze")
+    sp.add_argument("--look-at", type=float, nargs=3, metavar=("X", "Y", "Z"))
 
     sp = add("shot", cmd_shot, "take a screenshot into docs/shots")
     sp.add_argument("name", nargs="?")

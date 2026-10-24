@@ -43,6 +43,7 @@ namespace MistWorms
 
         // ---- Items and pieces used by the dev scenarios (spec §15.5) ----
         public const string SwordBronze = "SwordBronze";               // confirmed (dump section 4, bronze weapons)
+        public const string MaceBronze = "MaceBronze";                 // confirmed (dump section 4, bronze weapons; decisions.md 1.1 line 3)
         public const string Torch = "Torch";                           // unverified (spec §20.1)
         public const string ArmorPaddedCuirass = "ArmorPaddedCuirass"; // confirmed (dump section 4, padded armor)
         public const string ArmorPaddedGreaves = "ArmorPaddedGreaves"; // confirmed (dump section 4)

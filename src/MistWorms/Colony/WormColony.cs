@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using MistWorms.Assets;
 using MistWorms.Config;
+using MistWorms.Drops;
 using MistWorms.Render;
 using UnityEngine;
 
@@ -39,6 +40,9 @@ namespace MistWorms.Colony
         private bool _configured;
         private SpatialGrid _grid;
         private System.Random _rng;
+        private System.Random _dropRng;      // native drops (spec §7.5): own generator so tests can seed it without touching the movement
+        private WormEffects.Limiter _deathFx;
+        private WormEffects.Limiter _hitFx;
         private float _emptySince = -1f;
         private float _lastTickTime;
         private bool _registeredWithRenderer;
@@ -140,6 +144,8 @@ namespace MistWorms.Colony
             Store = new WormStore(capacity);
             _grid = new SpatialGrid(capacity);
             _rng = new System.Random(Environment.TickCount ^ GetInstanceID());
+            _dropRng = WormDrops.NewRng(GetInstanceID());
+            _nview.Register<int, int, ZPackage>(MWNames.RpcWormHit, RPC_WormHit);
             InitPaths();
 
             ZDO zdo = _nview.GetZDO();
@@ -234,10 +240,28 @@ namespace MistWorms.Colony
         public void KillWorm(int i, bool withDrops)
         {
             if (Store == null || (uint)i >= (uint)Store.Capacity || !Store.alive[i]) return;
+            Vector3 where = Store.pos[i];
             ReleasePath(i);
             Store.Free(i);
-            // Phase 3B: with withDrops, play the death effect and roll the native drops; phase 6 shares the pool.
+
+            // A disabled colony (simulation error) gives nothing (spec §9.3).
+            if (!withDrops || Disabled) return;
+            try
+            {
+                WormEffects.PlayDeath(ref _deathFx, where + Vector3.up * 0.1f, Time.time);
+                WormDrops.DropFor(_dropRng, where);
+                // Phase 6: the dying worm also hands out its share of the loot pool (spec §7.3).
+            }
+            catch (Exception e)
+            {
+                Plugin.LogException("WormColony.KillWorm (effect/drops)", e);
+            }
         }
+
+#if MW_DEV
+        /// <summary>Restarts the drop generator from <paramref name="seed"/> (WormDrops.SeedForTests).</summary>
+        public void ReseedDrops(int seed) => _dropRng = new System.Random(seed);
+#endif
 
         /// <summary>Kills every worm without drops (mw_kill).</summary>
         public int KillAll()
@@ -261,6 +285,15 @@ namespace MistWorms.Colony
         private const float CrawlPhaseStep = 1.7f;
         private const float SleepPhaseStep = 0.7f;
 
+        /// <summary>Position of worm <paramref name="i"/> interpolated between its last two simulation steps (render and hit proxy).</summary>
+        public Vector3 InterpolatedPos(int i, float now)
+        {
+            WormStore s = Store;
+            float interval = s.simInterval[i];
+            float t = interval > 1e-4f ? Mathf.Clamp01((now - s.lastSimTime[i]) / interval) : 1f;
+            return Vector3.Lerp(s.prevPos[i], s.pos[i], t);
+        }
+
         public void CollectInstances(WormRenderer.Sink sink)
         {
             WormStore s = Store;
@@ -275,11 +308,9 @@ namespace MistWorms.Colony
                 var state = (WormState)s.state[i];
                 if (state == WormState.Absorbed || state == WormState.Dead) continue;
 
-                // Interpolate between the last two simulation steps.
                 float since = now - s.lastSimTime[i];
                 float interval = s.simInterval[i];
-                float t = interval > 1e-4f ? Mathf.Clamp01(since / interval) : 1f;
-                Vector3 p = Vector3.Lerp(s.prevPos[i], s.pos[i], t);
+                Vector3 p = InterpolatedPos(i, now);
 
                 Quaternion rot = Quaternion.FromToRotation(Vector3.up, s.groundNormal[i])
                                  * Quaternion.Euler(0f, s.heading[i] * Mathf.Rad2Deg, 0f);

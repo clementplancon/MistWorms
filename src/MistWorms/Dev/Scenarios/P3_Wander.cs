@@ -58,12 +58,18 @@ namespace MistWorms.Dev.Scenarios
                 // A mine room may offer few valid points within 8 m: widen the disc pass by pass until n worms exist.
                 int created = 0;
                 WormColony colony = null;
-                foreach (float radius in new[] { 8f, 12f, 16f, 20f })
+                float[] radii = { 8f, 12f, 16f, 20f };
+                int zeroStreak = 0;
+                for (int pass = 0; pass < 12 && created < n; pass++)
                 {
-                    int got = ColonyDev.Spawn(n - created, radius, WormState.Idle, false, out colony, out string how);
+                    // Spawn only makes 10 draws per worm and large discs mostly fall out of line of sight in a corridor; 8 m succeeds ~26% of draws.
+                    float radius = pass < radii.Length ? radii[pass] : 8f;
+                    int got = ColonyDev.Spawn(n - created, radius, WormState.Idle, false, out WormColony c, out string how);
+                    if (c != null) colony = c;
                     created += got;
-                    ctx.Log($"spawn pass radius {radius}: +{got} ({created}/{n}) in a {how} colony {colony.ZdoId}, box {colony.BoxCenter} +-{colony.BoxHalfSize}");
-                    if (created >= n) break;
+                    ctx.Log($"spawn pass {pass + 1} radius {radius}: +{got} ({created}/{n}) in a {how} colony {colony?.ZdoId}, box {colony?.BoxCenter} +-{colony?.BoxHalfSize}");
+                    zeroStreak = got == 0 ? zeroStreak + 1 : 0;
+                    if (zeroStreak >= 2) break;
                 }
                 ctx.Assert("worms_created", created == n, n, created);
                 if (created == 0) yield break;

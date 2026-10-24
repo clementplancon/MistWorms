@@ -131,6 +131,32 @@ namespace MistWorms.Dev.Scenarios
                 result.Found ? (object)$"{result.Spot} after {result.Tested} candidates, {result.Hops} hops" : result.Error);
         }
 
+        // ---------------------------------------------------------------- player setup
+
+        /// <summary>Unequips everything and empties the inventory.</summary>
+        public void ClearInventory()
+        {
+            Player player = Player.m_localPlayer;
+            if (player == null) return;
+            player.UnequipAllItems();
+            player.GetInventory().RemoveAll();
+        }
+
+        /// <summary>Adds a quality 1 item (equipped or not) and returns it; null with a log line when the prefab is unknown or the inventory full.</summary>
+        public ItemDrop.ItemData Give(string prefab, bool equip)
+        {
+            Player player = Player.m_localPlayer;
+            if (player == null) return null;
+            ItemDrop.ItemData item = player.GetInventory().AddItem(prefab, 1, 1, 0, player.GetPlayerID(), player.GetPlayerName(), true);
+            if (item == null)
+            {
+                Log($"could not add '{prefab}'");
+                return null;
+            }
+            if (equip && !player.EquipItem(item)) Log($"could not equip '{prefab}'");
+            return item;
+        }
+
         // ---------------------------------------------------------------- waiting
 
         /// <summary>Waits real seconds (unaffected by time scale or pause).</summary>

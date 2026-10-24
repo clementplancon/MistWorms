@@ -27,8 +27,6 @@ namespace MistWorms.Dev
         // Routes the spec defines whose behaviour depends on systems built in later phases (§16).
         private static readonly Dictionary<string, int> PlannedRoutes = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            { "/hit", 3 },
-            { "/attack", 3 },
             { "/mass", 4 },
             { "/nest", 7 },
             { "/perf", 8 },
@@ -252,6 +250,14 @@ namespace MistWorms.Dev
                 case "/state":
                     req.RequireMethod("GET");
                     StateRoute(req, reply);
+                    return null;
+                case "/hit":
+                    req.RequireMethod("POST");
+                    HitRoute(req, reply);
+                    return null;
+                case "/attack":
+                    req.RequireMethod("POST");
+                    AttackRoute(req, reply);
                     return null;
                 case "/tp-mine":
                     req.RequireMethod("POST");
@@ -515,7 +521,112 @@ namespace MistWorms.Dev
             {
                 { "colonies", colonies },
                 { "frozen", Colony.WormColony.Frozen },
+                { "proxyLayer", Colony.ProxyLayer.LayerName },
+                { "bites", BitesJson() },
+                { "drops", DropsJson() },
                 { "player", playerJson },
+            };
+        }
+
+        private static Dictionary<string, object> BitesJson() => new Dictionary<string, object>
+        {
+            { "bites", Bites.WormBiteContext.Bites },
+            { "durabilityEaten", Bites.WormBiteContext.DurabilityEaten },
+            { "healthBites", Bites.WormBiteContext.HealthBites },
+            { "healthDamage", Bites.WormBiteContext.HealthDamage },
+        };
+
+        private static Dictionary<string, object> DropsJson() => new Dictionary<string, object>
+        {
+            { "rolls", Drops.WormDrops.Rolls },
+            { "bait", Drops.WormDrops.BaitRolled },
+            { "entrails", Drops.WormDrops.Entrails },
+            { "bloodbag", Drops.WormDrops.Bloodbag },
+            { "itemsSpawned", Drops.WormDrops.ItemsSpawned },
+            { "poolItems", Drops.WormDrops.PoolItems },
+        };
+
+        /// <summary>
+        /// POST /hit {worm, colony?, damage:{slash,blunt,pierce,fire,...}, point?} injects a vanilla HitData (attacker = the local player) on a
+        /// worm, through its hit proxy when it has one; {targetZdoid, damage} hits any vanilla object by its ZDOID (plain Damage).
+        /// </summary>
+        private static void HitRoute(BridgeRequest req, BridgeReply reply)
+        {
+            Player player = RequirePlayer();
+            Dictionary<string, object> dmg = MiniJson.GetObject(req.Body, "damage") ?? throw new BridgeException(400, "missing 'damage' object");
+
+            var hit = new HitData();
+            hit.m_damage.m_damage = MiniJson.GetFloat(dmg, "damage");
+            hit.m_damage.m_blunt = MiniJson.GetFloat(dmg, "blunt");
+            hit.m_damage.m_slash = MiniJson.GetFloat(dmg, "slash");
+            hit.m_damage.m_pierce = MiniJson.GetFloat(dmg, "pierce");
+            hit.m_damage.m_chop = MiniJson.GetFloat(dmg, "chop");
+            hit.m_damage.m_pickaxe = MiniJson.GetFloat(dmg, "pickaxe");
+            hit.m_damage.m_fire = MiniJson.GetFloat(dmg, "fire");
+            hit.m_damage.m_frost = MiniJson.GetFloat(dmg, "frost");
+            hit.m_damage.m_lightning = MiniJson.GetFloat(dmg, "lightning");
+            hit.m_damage.m_poison = MiniJson.GetFloat(dmg, "poison");
+            hit.m_damage.m_spirit = MiniJson.GetFloat(dmg, "spirit");
+            hit.SetAttacker(player);
+            hit.m_hitType = HitData.HitType.PlayerHit;
+            List<object> point = MiniJson.GetList(req.Body, "point");
+            if (point != null && point.Count == 3) hit.m_point = ToVector(point);
+            hit.m_dir = player.transform.forward;
+
+            string targetZdoid = MiniJson.GetString(req.Body, "targetZdoid");
+            if (!string.IsNullOrEmpty(targetZdoid))
+            {
+                string[] parts = targetZdoid.Split(':');
+                if (parts.Length != 2 || !long.TryParse(parts[0], out long user) || !uint.TryParse(parts[1], out uint id))
+                    throw new BridgeException(400, "'targetZdoid' must look like user:id");
+                GameObject go = ZNetScene.instance != null ? ZNetScene.instance.FindInstance(new ZDOID(user, id)) : null;
+                IDestructible target = go != null ? go.GetComponent<IDestructible>() : null;
+                if (target == null) throw new BridgeException(404, $"no destructible instance for {targetZdoid}");
+                if (hit.m_point == Vector3.zero) hit.m_point = go.transform.position;
+                target.Damage(hit);
+                reply.Body = new Dictionary<string, object> { { "ok", true }, { "target", targetZdoid } };
+                return;
+            }
+
+            if (!MiniJson.Has(req.Body, "worm")) throw new BridgeException(400, "missing 'worm' (slot index) or 'targetZdoid'");
+            int index = MiniJson.GetInt(req.Body, "worm");
+            Colony.WormColony colony = ColonyDev.ColonyOfWorm(MiniJson.GetString(req.Body, "colony"), index)
+                ?? throw new BridgeException(404, $"no living worm {index} in a loaded colony");
+            if (hit.m_point == Vector3.zero) hit.m_point = colony.Store.pos[index] + Vector3.up * 0.1f;
+
+            bool viaProxy = ColonyDev.HitWorm(colony, index, hit);
+            reply.Body = new Dictionary<string, object>
+            {
+                { "colony", colony.ZdoId.ToString() },
+                { "worm", index },
+                { "viaProxy", viaProxy },
+                { "hp", colony.Store.hp[index] },
+                { "dead", !colony.Store.alive[index] },
+                { "hitsReceived", colony.HitsReceived },
+                { "lastHitDamage", colony.LastHitDamage },
+            };
+        }
+
+        /// <summary>
+        /// POST /attack {weapon, lookAt?} gives and equips the weapon, turns the player toward lookAt ([x,y,z], default straight ahead) and
+        /// starts a real vanilla primary attack (Humanoid.StartAttack). The swing's hit comes later, from the animation.
+        /// </summary>
+        private static void AttackRoute(BridgeRequest req, BridgeReply reply)
+        {
+            Player player = RequirePlayer();
+            string weapon = req.String("weapon");
+            if (string.IsNullOrWhiteSpace(weapon)) throw new BridgeException(400, "missing 'weapon'");
+
+            List<object> look = MiniJson.GetList(req.Body, "lookAt");
+            Vector3? lookAt = look != null && look.Count == 3 ? ToVector(look) : (Vector3?)null;
+
+            bool started = ColonyDev.StartAttack(player, weapon, lookAt, out ItemDrop.ItemData item, out string error);
+            if (error != null) throw new BridgeException(422, error);
+            reply.Body = new Dictionary<string, object>
+            {
+                { "weapon", weapon },
+                { "started", started },
+                { "durability", item.m_durability },
             };
         }
 
