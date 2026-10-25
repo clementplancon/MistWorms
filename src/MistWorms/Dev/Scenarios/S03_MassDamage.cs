@@ -29,6 +29,8 @@ namespace MistWorms.Dev.Scenarios
     {
         private const int StartCount = 40;
         private const float SpawnDistance = 4.5f;     // inside the 5 m of open ground the scenario asks for
+        private const float FlatRadius = 6f, FlatTolerance = 0.3f;     // the ground around the player is level within this over this radius
+        private const float HipHeight = 0.9f;
         private const float MeleeDistance = 3.2f;      // capsule edge at 2.6 m (outside the sword reach), hit sphere edge at about 2 m (inside)
         private const float SwordReach = 2.4f;         // SwordBronze, dump section 7
         private const float Tolerance = 0.01f;
@@ -49,7 +51,8 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Console("mw_freeze off");
                 yield return ctx.WaitFrames(3);
 
-                yield return ctx.MoveToOpenGround(5f);
+                yield return ctx.MoveToOpenGround(5f, FlatAround);
+                ctx.Log($"site flat within {FlatRadius} m (+-{FlatTolerance} m): {FlatAround(ctx.LastOpenGround.Spot)}");
                 if (!ctx.LastOpenGround.Found) yield break;
 
                 Player player = Player.m_localPlayer;
@@ -84,6 +87,7 @@ namespace MistWorms.Dev.Scenarios
             Check(ctx, "patch_hover_name", AccessTools.Method(typeof(Character), nameof(Character.GetHoverName)), postfix: true);
             Check(ctx, "patch_stagger", AccessTools.Method(typeof(Character), nameof(Character.Stagger)), postfix: false);
             Check(ctx, "patch_pushback", AccessTools.Method(typeof(Character), "ApplyPushback", new[] { typeof(HitData) }), postfix: false);
+            Check(ctx, "patch_damage_fx_postfix", AccessTools.Method(typeof(Character), nameof(Character.Damage)), postfix: true);
             Check(ctx, "patch_apply_damage_postfix", AccessTools.Method(typeof(Character), nameof(Character.ApplyDamage)), postfix: true);
             // The bite prefix of phase 3 shares the method: it must still be there.
             Check(ctx, "patch_apply_damage_bite_prefix", AccessTools.Method(typeof(Character), nameof(Character.ApplyDamage)), postfix: false);
@@ -293,6 +297,49 @@ namespace MistWorms.Dev.Scenarios
                    $"animator={(anim != null ? $"enabled={anim.enabled} culling={anim.cullingMode} speed={anim.speed} stateHash={anim.GetCurrentAnimatorStateInfo(0).shortNameHash} t={anim.GetCurrentAnimatorStateInfo(0).normalizedTime:0.00}" : "none")}";
         }
 
+        /// <summary>True when the terrain within FlatRadius of <paramref name="g"/> (centre and 12 points on two rings) is level with it within FlatTolerance.</summary>
+        private static bool FlatAround(Vector3 g)
+        {
+            int mask = WormPhysics.SolidMask;
+            for (int ring = 1; ring <= 2; ring++)
+                for (int k = 0; k < 12; k++)
+                {
+                    float a = k * Mathf.PI * 2f / 12f;
+                    Vector3 p = g + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * (FlatRadius * ring / 2f);
+                    if (!Physics.Raycast(p + Vector3.up * 3f, Vector3.down, out RaycastHit hit, 8f, mask, QueryTriggerInteraction.Ignore)) return false;
+                    if (Mathf.Abs(hit.point.y - g.y) > FlatTolerance) return false;
+                }
+            return true;
+        }
+
+        /// <summary>
+        /// The mass for a swing: spawned MeleeDistance away, kept only if its floor is level with the player's within FlatTolerance and the line from the
+        /// player's hip to the centre of its hit sphere is clear; otherwise another of 8 directions is tried (logged). Falls back on the first one.
+        /// </summary>
+        private static WritheMassState SpawnLevelMass(ScenarioContext ctx, Player player, Vector3 first)
+        {
+            WritheMassState firstMass = null;
+            for (int k = 0; k < 8; k++)
+            {
+                Vector3 dir = Quaternion.AngleAxis(k * 45f, Vector3.up) * first;
+                WritheMassState mass = MassDev.SpawnAt(player.transform.position + dir * MeleeDistance, StartCount, ZDOID.None, freezeAI: true);
+                if (mass == null) continue;
+                Vector3 hip = player.transform.position + Vector3.up * HipHeight;
+                float dy = mass.transform.position.y - player.transform.position.y;
+                bool clear = !mass.TryGetHitSphere(out Vector3 centre, out _) ? true : !Physics.Linecast(hip, new Vector3(centre.x, hip.y, centre.z), WormPhysics.SolidMask, QueryTriggerInteraction.Ignore);
+                if (Mathf.Abs(dy) <= FlatTolerance && clear)
+                {
+                    if (firstMass != null) MassDev.Destroy(firstMass);
+                    if (k > 0) ctx.Log($"melee site: direction {k * 45} deg, floor {dy:+0.00;-0.00} m, line clear");
+                    return mass;
+                }
+                ctx.Log($"melee site rejected (direction {k * 45} deg): floor {dy:+0.00;-0.00} m from the player, line to the hit sphere clear={clear}");
+                if (firstMass == null) firstMass = mass;
+                else MassDev.Destroy(mass);
+            }
+            return firstMass;
+        }
+
         private IEnumerator Melee(ScenarioContext ctx, Player player, int reps)
         {
             // Vanilla logs what a swing finds ("initiating an attack", "added N hits to set", "hit X for ...") when this test is on: see the BepInEx log.
@@ -305,7 +352,7 @@ namespace MistWorms.Dev.Scenarios
                 yield return ctx.WaitUntil(() => player == null || !player.InAttack(), 4f);
                 Vector3 fwd = Forward(player);
                 S18_GroupCoherence.ClearCreatures(ctx, player);   // before the mass exists: it must not be taken for a vanilla creature
-                WritheMassState mass = MassDev.SpawnAt(player.transform.position + fwd * MeleeDistance, StartCount, ZDOID.None, freezeAI: true);
+                WritheMassState mass = SpawnLevelMass(ctx, player, fwd);
                 if (mass == null) { ctx.Assert($"melee_{rep}", false, "a mass", "none"); continue; }
                 Vector3 spawnedAt = mass.transform.position;
                 yield return ctx.Wait(0.6f);   // the hit sphere reaches the physics scene at the next fixed step

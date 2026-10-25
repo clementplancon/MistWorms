@@ -70,6 +70,8 @@ namespace MistWorms.Mass
         private Vector3 _targetPos;
 
         private WormEffects.Limiter _detachLimit;
+        private readonly float[] _soundNext = new float[MassAudio.Layers];
+        private bool _birthSounded, _engulfSounded;
 
         // Published to MassRenderSystem and to the dev tools.
         /// <summary>Per-frame inputs of the layout. Filled by Update, completed with the camera by <see cref="PrepareEmit"/>.</summary>
@@ -330,6 +332,12 @@ namespace MistWorms.Mass
             Active = true;
 
             if (_arrCount > 0) StartArrivals(now, n);
+
+            // ---- sounds (spec 12.3)
+            MassAudio.Update(this, now, n, _soundNext);
+            if (grow < 1f && !_birthSounded) { _birthSounded = true; MassAudio.PlayBirth(root, now); }
+            if (_engulf > 0f) { if (!_engulfSounded) { _engulfSounded = true; MassAudio.PlayEngulfStart(root, now); } }
+            else _engulfSounded = false;
         }
 
         // ------------------------------------------------------------------ transitions (phase 4B-4)

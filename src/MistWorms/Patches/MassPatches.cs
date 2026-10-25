@@ -1,8 +1,10 @@
 using System;
 using HarmonyLib;
+using MistWorms.Colony;
 using MistWorms.Config;
 using MistWorms.Mass;
 using MistWorms.Render;
+using UnityEngine;
 
 namespace MistWorms.Patches
 {
@@ -83,6 +85,32 @@ namespace MistWorms.Patches
                 catch (Exception e)
                 {
                     Plugin.LogException("MassPatches.ApplyPushback", e);
+                }
+            }
+        }
+
+        private static WormEffects.Limiter s_hitFx;
+
+        /// <summary>
+        /// Green splash and hurt sound at the impact point of a hit on a mass, on the peer that lands it (the attacker is the local player, or a hit with
+        /// no attacker made here), whatever the hit kills: a hit that costs no worm is seen as well (spec 12.4). Same 10 per second limiter as the worms.
+        /// </summary>
+        [HarmonyPatch(typeof(Character), nameof(Character.Damage))]
+        private static class DamageFxPatch
+        {
+            private static void Postfix(Character __instance, HitData hit)
+            {
+                try
+                {
+                    if (hit == null || !WritheMassState.TryGet(__instance, out WritheMassState mass)) return;
+                    if (hit.HaveAttacker() && hit.GetAttacker() != Player.m_localPlayer) return;
+                    if (hit.GetTotalDamage() <= 0.1f) return;
+                    Vector3 where = hit.m_point == Vector3.zero ? mass.transform.position + Vector3.up * 0.4f : hit.m_point;
+                    WormEffects.PlayHit(ref s_hitFx, where, Time.time);
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogException("MassPatches.Damage", e);
                 }
             }
         }

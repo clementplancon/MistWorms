@@ -101,7 +101,13 @@ namespace MistWorms.Colony
         private static readonly Slot s_deathSound = new Slot("death sound", new[] { VanillaNames.SfxLeechDeath }, null);
         private static readonly Slot s_strikeSound = new Slot("strike sound", new[] { VanillaNames.SfxTickAttackJump }, null);
         private static readonly Slot s_idleSound = new Slot("idle sound", new[] { VanillaNames.SfxTickIdle }, null);
-        private static readonly Slot[] s_all = { s_hit, s_death, s_hitSound, s_deathSound, s_strikeSound, s_idleSound };
+        // The three layers of the "loop" of a mass (spec 12.3, phase 4B-5): vanilla idles of three small wet creatures, each re-tried with the tick one if missing.
+        private static readonly Slot s_massIdleA = new Slot("mass layer A", new[] { VanillaNames.SfxTickIdle }, null);
+        private static readonly Slot s_massIdleB = new Slot("mass layer B", new[] { VanillaNames.SfxLeechIdle, VanillaNames.SfxTickIdle }, null);
+        private static readonly Slot s_massIdleC = new Slot("mass layer C", new[] { VanillaNames.SfxBlobIdle, VanillaNames.SfxTickIdle }, null);
+        private static readonly Slot s_alertSound = new Slot("alert sound", new[] { VanillaNames.SfxBlobAlerted, VanillaNames.SfxTickAlerted }, null);
+        private static readonly Slot s_formSound = new Slot("formation sound", new[] { VanillaNames.SfxTickAlerted }, null);
+        private static readonly Slot[] s_all = { s_hit, s_death, s_hitSound, s_deathSound, s_strikeSound, s_idleSound, s_massIdleA, s_massIdleB, s_massIdleC, s_alertSound, s_formSound };
 
         private static GameObject s_holder;
         private static ZNetScene s_scene;   // prefabs belong to a session: resolve again when the scene is replaced
@@ -142,13 +148,14 @@ namespace MistWorms.Colony
         // an event of the animator; rendering callbacks: a worm landing). The Play* calls only note the request; `Pump`, called from the plugin's
         // Update, builds the templates (they need DestroyImmediate) and plays what is pending. A request older than PendingLife is dropped.
 
-        private enum Kind : byte { Hit, Death, Strike, Idle }
+        private enum Kind : byte { Hit, Death, Strike, Idle, MassA, MassB, MassC, Alert, Form }
 
         private struct Pending
         {
             public Kind Kind;
             public Vector3 Position;
             public float Expire;
+            public float Volume, Pitch;      // factors on the ZSFX of the instance (1 = as vanilla)
         }
 
         public const int PendingMax = 64;
@@ -161,12 +168,12 @@ namespace MistWorms.Colony
         /// <summary>Requests waiting for the next Pump (dev checks).</summary>
         public static int PendingCount => s_pendingCount;
 
-        private static void Enqueue(Kind kind, Vector3 position)
+        private static void Enqueue(Kind kind, Vector3 position, float volume = 1f, float pitch = 1f)
         {
             if (Application.isBatchMode) return;
             if (s_pendingCount >= PendingMax) return;      // a burst beyond the limiter: drop
             int at = (s_pendingHead + s_pendingCount) % PendingMax;
-            s_pending[at] = new Pending { Kind = kind, Position = position, Expire = Time.unscaledTime + PendingLife };
+            s_pending[at] = new Pending { Kind = kind, Position = position, Expire = Time.unscaledTime + PendingLife, Volume = volume, Pitch = pitch };
             s_pendingCount++;
         }
 
@@ -189,6 +196,24 @@ namespace MistWorms.Colony
         public static void PlayIdle(ref Limiter limiter, Vector3 position, float now)
         {
             if (limiter.Allow(now)) Enqueue(Kind.Idle, position);
+        }
+
+        /// <summary>One sound of a layer (0, 1, 2) of the loop of a mass, with its volume and pitch factors.</summary>
+        public static void PlayMassLayer(ref Limiter limiter, int layer, Vector3 position, float volume, float pitch, float now)
+        {
+            if (limiter.Allow(now)) Enqueue(layer == 0 ? Kind.MassA : layer == 1 ? Kind.MassB : Kind.MassC, position, volume, pitch);
+        }
+
+        /// <summary>The start of an engulfing (spec 12.3).</summary>
+        public static void PlayAlert(ref Limiter limiter, Vector3 position, float now)
+        {
+            if (limiter.Allow(now)) Enqueue(Kind.Alert, position);
+        }
+
+        /// <summary>A mass is born (spec 12.3).</summary>
+        public static void PlayForm(ref Limiter limiter, Vector3 position, float now)
+        {
+            if (limiter.Allow(now)) Enqueue(Kind.Form, position);
         }
 
         /// <summary>
@@ -221,7 +246,7 @@ namespace MistWorms.Colony
                     s_pendingHead = (s_pendingHead + 1) % PendingMax;
                     s_pendingCount--;
                     if (p.Expire < now) continue;
-                    PlayNow(p.Kind, p.Position);
+                    PlayNow(p.Kind, p.Position, p.Volume, p.Pitch);
                 }
             }
             catch (Exception e)
@@ -235,7 +260,7 @@ namespace MistWorms.Colony
             }
         }
 
-        private static void PlayNow(Kind kind, Vector3 position)
+        private static void PlayNow(Kind kind, Vector3 position, float volume, float pitch)
         {
             try
             {
@@ -244,6 +269,11 @@ namespace MistWorms.Colony
                     case Kind.Hit: SpawnFx(s_hit, position); SpawnSound(s_hitSound, position); break;
                     case Kind.Death: SpawnFx(s_death, position); SpawnSound(s_deathSound, position); break;
                     case Kind.Strike: SpawnSound(s_strikeSound, position); break;
+                    case Kind.MassA: SpawnSound(s_massIdleA, position, volume, pitch); break;
+                    case Kind.MassB: SpawnSound(s_massIdleB, position, volume, pitch); break;
+                    case Kind.MassC: SpawnSound(s_massIdleC, position, volume, pitch); break;
+                    case Kind.Alert: SpawnSound(s_alertSound, position); break;
+                    case Kind.Form: SpawnSound(s_formSound, position); break;
                     default: SpawnSound(s_idleSound, position); break;
                 }
             }
@@ -271,14 +301,24 @@ namespace MistWorms.Colony
 #endif
         }
 
-        private static void SpawnSound(Slot slot, Vector3 position)
+        private static void SpawnSound(Slot slot, Vector3 position, float volume = 1f, float pitch = 1f)
         {
             if (Application.isBatchMode) return;
             Player listener = Player.m_localPlayer;
             if (listener == null || (listener.transform.position - position).sqrMagnitude > SoundRange * SoundRange) return;
             GameObject template = slot.Template;
             if (template == null) return;
-            Object.Instantiate(template, position, Quaternion.identity).SetActive(true);
+            GameObject sound = Object.Instantiate(template, position, Quaternion.identity);   // inactive, like its template
+            if (volume != 1f || pitch != 1f)
+            {
+                ZSFX zsfx = sound.GetComponentInChildren<ZSFX>(true);
+                if (zsfx != null)
+                {
+                    zsfx.m_minVol *= volume; zsfx.m_maxVol *= volume;
+                    zsfx.m_minPitch *= pitch; zsfx.m_maxPitch *= pitch;
+                }
+            }
+            sound.SetActive(true);
         }
 
         // ------------------------------------------------------------------ templates

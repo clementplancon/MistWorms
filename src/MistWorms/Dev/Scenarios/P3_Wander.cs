@@ -113,7 +113,7 @@ namespace MistWorms.Dev.Scenarios
                                 if (fwd && bwd)
                                 {
                                     if (++wallViolations <= 5)
-                                        ctx.Log($"wall violation worm {i} {last[i]} -> {p} through {wall.collider.name} (layer {LayerMask.LayerToName(wall.collider.gameObject.layer)}, normal {wall.normal}; back: {wallBack.collider.name}, normal {wallBack.normal})");
+                                        ctx.Log($"wall violation worm {i} {last[i]} -> {p} state {(WormState)store.state[i]}, step {(p - last[i]).magnitude:0.000} m, home {store.home[i]}, heading {store.heading[i]:0.00}, ground normal {store.groundNormal[i]} through {wall.collider.name} bounds {wall.collider.bounds} hit at {wall.point} (layer {LayerMask.LayerToName(wall.collider.gameObject.layer)}, normal {wall.normal}; back: {wallBack.collider.name}, normal {wallBack.normal})");
                                 }
                                 else if (fwd || bwd)
                                 {

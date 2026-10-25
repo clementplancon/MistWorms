@@ -148,6 +148,9 @@ namespace MistWorms
         public const string SfxTickAttackJump = "sfx_tick_attack_jump";    // confirmed (dump L446)
         public const string SfxTickHurt = "sfx_tick_hurt";                 // confirmed (dump L276)
         public const string SfxTickAlerted = "sfx_tick_alerted";           // confirmed (dump L280)
+        public const string SfxLeechIdle = "sfx_leech_idle";               // confirmed (dump section 11, Leech m_idleSound): wet, low
+        public const string SfxBlobIdle = "sfx_blob_idle";                 // confirmed (dump section 11, Blob m_idleSound): slow gurgle
+        public const string SfxBlobAlerted = "sfx_blob_alerted";           // confirmed (dump L215, Blob m_alertedEffects)
         public const string FxBabySeekerDeath = "fx_babyseeker_death";     // confirmed (dump L159)
         public const string FxBabySeekerHurt = "fx_babyseeker_hurt";       // confirmed (dump L156)
         public const string SfxBabySeekerIdle = "sfx_baby_seeker_idle";    // to confirm: referenced by SeekerBrood (dump L161) but absent from the sfx_* list (L514)

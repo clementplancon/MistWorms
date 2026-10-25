@@ -75,7 +75,7 @@ namespace MistWorms.Dev.Scenarios
                     {
                         yield return ctx.Wait(1f);
                         var site = new MineSiteResult();
-                        yield return MineSite.Find(Player.m_localPlayer.transform.position, MassMath.Radius(15) + 6f, MineSite.AbsoluteMinClearance, site);
+                        yield return MineSite.Find(Player.m_localPlayer.transform.position, MassMath.Radius(15) + 6f, MineSite.AbsoluteMinClearance, site, (floor, clearance) => FlatAround(floor));
                         ctx.Assert("mine_site_found", site.Found, "a flat free floor", site.Found ? $"{site.Floor} clearance {site.Clearance:0.0} m" : site.Error);
                         if (site.Found) { anchor = site.Floor; placed = true; }
                     }
@@ -90,7 +90,7 @@ namespace MistWorms.Dev.Scenarios
                         ClutterSystem.instance.ClearAll();
                         clutterHidden = true;
                     }
-                    yield return ctx.MoveToOpenGround(8f);
+                    yield return ctx.MoveToOpenGround(8f, FlatAround);
                     if (!ctx.LastOpenGround.Found) yield break;
                     player = Player.m_localPlayer;
                     anchor = player.transform.position + Forward(player) * 5f;
@@ -283,9 +283,48 @@ namespace MistWorms.Dev.Scenarios
         private static void Frame(ScenarioContext ctx, Vector3 center, float horizontal, Vector3 dir)
         {
             Vector3 look = center + Vector3.up * 0.3f;
-            if (!VisualScenario.ClearCamera(center, dir, horizontal, CameraHeight, look, out Vector3 pos)) ctx.Log("camera: no clear side, using the first");
+            int mask = VisualScenario.CameraMask();
+            float zone = Mathf.Max(0.5f, horizontal - CameraEdgeGap);
+            Vector3 flat = new Vector3(dir.x, 0f, dir.z).normalized;
+            Vector3 pos = center + flat * horizontal + Vector3.up * CameraHeight;
+            bool found = false;
+            // A side qualifies when the camera is in the open and sees the centre of the action AND the edge of the zone all around it (a bump of the
+            // ground between the camera and the action hid a whole clip): 8 sides, then 0.6 m higher.
+            for (int lift = 0; lift < 2 && !found; lift++)
+                for (int k = 0; k < 8 && !found; k++)
+                {
+                    int step = (k + 1) / 2 * (k % 2 == 0 ? 1 : -1);
+                    Vector3 side = Quaternion.AngleAxis(step * 45f, Vector3.up) * flat;
+                    Vector3 c = center + side * horizontal + Vector3.up * (CameraHeight + lift * 0.6f);
+                    if (Physics.CheckSphere(c, 0.4f, mask, QueryTriggerInteraction.Ignore) || Physics.Linecast(c, look, mask, QueryTriggerInteraction.Ignore)) continue;
+                    bool seesZone = true;
+                    for (int e = 0; e < 4 && seesZone; e++)
+                    {
+                        Vector3 edge = center + Quaternion.AngleAxis(e * 90f, Vector3.up) * side * zone + Vector3.up * 0.15f;
+                        if (Physics.Linecast(c, edge, mask, QueryTriggerInteraction.Ignore)) seesZone = false;
+                    }
+                    if (!seesZone) continue;
+                    pos = c;
+                    found = true;
+                }
+            if (!found) ctx.Log($"camera: no side sees the whole action at {horizontal:0.0} m, using the first");
             DevCamera.Free(pos, look);
             DevCamera.SetFillLight(true);
+        }
+
+        /// <summary>The ground within 6 m of <paramref name="g"/> (centre and 24 points on two rings) is level with it within 0.3 m.</summary>
+        private static bool FlatAround(Vector3 g)
+        {
+            int mask = WormPhysics.SolidMask;
+            for (int ring = 1; ring <= 2; ring++)
+                for (int k = 0; k < 12; k++)
+                {
+                    float a = k * Mathf.PI * 2f / 12f;
+                    Vector3 p = g + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * (3f * ring);
+                    if (!Physics.Raycast(p + Vector3.up * 3f, Vector3.down, out RaycastHit hit, 8f, mask, QueryTriggerInteraction.Ignore)) return false;
+                    if (Mathf.Abs(hit.point.y - g.y) > 0.3f) return false;
+                }
+            return true;
         }
 
         private static int CountMasses(WormColony colony)
