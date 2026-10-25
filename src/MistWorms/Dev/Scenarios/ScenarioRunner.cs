@@ -131,6 +131,8 @@ namespace MistWorms.Dev.Scenarios
             bool timedOut = false;
             Plugin.Log.LogInfo($"[Scenario] start {result.Id}");
             s_errors.Begin();
+            try { ctx.ResetPlayerState(); }
+            catch (Exception e) { Plugin.Log.LogWarning("[Scenario] ResetPlayerState: " + e.Message); }
 
             IEnumerator body = null;
             try { body = scenario.Run(ctx); }

@@ -962,6 +962,32 @@ namespace MistWorms.Mass
             m.m33 = 1f;
         }
 
+        /// <summary>Share of r(n) at which a release or arrival point lies from the centre, at most (inside the footprint).</summary>
+        public const float ReleaseReach = 0.9f;
+        /// <summary>Height of a release point on the heap, as a share of r(n) (the visual height of the heap is about half its radius).</summary>
+        public const float ReleaseHeight = 0.5f;
+
+        /// <summary>
+        /// Pure points on a heap where worms leave it (dissolution) or reach it (formation, transfer): the first <paramref name="count"/> places of
+        /// the heap seed, projected on the footprint of radius <paramref name="r"/> (place k lies at the same direction and depth as the worm of
+        /// the layout that holds it). <paramref name="forward"/> and <paramref name="left"/> are the horizontal axes of the heap frame, +X and +Z
+        /// of the local frame. Fills <paramref name="outPoints"/>[0..count) with world positions; heights are above <paramref name="root"/>. No allocation.
+        /// </summary>
+        public static void ReleasePoints(uint seed, int count, float r, Vector3 root, Vector3 forward, Vector3 left, Vector3[] outPoints)
+        {
+            for (int k = 0; k < count; k++)
+            {
+                uint a = (uint)(k + 1);
+                float u = Hash01(seed, a, 2);
+                float rho = (float)Math.Sqrt(1f - u * u);
+                float ph = Hash01(seed, a, 3);
+                float dx = rho * CosT(ph), dz = rho * SinT(ph);
+                float hh = Hash01(seed, a, 30);
+                float depth = (1f - C.RhoSpan * hh * hh) * ReleaseReach;
+                outPoints[k] = root + forward * (dx * depth * r) + left * (dz * depth * r) + Vector3.up * (u * ReleaseHeight * r);
+            }
+        }
+
         /// <summary>Frame of a heap in the world: local +X to forward, +Y to up, +Z to LEFT (= -right = cross(forward, up)), origin at root.</summary>
         public static Matrix4x4 MakeFrame(Vector3 root, Vector3 forward, Vector3 up)
         {

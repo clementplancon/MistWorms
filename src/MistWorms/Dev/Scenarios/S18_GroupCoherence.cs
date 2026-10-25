@@ -19,7 +19,8 @@ namespace MistWorms.Dev.Scenarios
     /// after 5 s, aggregate >= 95 %); a) the 30 degree sectors occupied by the worms within 2 m of the player at the end (>= 240 degrees);
     /// b) a worm with less than 0.5 m of progress in 6 s while its goal is reachable counts as blocked (0 allowed), and the floor / wall / box
     /// checks of P3_Wander (0 allowed). Hunters are refreshed as "seen" at each sample so that sensing, which is not under test, never
-    /// makes them give up. Parameters: part (a, b, both), seconds_a (20), seconds_b (30).
+    /// makes them give up. Gathering is switched off (ColonyDev.GatheringEnabled) so the free worms stay free (phase 4B-4).
+    /// Parameters: part (a, b, both), seconds_a (20), seconds_b (30).
     /// </summary>
     internal sealed class S18_GroupCoherence : IDevScenario
     {
@@ -61,6 +62,9 @@ namespace MistWorms.Dev.Scenarios
         public IEnumerator Run(ScenarioContext ctx)
         {
             bool clutterHidden = false;
+            // S18 tests the free worms: they do not gather, form masses or get absorbed (plan 4B-4). Restored at the end.
+            bool gatheringBefore = ColonyDev.GatheringEnabled;
+            ColonyDev.GatheringEnabled = false;
             string part = ctx.Param("part", "both").ToLowerInvariant();
             bool runA = part == "a" || part == "both";
             bool runB = part == "b" || part == "both";
@@ -114,6 +118,7 @@ namespace MistWorms.Dev.Scenarios
             }
             finally
             {
+                ColonyDev.GatheringEnabled = gatheringBefore;
                 if (clutterHidden && ClutterSystem.instance != null) ClutterSystem.instance.enabled = true;
                 DevCamera.Follow();
                 ctx.Console("mw_kill");

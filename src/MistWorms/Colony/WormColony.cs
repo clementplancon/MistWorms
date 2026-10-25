@@ -150,6 +150,7 @@ namespace MistWorms.Colony
             _nview.Register<int, int, ZPackage>(MWNames.RpcWormHit, RPC_WormHit);
             _nview.Register<ZDOID, int, Vector3, ZPackage>(MWNames.RpcMassDissolve, RPC_MassDissolve);
             InitPaths();
+            InitMassLink(capacity);
 
             ZDO zdo = _nview.GetZDO();
             Kind = (ColonyKind)zdo.GetInt(MWNames.ZdoKind, 0);

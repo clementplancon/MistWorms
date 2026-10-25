@@ -158,7 +158,10 @@ namespace MistWorms.Mass
                 ProbeStream();
             }
 
-            if (_target != null || DevGoal.HasValue) Hunt(dt);
+            // Going to join a bigger mass of the colony comes before the hunt while it lasts (at most MergeSeekMaxSeconds).
+            bool seeking = _state.TryGetSeekGoal(out Vector3 seekGoal);
+            if (seeking) Hunt(dt, seekGoal);
+            else if (_target != null || DevGoal.HasValue) Hunt(dt);
             else Idle(dt);
         }
 
@@ -262,13 +265,13 @@ namespace MistWorms.Mass
 
         // ------------------------------------------------------------------ movement
 
-        private void Hunt(float dt)
+        private void Hunt(float dt, Vector3? seek = null)
         {
             _state.SetMode(MassStateCodes.Hunt);
             SetSpeedFactor(1f);
 
-            Vector3 goal = DevGoal ?? _target.transform.position;
-            float stop = DevGoal.HasValue ? DevGoalStop : MassMath.Radius(Mathf.Max(1, _state.N)) + MWConfig.Mass.EngulfRange.Value;
+            Vector3 goal = seek ?? DevGoal ?? _target.transform.position;
+            float stop = seek.HasValue || DevGoal.HasValue ? DevGoalStop : MassMath.Radius(Mathf.Max(1, _state.N)) + MWConfig.Mass.EngulfRange.Value;
 
             bool done = MoveTo(dt, goal, stop, false);
             if (!done)

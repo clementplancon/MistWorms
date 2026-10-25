@@ -98,6 +98,7 @@ namespace MistWorms.Dev.Scenarios
                 WormDrops.ResetCounters();
 
 
+                ctx.ResetPlayerState();
                 bool started = ColonyDev.StartAttack(player, VanillaNames.SwordBronze, colony.Store.pos[slot], out _, out string error);
                 yield return ctx.Wait(1.2f);
 

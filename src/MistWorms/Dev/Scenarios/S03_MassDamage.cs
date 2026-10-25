@@ -278,8 +278,27 @@ namespace MistWorms.Dev.Scenarios
                    $"hit sphere {HitSphereText(mass)}, creatures within 15 m={near}";
         }
 
+        private static readonly System.Reflection.FieldInfo DistantField = AccessTools.Field(typeof(Player), "m_distantTeleport");
+        private static readonly System.Reflection.FieldInfo TeleportingField = AccessTools.Field(typeof(Player), "m_teleporting");
+
+        /// <summary>The state of the player and of the rules a swing goes through (Attack.DoMeleeAttack, Character.RPC_Damage), for a swing that finds nothing.</summary>
+        private static string PlayerDiagnostics(Player player, WritheMassState mass)
+        {
+            Animator anim = player.GetComponentInChildren<Animator>();
+            ZDOID id = player.GetZDOID();
+            GameObject found = ZNetScene.instance != null ? ZNetScene.instance.FindInstance(id) : null;
+            return $"; isEnemy={BaseAI.IsEnemy(player, mass.Character)} pvp={player.IsPVPEnabled()} interior={player.InInterior()} faction={player.GetFaction()} group='{player.GetGroup()}' massGroup='{mass.Character.GetGroup()}' " +
+                   $"mteleporting={TeleportingField?.GetValue(player)} distantTeleport={DistantField?.GetValue(player)} zdoid={id} findInstanceIsPlayer={found == player.gameObject} " +
+                   $"eyeHeight={player.GetEyePoint().y - player.transform.position.y:0.00} crouch={player.IsCrouching()} sitting={player.IsSitting()} onGround={player.IsOnGround()} swimming={player.IsSwimming()} attached={player.IsAttached()} emote={player.InEmote()} " +
+                   $"animator={(anim != null ? $"enabled={anim.enabled} culling={anim.cullingMode} speed={anim.speed} stateHash={anim.GetCurrentAnimatorStateInfo(0).shortNameHash} t={anim.GetCurrentAnimatorStateInfo(0).normalizedTime:0.00}" : "none")}";
+        }
+
         private IEnumerator Melee(ScenarioContext ctx, Player player, int reps)
         {
+            // Vanilla logs what a swing finds ("initiating an attack", "added N hits to set", "hit X for ...") when this test is on: see the BepInEx log.
+            bool testsBefore = Terminal.m_showTests;
+            Terminal.m_showTests = true;
+            Terminal.m_testList["damage"] = "";
             int passed = 0;
             for (int rep = 1; rep <= reps; rep++)
             {
@@ -304,20 +323,34 @@ namespace MistWorms.Dev.Scenarios
                     yield return ctx.WaitUntil(() => player == null || !player.InAttack(), 4f);
                     player.m_stamina = player.GetMaxStamina();
                     yield return ctx.Wait(0.3f);
+                    ctx.ResetPlayerState();
                     started = ColonyDev.StartAttack(player, VanillaNames.SwordBronze, mass.transform.position, out _, out error);
                     if (!started) ctx.Log($"melee_{rep}: swing refused (attempt {attempt + 1}), retrying");
                 }
                 yield return ctx.Wait(1.4f);
 
                 int calls = mass.DamageCalls - callsBefore;
+                string aim = "";
+                if (mass.TryGetHitSphere(out Vector3 sc, out float sr))
+                {
+                    Vector3 toSphere = (sc - player.GetEyePoint()).normalized;
+                    var sbq = new System.Text.StringBuilder();
+                    foreach (RaycastHit h in Physics.RaycastAll(player.GetEyePoint(), toSphere, 4f, ~0, QueryTriggerInteraction.Collide))
+                        sbq.Append($" [{h.collider.name}/{LayerMask.LayerToName(h.collider.gameObject.layer)} d={h.distance:0.00} trig={h.collider.isTrigger} en={h.collider.enabled}]");
+                    aim = $"; rays:{sbq}; look {player.GetLookDir()} toSphere {toSphere} angle {Vector3.Angle(player.GetLookDir(), toSphere):0.0} deg, sphere distance from eye {Vector3.Distance(player.GetEyePoint(), sc):0.00}, ghost={player.InGhostMode()} god={player.InGodMode()} debugFly={player.IsDebugFlying()} teleporting={player.IsTeleporting()} inAttack={player.InAttack()} pos={player.transform.position}";
+                    aim += PlayerDiagnostics(player, mass);
+                }
                 bool outsideReach = capsuleGap > SwordReach;
                 bool ok = started && outsideReach && calls == 1 && mass.N < StartCount && mass.Health < hpBefore;
+                ctx.Log($"melee_{rep} diagnostics{aim}");
                 ctx.Assert($"melee_{rep}", ok, "attack started, body capsule out of reach, exactly one ApplyDamage, the mass lost worms",
-                    $"started={started}{(error != null ? " (" + error + ")" : string.Empty)} capsuleGap={capsuleGap:0.00} (reach {SwordReach}) applyDamageCalls={calls} n={mass.N} hp={mass.Health:0.#} (was {hpBefore:0.#}); {Diagnose(mass, spawnedAt)}");
+                    $"started={started}{(error != null ? " (" + error + ")" : string.Empty)} capsuleGap={capsuleGap:0.00} (reach {SwordReach}) applyDamageCalls={calls} n={mass.N} hp={mass.Health:0.#} (was {hpBefore:0.#}); {Diagnose(mass, spawnedAt)}{aim}");
                 if (ok) passed++;
                 MassDev.Destroy(mass);
                 yield return ctx.Wait(0.3f);
             }
+            Terminal.m_showTests = testsBefore;
+            Terminal.m_testList.Remove("damage");
             ctx.Assert("melee_hits", passed == reps, $"{reps}/{reps}", $"{passed}/{reps}");
         }
 
@@ -402,11 +435,36 @@ namespace MistWorms.Dev.Scenarios
 
         // ------------------------------------------------------------------ helpers
 
+        /// <summary>
+        /// The direction the masses are put in: the way the player faces if the floor there is level with his feet from 1.5 to 4.5 m (a sword swings at
+        /// the height of the player, and a mass standing 1 m higher on a bump is out of its arc: the result of S03 depended on where the previous scenario
+        /// left the player turned), otherwise the nearest of 16 directions that is level.
+        /// </summary>
         private static Vector3 Forward(Player player)
         {
             Vector3 f = player.transform.forward;
             f.y = 0f;
-            return f.sqrMagnitude > 1e-4f ? f.normalized : Vector3.forward;
+            f = f.sqrMagnitude > 1e-4f ? f.normalized : Vector3.forward;
+            Vector3 origin = player.transform.position;
+            for (int k = 0; k < 16; k++)
+            {
+                int step = (k + 1) / 2 * (k % 2 == 0 ? 1 : -1);
+                Vector3 d = Quaternion.AngleAxis(step * 22.5f, Vector3.up) * f;
+                if (LevelAlong(origin, d)) return d;
+            }
+            return f;
+        }
+
+        private static bool LevelAlong(Vector3 origin, Vector3 dir)
+        {
+            int mask = WormPhysics.SolidMask;
+            foreach (float dist in new[] { 1.5f, 2.5f, 3.2f, 4.5f })
+            {
+                Vector3 p = origin + dir * dist;
+                if (!Physics.Raycast(p + Vector3.up * 2f, Vector3.down, out RaycastHit hit, 5f, mask, QueryTriggerInteraction.Ignore)) return false;
+                if (Mathf.Abs(hit.point.y - origin.y) > 0.25f || hit.normal.y < 0.95f) return false;
+            }
+            return true;
         }
 
         /// <summary>A hit with no attacker (vanilla lets it through; a declared but missing attacker would be thrown away, Character.cs:2273).</summary>

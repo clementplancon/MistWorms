@@ -38,7 +38,8 @@ namespace MistWorms.Mass
 
     /// <summary>
     /// Layout of <c>mw_state</c> (spec §4.10, §11.3): the low nibble is the mode, 0x10 and 0x20 are the transient states of the
-    /// merge and dissolve transitions (render only, phase 4B-4), and 0x80 is the Stream bit (a shape, not a state).
+    /// merge and dissolve transitions (render only, phase 4B-4), 0x40 marks a partial merge in progress (the count drops without a loss: no worm
+    /// falls and dies), and 0x80 is the Stream bit (a shape, not a state).
     /// </summary>
     public static class MassStateCodes
     {
@@ -50,6 +51,7 @@ namespace MistWorms.Mass
         public const byte ModeMask = 0x0F;
         public const byte Merging = 0x10;
         public const byte Dissolving = 0x20;
+        public const byte Transferring = 0x40;
         public const byte Stream = 0x80;
 
         public static byte Mode(byte code) => (byte)(code & ModeMask);
@@ -59,6 +61,8 @@ namespace MistWorms.Mass
         public static bool IsMerging(byte code) => (code & Merging) != 0;
 
         public static bool IsDissolving(byte code) => (code & Dissolving) != 0;
+
+        public static bool IsTransferring(byte code) => (code & Transferring) != 0;
 
         public static byte With(byte code, byte flag, bool on) => on ? (byte)(code | flag) : (byte)(code & ~flag);
 
@@ -77,6 +81,7 @@ namespace MistWorms.Mass
             }
             if (IsMerging(code)) mode += "+Merging";
             if (IsDissolving(code)) mode += "+Dissolving";
+            if (IsTransferring(code)) mode += "+Transferring";
             if (IsStream(code)) mode += "+Stream";
             return mode;
         }

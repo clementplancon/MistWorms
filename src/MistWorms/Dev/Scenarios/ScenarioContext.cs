@@ -57,6 +57,21 @@ namespace MistWorms.Dev.Scenarios
             return s == "1" ? true : s == "0" ? false : def;
         }
 
+        /// <summary>
+        /// Gives the player back to a known state, so that the order of the scenarios never matters: the dev camera released, debug flight off, the
+        /// look straight ahead (a pitch inherited from a mine would send a sword swing over a low hit sphere), full stamina. Called by the runner
+        /// before every scenario and by the melee ones before each swing.
+        /// </summary>
+        public void ResetPlayerState()
+        {
+            Preview.DevCamera.Follow();
+            Player p = Player.m_localPlayer;
+            if (p == null) return;
+            if (p.IsDebugFlying()) p.ToggleDebugFly();
+            p.SetMouseLookForward(true);
+            p.m_stamina = p.GetMaxStamina();
+        }
+
         // ---------------------------------------------------------------- results
 
         /// <summary>Records an assertion; returns <paramref name="ok"/> so callers can bail out early.</summary>

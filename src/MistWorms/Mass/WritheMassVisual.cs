@@ -25,6 +25,14 @@ namespace MistWorms.Mass
         private const float TargetTurnIdle = 60f;      // deg/s toward the target at rest
         private const float TargetRefresh = C.TargetRefresh;
         private const float DissolveSeconds = WritheMassState.DissolveDestroyDelay;
+        private const float MergeSeconds = MassMergeMath.MergeSeconds;
+        private const float GrowSeconds = 0.5f;        // spec 12.4: a newborn heap grows from nothing to r(n) in 0.5 s (ease-out)
+        private const float MinGrowth = 0.05f;
+        private const float ArrivalSeconds = 0.4f;     // spec 12.4: the worms that form or join a heap slide onto it in 0.4 s
+        private const float ArrivalReach = 0.6f;       // they end inside the footprint, at this share of the final radius
+        private const float ArrivalHump = 0.08f;
+        private const float ArrivalEndScale = 0.9f;
+        private const int ArrivalMax = 64;             // glides started per call (a formation of 200 worms shows a sample)
         private const float EngulfRate = 1f;           // engulf units per second (smooth, never a pop)
         private const float OdoFold = 4096f;           // multiple of every flipbook length: folding changes no frame
         private const float DetachWindowFrames = 4;    // the detached worm is taken from an evaluation at most this many frames old
@@ -166,15 +174,22 @@ namespace MistWorms.Mass
             EnsureSlots();
 
             float now = Time.time;
-            bool dissolving = _state.Dissolving || MassStateCodes.IsDissolving(_state.StateCode);
+            byte code = _state.StateCode;
+            bool dissolving = _state.Dissolving || MassStateCodes.IsDissolving(code);
+            bool merging = MassStateCodes.IsMerging(code);
+            bool shrinking = dissolving || merging;
+            bool transferring = MassStateCodes.IsTransferring(code);
 
-            // ---- radius (spec 4.5: smoothed on change), loss detection
+            // ---- radius (spec 4.5: smoothed on change; a newborn grows from nothing in 0.5 s, spec 12.4), loss detection
             float target = MassMath.Radius(n);
-            if (_shownRadius < 0f) _shownRadius = target;
+            float grow = shrinking ? 1f : BornGrowth();
+            if (_shownRadius < 0f) _shownRadius = target * grow;
             else _shownRadius = MassMath.SmoothRadius(_shownRadius, target, dt);
-            if (_lastN >= 0 && n < _lastN && !dissolving) DetachLost(_lastN, n);
+            if (grow < 1f && _shownRadius > target * grow) _shownRadius = target * grow;
+            // A worm that leaves for another mass (partial merge) or that merges is not a loss: nothing falls and dies.
+            if (_lastN >= 0 && n < _lastN && !shrinking && !transferring) DetachLost(_lastN, n);
             _lastN = n;
-            _dissolve = Mathf.MoveTowards(_dissolve, dissolving ? 1f : 0f, dt / DissolveSeconds);
+            _dissolve = Mathf.MoveTowards(_dissolve, shrinking ? 1f : 0f, dt / (dissolving ? DissolveSeconds : MergeSeconds));
             float shrink = 1f - _dissolve * _dissolve * (3f - 2f * _dissolve);
             float r = Mathf.Max(MinRadius, _shownRadius * shrink);
 
@@ -313,7 +328,97 @@ namespace MistWorms.Mass
             BoundRadius = bound;
             Center = root + up * (0.25f * r + 0.2f);
             Active = true;
+
+            if (_arrCount > 0) StartArrivals(now, n);
         }
+
+        // ------------------------------------------------------------------ transitions (phase 4B-4)
+
+        /// <summary>Share of r(n) a newborn heap shows: 0.05 at birth to 1 after 0.5 s (ease-out); 1 for a mass born earlier or of unknown age.</summary>
+        private float BornGrowth()
+        {
+            long born = _state.BornTicks;
+            if (born <= 0 || ZNet.instance == null) return 1f;
+            double age = (ZNet.instance.GetTime().Ticks - born) / (double)TimeSpan.TicksPerSecond;
+            if (age >= GrowSeconds) return 1f;
+            if (age < 0.0) age = 0.0;
+            float t = (float)(age / GrowSeconds);
+            float e = 1f - (1f - t) * (1f - t);
+            return Mathf.Max(MinGrowth, e);
+        }
+
+        private readonly Vector3[] _arrFrom = new Vector3[ArrivalMax];
+        private Vector3[] _arrTo;
+        private int _arrCount;
+        private Vector3[] _releaseScratch;
+
+        /// <summary>
+        /// Formation or transfer (spec 12.4): the worms standing at <paramref name="world"/> (the first <paramref name="count"/>) slide onto this heap in
+        /// 0.4 s, as independent crawling worms (<see cref="MassTransients"/>), so the heap never pops. Taken on the next Update, once the heap has its frame.
+        /// Local to the peer that calls it; a sample of ArrivalMax when there are more.
+        /// </summary>
+        public void SeedArrivals(Vector3[] world, int count)
+        {
+            if (world == null || count <= 0) return;
+            int c = Math.Min(count, world.Length);
+            int take = Math.Min(c, ArrivalMax - _arrCount);
+            for (int j = 0; j < take; j++) _arrFrom[_arrCount++] = world[(int)((long)j * c / take)];
+        }
+
+        /// <summary>Absorption (spec 12.4): the worm that just finished climbing, at <paramref name="from"/>, sinks into the heap instead of vanishing.</summary>
+        public void NotifyArrival(Vector3 from)
+        {
+            if (_arrCount < ArrivalMax) _arrFrom[_arrCount++] = from;
+        }
+
+        private void StartArrivals(float now, int n)
+        {
+            if (Application.isBatchMode || _slots == null) { _arrCount = 0; return; }
+            if (_arrTo == null) _arrTo = new Vector3[ArrivalMax];
+            float rt = ArrivalReach * MassMath.Radius(Math.Max(1, n)) / MassLayout.ReleaseReach;
+            MassLayout.ReleasePoints(_slots.Seed, _arrCount, rt, Root, Forward, Left, _arrTo);
+            for (int k = 0; k < _arrCount; k++)
+                MassTransients.SpawnGlide(_arrFrom[k], _arrTo[k], ArrivalSeconds, now, ArrivalHump, ArrivalEndScale, k);
+            _arrCount = 0;
+        }
+
+        /// <summary>
+        /// World points of <paramref name="count"/> worms of the heap, for the dissolution (the free worms leap from there) and the transfers: the worms
+        /// the layout drew in the last frames when there are some, completed with pure points of the heap seed (<see cref="MassLayout.ReleasePoints"/>)
+        /// when the heap was not drawn (culled, server). Returns how many came from drawn worms.
+        /// </summary>
+        internal int GetReleasePoints(Vector3[] dst, int count)
+        {
+            count = Math.Min(count, dst.Length);
+            int got = 0;
+            MassJob job = Job;
+            if (job != null && job.ReadyIdx >= 0)
+            {
+                MassOutput o = job.Out[job.ReadyIdx];
+                if (o.Valid && o.CandCount > 0 && Time.frameCount - o.Frame <= ReleaseMaxAgeFrames)
+                {
+                    int step = Math.Max(1, o.CandCount / Math.Max(1, count));
+                    for (int i = 0; i < o.CandCount && got < count; i += step)
+                        dst[got++] = new Vector3(o.Cand[i].M.m03, o.Cand[i].M.m13, o.Cand[i].M.m23);
+                }
+            }
+            int drawn = got;
+            if (got < count)
+            {
+                bool frame = _root.Started;
+                Vector3 root = frame ? Root : transform.position;
+                Vector3 fwd = frame ? Forward : Vector3.forward;
+                Vector3 left = frame ? Left : Vector3.left;
+                float r = _shownRadius > 0f ? _shownRadius : MassMath.Radius(Math.Max(1, N));
+                uint seed = _slots != null ? _slots.Seed : (_state != null && _state.Valid ? MassLayout.SeedFromIds(_state.ZdoId.UserID, _state.ZdoId.ID) : 1u);
+                if (_releaseScratch == null || _releaseScratch.Length < count) _releaseScratch = new Vector3[Math.Max(count, 16)];
+                MassLayout.ReleasePoints(seed, count, r, root, fwd, left, _releaseScratch);
+                for (int k = got; k < count; k++) dst[k] = _releaseScratch[k];
+            }
+            return drawn;
+        }
+
+        private const int ReleaseMaxAgeFrames = 12;
 
         private void UpdateTarget(float now)
         {

@@ -11,11 +11,11 @@ namespace MistWorms.Colony
     internal sealed partial class WormColony
     {
         // Fixed behaviour numbers of the spec that have no config key.
+        private const float LeapStepInterval = 0.05f;
         private const float WanderRadius = 6f;             // spec §3.3 Idle
         private const float WanderSpeedFactor = 0.5f;      // decisions.md 34: strolling at half speed
         private const float ArriveDistance = 0.3f;
         private const float WanderGoalMaxTime = 8f;
-        private const float FleeDuration = 4f;             // spec §3.3 Fleeing
         private const float FleeGoalDistance = 6f;
         private const float GroundInterval = 0.25f;        // spec §11.1: floor check cadence of a resting worm
         private const float AvoidInterval = 0.25f;
@@ -28,6 +28,7 @@ namespace MistWorms.Colony
         private const float SeparationRadius = 0.3f;       // between body middles
         private const int SeparationNeighbors = 6;
         private const float SeparationWeight = 1.5f;
+        private const float SeparationFirstMin = 0.2f;   // push (a unit is a worm on top of another) above which Recovery ignores its place
         private const float SeparationQueryRadius = SeparationRadius + 2f * WormMath.BodyMidOffset; // head distance that can still mean middles < 0.3 m apart
         private const int NeighborQueryCount = 8;          // the 6 separation neighbours plus 2 for cohesion and alignment
         private const float NeighborMaxDy = 1.5f;
@@ -43,7 +44,7 @@ namespace MistWorms.Colony
         private const float ApproachPatience = 4f;         // ...or after this long in Hunting without getting there (anti-blocking)
         private const float WindupNudgeSpeed = 0.35f;      // m/s of the sideways slide of a worm in its windup
         private const float WindupNudgeMinPush = 0.05f;    // separation push (a unit is a worm on top of another) under which it stays still
-        private const float RecoverSpeedFactor = 0.3f;     // a worm recovering from a strike shuffles to its place at this share of the speed
+        private const float RecoverSpeedFactor = 0.5f;     // a worm recovering from a strike shuffles to its place at this share of the speed (0.3 left Recovery + Recovery pairs overlapping, S18)
         private const int ApproachTries = 8;              // places tried in order before aiming at the target itself
         private const float ApproachMaxDy = 0.6f;          // floor of the point within this of the target's feet
         private const float GridInterval = 0.1f;
@@ -76,6 +77,7 @@ namespace MistWorms.Colony
             _players = Player.GetAllPlayers();
             RefreshFire(now);
             RefreshPathBudget(now);
+            MassTick(now);
             bool gridRebuilt = false;
             if (now >= _nextGridTime) { RebuildGrid(now); gridRebuilt = true; }
 
@@ -92,6 +94,7 @@ namespace MistWorms.Colony
                 float dt = Mathf.Min(now - s.lastSimTime[i], MaxStepDt);
                 float rate = WormMath.SimRate(state == WormState.Sleeping, NearestPlayerSqr(s.pos[i]), nearRate, farRate);
                 float interval = 1f / Mathf.Max(0.1f, rate);
+                if (state == WormState.Fleeing && s.subPhase[i] == LeapPhase && interval > LeapStepInterval) interval = LeapStepInterval;   // a 0.35 s leap is stepped finely whatever the distance
                 s.lastSimTime[i] = now;
                 s.nextSimTime[i] = now + interval;
                 s.simInterval[i] = interval;
@@ -100,8 +103,9 @@ namespace MistWorms.Colony
                 steps++;
             }
 
-            // Phase 7 adds nests and the snapshot: a colony will then also wait for its nests before vanishing.
-            if (s.AliveCount == 0)
+            // Phase 7 adds nests and the snapshot: a colony will then also wait for its nests before vanishing. It also stays while it has a mass
+            // (the worms of a dissolving mass come back to it, spec §4.4).
+            if (s.AliveCount == 0 && _massCount == 0)
             {
                 if (_emptySince < 0f) _emptySince = now;
                 else if (now - _emptySince >= EmptyDestroyDelay) DestroyColony();
@@ -171,8 +175,13 @@ namespace MistWorms.Colony
                 case WormState.Fleeing:
                     StepFleeing(i, now, dt);
                     break;
+                case WormState.Gathering:
+                    StepGathering(i, now, dt);
+                    break;
+                case WormState.Absorbing:
+                    StepAbsorbing(i, now, dt);
+                    break;
                 default:
-                    // Idle. Gathering joins the same behaviour until phase 4 adds masses and groups.
                     StepIdle(i, now, dt);
                     break;
             }
@@ -202,8 +211,8 @@ namespace MistWorms.Colony
                 s.nextSenseTime[i] = now + SenseInterval;
                 if (SenseTarget(i, now))
                 {
-                    // Phase 4: look for a mass or a group to join (Gathering) before hunting alone.
-                    SetState(i, WormState.Hunting, now);
+                    // A mass or a group to join (Gathering) before hunting alone (spec §3.3).
+                    BeginPursuit(i, now);
                     return;
                 }
             }
@@ -436,7 +445,7 @@ namespace MistWorms.Colony
             WormStore s = Store;
             Vector3 before = s.pos[i];
             Vector3 goal = ApproachGoal(i, target, now);
-            MoveWorm(i, goal, MWConfig.Worm.MoveSpeed.Value * RecoverSpeedFactor, now, dt, noiseWeight: 0f, stopAtGoal: true);
+            MoveWorm(i, goal, MWConfig.Worm.MoveSpeed.Value * RecoverSpeedFactor, now, dt, noiseWeight: 0f, stopAtGoal: true, separationFirst: true);
             if (SurfaceDistance(i, target) > MWConfig.Worm.CobraRange.Value)
             {
                 s.pos[i] = before;
@@ -466,13 +475,12 @@ namespace MistWorms.Colony
         private void StepFleeing(int i, float now, float dt)
         {
             WormStore s = Store;
-            if (s.stateTime[i] >= FleeDuration)
+            // The leap out of a dissolved mass comes first (the flee timer starts when it lands).
+            if (s.subPhase[i] == LeapPhase && StepLeap(i, now, dt)) return;
+            if (s.stateTime[i] >= MWConfig.Worm.FleeDuration.Value)
             {
-                // Phase 4: Gathering when a group exists within 30 m. Phase 3: back to wandering where it ended up.
-                s.home[i] = s.pos[i];
-                s.goalTime[i] = 0f;
-                s.pauseUntil[i] = now;
-                SetState(i, WormState.Idle, now);
+                // Gathering when a mass or a group exists within Mass.RegroupRadius, otherwise back to wandering where it ended up.
+                EndFlee(i, now);
                 return;
             }
 
@@ -491,7 +499,7 @@ namespace MistWorms.Colony
         /// One crawl step toward <paramref name="goal"/>: steer (goal + obstacle avoidance + separation + wander noise), turn at
         /// Worm.TurnSpeed, then advance along the heading through <see cref="WormPhysics.TryStep"/>. Returns true if the worm moved.
         /// </summary>
-        private bool MoveWorm(int i, Vector3 goal, float speed, float now, float dt, float noiseWeight, bool stopAtGoal)
+        private bool MoveWorm(int i, Vector3 goal, float speed, float now, float dt, float noiseWeight, bool stopAtGoal, bool separationFirst = false)
         {
             WormStore s = Store;
             Vector3 pos = s.pos[i];
@@ -504,7 +512,11 @@ namespace MistWorms.Colony
 
             if (now >= s.nextAvoidTime[i]) EvaluateAvoidance(i, now);
             desired += s.avoidDir[i] * AvoidWeight;
-            desired += GroupSteer(i, pos, h, out float fileCap);
+            Vector3 group = GroupSteer(i, pos, h, out float fileCap);
+            // Recovering from a strike: a push away from a neighbour comes before the way back to the place (the goal is dropped while it lasts).
+            bool pushed = separationFirst && group.sqrMagnitude > SeparationFirstMin * SeparationFirstMin;
+            if (pushed) desired = group + s.avoidDir[i] * AvoidWeight;
+            else desired += group;
             if (fileCap < speed) speed = fileCap;
             if (noiseWeight > 0f)
             {
@@ -524,7 +536,7 @@ namespace MistWorms.Colony
             // A worm crawls along its heading and slows down while it is still turning toward the wanted direction.
             float align = mag > 1e-4f ? (fx * desired.x + fz * desired.z) / mag : 1f;
             float travel = speed * dt * Mathf.Clamp(0.25f + 0.75f * align, 0.2f, 1f);
-            if (stopAtGoal && travel > dist) travel = dist;
+            if (stopAtGoal && !pushed && travel > dist) travel = dist;
             if (travel < 1e-4f)
             {
                 GroundMaintain(i, now);

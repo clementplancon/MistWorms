@@ -17,6 +17,13 @@ namespace MistWorms.Dev
 
         private static readonly System.Random s_rng = new System.Random();
 
+        /// <summary>Dev switch (plan 4B-4): while false a worm that senses a player hunts alone, and nothing gathers, forms or absorbs. S18 tests the free worms with it off.</summary>
+        public static bool GatheringEnabled
+        {
+            get => WormColony.GatheringEnabled;
+            set => WormColony.GatheringEnabled = value;
+        }
+
         // ---------------------------------------------------------------- colony lookup / creation
 
         /// <summary>
@@ -59,7 +66,7 @@ namespace MistWorms.Dev
         /// the player's chest (never behind a wall or inside rock). Respects Colony.MaxAlivePerMine unless <paramref name="force"/>.
         /// Returns how many were created.
         /// </summary>
-        public static int Spawn(int n, float radius, WormState state, bool force, out WormColony colony, out string note)
+        public static int Spawn(int n, float radius, WormState state, bool force, out WormColony colony, out string note, int tries = SpawnTries)
         {
             colony = null;
             note = null;
@@ -78,7 +85,7 @@ namespace MistWorms.Dev
 
             for (int k = 0; k < n; k++)
             {
-                for (int attempt = 0; attempt < SpawnTries; attempt++)
+                for (int attempt = 0; attempt < tries; attempt++)
                 {
                     float angle = (float)s_rng.NextDouble() * Mathf.PI * 2f;
                     float r = Mathf.Sqrt((float)s_rng.NextDouble()) * radius;
@@ -147,6 +154,7 @@ namespace MistWorms.Dev
                 {
                     player.transform.rotation = Quaternion.LookRotation(dir);
                     player.SetLookDir(dir.normalized);
+                    player.SetMouseLookForward(true);   // yaw from the body, pitch 0: the swing is level with the hit sphere
                 }
             }
 
@@ -269,6 +277,7 @@ namespace MistWorms.Dev
                 { "byState", byState },
                 { "simMs", new Dictionary<string, object> { { "last", c.LastSimMs }, { "avg", c.AvgSimMs }, { "max", c.MaxSimMs }, { "steps", c.LastSimSteps } } },
                 { "proxies", ProxiedWorms(c) },
+                { "masses", new Dictionary<string, object> { { "known", c.MassCount }, { "formed", c.MassesFormed }, { "wormsFormed", c.WormsFormed }, { "wormsAbsorbed", c.WormsAbsorbed }, { "dissolvedWorms", c.DissolvedWorms }, { "gathering", ColonyDev.GatheringEnabled } } },
                 {
                     "combat", new Dictionary<string, object>
                     {

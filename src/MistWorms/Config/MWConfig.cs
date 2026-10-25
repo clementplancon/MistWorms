@@ -158,6 +158,7 @@ namespace MistWorms.Config
             public static ConfigEntry<float> Health;
             public static ConfigEntry<float> MoveSpeed;
             public static ConfigEntry<float> FleeSpeedMultiplier;
+            public static ConfigEntry<float> FleeDuration;
             public static ConfigEntry<float> TurnSpeed;
             public static ConfigEntry<float> DurabilityPerBite;
             public static ConfigEntry<float> BiteInterval;
@@ -183,6 +184,9 @@ namespace MistWorms.Config
                     "Crawl speed of a free worm, in m/s.", F(0.5f, 8f));
                 FleeSpeedMultiplier = Synced(S, nameof(FleeSpeedMultiplier), 1.35f,
                     "Speed multiplier while fleeing (fire, mass dissolution).", F(1f, 3f));
+                // range chosen (decisions.md 82 gives the key and its default, not its range)
+                FleeDuration = Synced(S, nameof(FleeDuration), 4f,
+                    "Seconds a worm flees after a mass dissolved or at the sight of fire, before it regroups or wanders again.", F(0.5f, 30f));
                 TurnSpeed = Synced(S, nameof(TurnSpeed), 360f,
                     "Turn rate of a free worm, in degrees per second.", F(90f, 720f));
                 DurabilityPerBite = Synced(S, nameof(DurabilityPerBite), 1f,

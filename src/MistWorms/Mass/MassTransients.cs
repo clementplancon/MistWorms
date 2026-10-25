@@ -35,6 +35,89 @@ namespace MistWorms.Mass
         private int _next;
         private WormEffects.Limiter _impactFx;
 
+        // Worms that slide onto a heap (formation, absorption, transfer of a partial merge; phase 4B-4): a straight glide with a low hump,
+        // a crawl pose, and a scale that can shrink toward the end. Same static ring as the falls, so they survive the mass that asked for them.
+        public const int GlideMax = 96;
+        public const float GlideCrawlRate = 1.2f;       // flipbook seconds per second of glide
+
+        private struct Glide
+        {
+            public bool Live;
+            public float T0, Duration, Hump, EndScale;
+            public Vector3 From, To;
+            public int Phase;
+        }
+
+        private readonly Glide[] _glides = new Glide[GlideMax];
+        private int _nextGlide;
+
+        /// <summary>Glides in progress (dev checks).</summary>
+        public static int GlideLiveCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < GlideMax; i++) if (Instance._glides[i].Live) n++;
+                return n;
+            }
+        }
+
+        /// <summary>Total number of glides ever started (dev checks).</summary>
+        public static int GlideSpawned { get; private set; }
+
+        /// <summary>
+        /// A worm slides from <paramref name="from"/> to <paramref name="to"/> in <paramref name="duration"/> seconds (ease-out),
+        /// <paramref name="hump"/> metres higher at mid-way, its scale going to <paramref name="endScale"/>. Overwrites the oldest one when the ring is full.
+        /// </summary>
+        public static void SpawnGlide(Vector3 from, Vector3 to, float duration, float now, float hump, float endScale, int phase)
+        {
+            MassTransients t = Instance;
+            Glide g;
+            g.Live = true;
+            g.T0 = now;
+            g.Duration = duration < 0.05f ? 0.05f : duration;
+            g.Hump = hump;
+            g.EndScale = endScale;
+            g.From = from;
+            g.To = to;
+            g.Phase = phase;
+            t._glides[t._nextGlide] = g;
+            t._nextGlide = (t._nextGlide + 1) % GlideMax;
+            GlideSpawned++;
+
+            if (!Application.isBatchMode) WormRenderer.Instance.Register(t);   // idempotent
+        }
+
+        private void CollectGlides(WormRenderer.Sink sink, float now)
+        {
+            for (int i = 0; i < GlideMax; i++)
+            {
+                if (!_glides[i].Live) continue;
+                Glide g = _glides[i];
+                float t = (now - g.T0) / g.Duration;
+                if (t >= 1f || t < 0f)
+                {
+                    _glides[i].Live = false;
+                    continue;
+                }
+
+                float e = 1f - (1f - t) * (1f - t);
+                Vector3 pos = Vector3.Lerp(g.From, g.To, e);
+                pos.y += g.Hump * 4f * t * (1f - t);
+                Vector3 dir = g.To - g.From;
+                dir.y = 0f;
+                Vector3 fwd = dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
+                float s = 1f + (g.EndScale - 1f) * e;
+                Vector3 right = Vector3.Cross(Vector3.up, fwd);
+                Matrix4x4 m = default;
+                m.m00 = right.x * s; m.m10 = right.y * s; m.m20 = right.z * s;
+                m.m01 = 0f; m.m11 = s; m.m21 = 0f;
+                m.m02 = fwd.x * s; m.m12 = fwd.y * s; m.m22 = fwd.z * s;
+                m.m03 = pos.x; m.m13 = pos.y; m.m23 = pos.z; m.m33 = 1f;
+                sink.AddWorm(WormAnim.Crawl, sink.FrameAt(WormAnim.Crawl, (now - g.T0) * GlideCrawlRate, g.Phase * 0.37f), m);
+            }
+        }
+
         /// <summary>Falls in progress (dev checks).</summary>
         public static int LiveCount
         {
@@ -78,6 +161,7 @@ namespace MistWorms.Mass
         public void CollectInstances(WormRenderer.Sink sink)
         {
             float now = Time.time;
+            CollectGlides(sink, now);
             for (int i = 0; i < Max; i++)
             {
                 if (!_ring[i].Live) continue;

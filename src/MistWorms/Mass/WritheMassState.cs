@@ -14,7 +14,7 @@ namespace MistWorms.Mass
     /// (<c>mw_n</c>, <c>mw_partial</c>), where every peer reads it for the name, the hit sphere, the render and the loss effects.
     /// A mass never heals and has no level: its health is exactly n x Worm.Health (decisions.md 85).
     /// </summary>
-    internal sealed class WritheMassState : MonoBehaviour
+    internal sealed partial class WritheMassState : MonoBehaviour
     {
         /// <summary>The mass disappears this long after it dissolved into fleeing worms (spec §4.4: the dome shrinks in 0.4 s).</summary>
         public const float DissolveDestroyDelay = 0.4f;
@@ -109,9 +109,9 @@ namespace MistWorms.Mass
 
         /// <summary>
         /// Instantiates a mass of <paramref name="n"/> worms standing at <paramref name="position"/> (the floor). The calling peer owns it.
-        /// Returns null when the prefab is not registered. Used by the colony (phase 4B-3) and by the dev tools.
+        /// Returns null when the prefab is not registered. Used by the colony (<paramref name="newborn"/>: a formation, the heap grows from nothing in 0.5 s) and by the dev tools.
         /// </summary>
-        public static WritheMassState Create(Vector3 position, int n, ZDOID colony)
+        public static WritheMassState Create(Vector3 position, int n, ZDOID colony, bool newborn = false)
         {
             GameObject prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(MWNames.MassPrefab) : null;
             if (prefab == null)
@@ -129,7 +129,7 @@ namespace MistWorms.Mass
                 else Destroy(go);
                 return null;
             }
-            state.Initialize(n, colony);
+            state.Initialize(n, colony, newborn);
             return state;
         }
 
@@ -154,7 +154,7 @@ namespace MistWorms.Mass
         }
 
         /// <summary>Fresh mass: writes the ZDO fields and imposes the exact health n x Worm.Health. Owner only.</summary>
-        public void Initialize(int n, ZDOID colony)
+        public void Initialize(int n, ZDOID colony, bool newborn = false)
         {
             if (!IsOwner) return;
             n = Math.Max(1, Math.Min(n, MWConfig.Mass.MaxCount.Value));
@@ -163,7 +163,8 @@ namespace MistWorms.Mass
             zdo.Set(HashPartial, 0f);
             zdo.Set(HashState, (int)MassStateCodes.Idle);
             zdo.Set(MWNames.ZdoMassColony, colony);
-            zdo.Set(HashBorn, ZNet.instance != null ? ZNet.instance.GetTime().Ticks : 0L);
+            // The growth animation (spec §12.4) is for a mass born of a formation; a dev mass appears at its size (mw_born 0 = unknown).
+            zdo.Set(HashBorn, newborn && ZNet.instance != null ? ZNet.instance.GetTime().Ticks : 0L);
             zdo.Set(MWNames.ZdoMassPool, Array.Empty<byte>());
             ImposeHealth(n, 0f);
             _imposed = true;
@@ -230,6 +231,7 @@ namespace MistWorms.Mass
                 _nextReconcile = Time.time + ReconcilePeriod;
                 Reconcile();
             }
+            MergeTick(Time.time);
         }
 
         // ------------------------------------------------------------------ fall safety net (owner)
@@ -272,6 +274,7 @@ namespace MistWorms.Mass
         {
             if (!IsOwner || _character == null || _body == null) return;
             float now = Time.time;
+            if (_merging) StepMerge(now);
 
             if (_character.IsOnGround() && GroundConfirmed(transform.position))
             {
@@ -488,7 +491,7 @@ namespace MistWorms.Mass
                 _nview.InvokeRPC(MWNames.RpcMassAdd, k);
                 return -1;
             }
-            if (_dissolving || _character == null || _character.IsDead()) return 0;
+            if (_dissolving || _merging || _character == null || _character.IsDead()) return 0;
 
             int n = N;
             int accepted = Math.Max(0, Math.Min(k, MWConfig.Mass.MaxCount.Value - n));
@@ -567,6 +570,7 @@ namespace MistWorms.Mass
         private void BeginDissolve(int n)
         {
             if (_dissolving) return;
+            if (_merging) CancelMerge();
             _dissolving = true;
             WriteState(MassStateCodes.With(StateCode, MassStateCodes.Dissolving, true));
 

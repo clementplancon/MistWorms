@@ -56,6 +56,11 @@ namespace MistWorms.Colony
         public readonly float[] approachNext;     // when the approach point is evaluated next
         public readonly byte[] approachMode;      // 0 = not evaluated yet, 1 = a validated place, 2 = no valid place (aims at the target itself)
 
+        // ---- masses (phase 4B-4, local, never synchronized)
+        public readonly ZDOID[] massRef;          // the mass an Absorbing worm climbs onto
+        public readonly Vector3[] absorbFrom;     // where the absorption (or the leap of a dissolved worm) started
+        public readonly float[] leapHeight;       // apex of the leap of a dissolved worm, metres (subPhase 1 while Fleeing)
+
         // ---- scheduling and perception
         public readonly float[] nextSimTime;
         public readonly float[] lastSimTime;
@@ -114,6 +119,10 @@ namespace MistWorms.Colony
             approachOffset = new Vector3[capacity];
             approachNext = new float[capacity];
             approachMode = new byte[capacity];
+
+            massRef = new ZDOID[capacity];
+            absorbFrom = new Vector3[capacity];
+            leapHeight = new float[capacity];
 
             nextSimTime = new float[capacity];
             lastSimTime = new float[capacity];
@@ -178,6 +187,10 @@ namespace MistWorms.Colony
             approachOffset[i] = Vector3.zero;
             approachNext[i] = 0f;
             approachMode[i] = 0;
+
+            massRef[i] = ZDOID.None;
+            absorbFrom[i] = position;
+            leapHeight[i] = 0f;
 
             lastSimTime[i] = now;
             nextSimTime[i] = now;

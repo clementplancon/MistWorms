@@ -9,8 +9,9 @@ namespace MistWorms.Colony
         Hunting = 3,
         Striking = 4,
         Fleeing = 5,
-        Absorbed = 6,
-        Dead = 7,
+        Absorbing = 7,   // climbing onto a mass for 0.5 s (decisions.md 64: Absorbed and Dead move up by one)
+        Absorbed = 8,
+        Dead = 9,
     }
 
     /// <summary>Sub-phase of Striking (spec §3.3 point 5).</summary>
