@@ -25,6 +25,7 @@ namespace MistWorms.Colony
         private const float WaypointReach = 0.5f;
 
         private List<Player> _players = new List<Player>();
+        private readonly TargetScanner _scanner = new TargetScanner();
         private readonly Collider[] _fire = new Collider[MaxFireColliders];
         private int _fireCount;
         private float _nextFireTime;
@@ -59,24 +60,38 @@ namespace MistWorms.Colony
             return null;
         }
 
+        /// <summary>The current target of worm <paramref name="i"/> as a ZDOID, for a creature, a tamed animal or a structure; ZDOID.None otherwise.</summary>
+        private ZDOID ObjectTargetId(int i)
+        {
+            WormStore s = Store;
+            TargetKind kind = (TargetKind)s.targetKind[i];
+            return kind == TargetKind.Tamed || kind == TargetKind.Creature || kind == TargetKind.Structure ? new ZDOID(s.targetZdoUser[i], s.targetZdoId[i]) : ZDOID.None;
+        }
+
         /// <summary>
         /// Perception of a worm (spec §3.1, §5.3): a player is sensed when heard (BaseAI.CanHearTarget rule) or seen (range, angle,
-        /// no view blocker). The closest by distance x PlayerWeight within the hunt range becomes the target; the current target is
-        /// kept while perceived at any range, and forgotten after 5 s unseen or beyond twice the view range.
+        /// no view blocker). Creatures, tamed animals and structures are chosen by <see cref="TargetScanner"/> (3D distance, line of sight, Targets.*). The
+        /// lowest distance x weight within the hunt range becomes the target; the current target is kept while perceived at any range, and forgotten after
+        /// 5 s unseen or beyond twice the view range. Targets.ExcludedPrefabs applies to every kind.
         /// Returns whether the worm has a target afterwards.
         /// </summary>
         private bool SenseTarget(int i, float now)
         {
             WormStore s = Store;
-            if (!MWConfig.Targets.AttackPlayers.Value)
+            bool players = MWConfig.Targets.AttackPlayers.Value;
+            bool objects = MWConfig.Targets.AttackTamed.Value || MWConfig.Targets.AttackCreatures.Value || MWConfig.Targets.AttackStructures.Value;
+            if (!players && !objects)
             {
-                if (s.targetId[i] != 0) ClearTarget(i);
+                if (s.targetKind[i] != (byte)TargetKind.None) ClearTarget(i);
                 return false;
             }
+            TargetRules.Excluded.Refresh(MWConfig.Targets.ExcludedPrefabs.Value);
+            if (KeepObstacle(i, now)) return true;   // the door a living target hides behind is gnawed until it falls (decision 164)
 
             Vector3 pos = s.pos[i];
             Vector3 eye = pos + Vector3.up * EyeHeight;
-            long current = s.targetId[i];
+            TargetKind currentKind = (TargetKind)s.targetKind[i];
+            long current = currentKind == TargetKind.Player ? s.targetId[i] : 0;
             float viewRange = MWConfig.Worm.ViewRange.Value;
             float viewAngle = MWConfig.Worm.ViewAngle.Value;
             float hearRange = MWConfig.Worm.HearRange.Value;
@@ -87,10 +102,10 @@ namespace MistWorms.Colony
             float bestScore = float.MaxValue;
             Vector3 bestCenter = default;
 
-            for (int k = 0; k < _players.Count; k++)
+            for (int k = 0; players && k < _players.Count; k++)
             {
                 Player p = _players[k];
-                if (!Targetable(p)) continue;
+                if (!Targetable(p) || TargetScanner.IsExcluded(p)) continue;
 
                 bool isCurrent = current != 0 && p.GetPlayerID() == current;
                 Vector3 center = p.GetCenterPoint();
@@ -115,20 +130,34 @@ namespace MistWorms.Colony
                 }
             }
 
+            // A creature or a tamed animal that beats the best player; a structure only when no player and no creature is perceived (decision 164).
+            if (objects && _scanner.Pick(pos, eye, Mathf.Min(HuntRange, viewRange), bestScore, ObjectTargetId(i), null, now,
+                    TargetReach.WormVerticalReach(EyeHeight, MWConfig.Worm.CobraRange.Value), _blacklist, i,
+                    TargetRules.FallbackDelayElapsed(now, _livingSeen[i], ForgetTime), out TargetChoice pick))
+            {
+                ZDOID id = pick.Id;
+                if (id != ZDOID.None)
+                {
+                    s.SetObjectTarget(i, pick.Kind, id.UserID, id.ID);
+                    s.lastSeen[i] = now;
+                    if (pick.Kind != TargetKind.Structure) _livingSeen[i] = now;
+                    s.hasLos[i] = true;   // the pick is a line of sight
+                    return true;
+                }
+            }
+
             if (best != null)
             {
-                s.targetKind[i] = (byte)TargetKind.Player;
-                s.targetId[i] = best.GetPlayerID();
+                s.SetPlayerTarget(i, best.GetPlayerID());
                 s.lastSeen[i] = now;
+                _livingSeen[i] = now;
                 s.hasLos[i] = !Physics.Linecast(eye, bestCenter, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore);
                 return true;
             }
 
-            if (current != 0)
+            if (currentKind != TargetKind.None)
             {
-                Player held = FindPlayer(current);
-                if (held == null || !Targetable(held) || now - s.lastSeen[i] > ForgetTime
-                    || Vector3.Distance(held.transform.position, pos) > 2f * viewRange)
+                if (!TargetStillValid(i, currentKind, now, viewRange))
                 {
                     ClearTarget(i);
                     return false;
@@ -136,6 +165,20 @@ namespace MistWorms.Colony
                 return true; // not perceived this time, but not forgotten yet
             }
             return false;
+        }
+
+        /// <summary>The current target still exists, is alive and was perceived less than ForgetTime ago, within twice the view range.</summary>
+        private bool TargetStillValid(int i, TargetKind kind, float now, float viewRange)
+        {
+            WormStore s = Store;
+            if (now - s.lastSeen[i] > ForgetTime) return false;
+            if (kind == TargetKind.Player)
+            {
+                Player held = FindPlayer(s.targetId[i]);
+                return held != null && Targetable(held) && Vector3.Distance(held.transform.position, s.pos[i]) <= 2f * viewRange;
+            }
+            if (!ResolveTarget(i, out TargetView view)) return false;
+            return Vector3.Distance(view.Position, s.pos[i]) <= 2f * viewRange;
         }
 
         // ------------------------------------------------------------------ fire (spec §9.1, decisions 16)

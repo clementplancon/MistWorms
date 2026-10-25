@@ -133,6 +133,10 @@ namespace MistWorms.Dev.Scenarios
             s_errors.Begin();
             try { ctx.ResetPlayerState(); }
             catch (Exception e) { Plugin.Log.LogWarning("[Scenario] ResetPlayerState: " + e.Message); }
+            IEnumerator ready = null;
+            try { ready = ctx.WaitPlayerSane(5f); }
+            catch (Exception e) { Plugin.Log.LogWarning("[Scenario] WaitPlayerSane: " + e.Message); }
+            if (ready != null) yield return ready;
 
             IEnumerator body = null;
             try { body = scenario.Run(ctx); }

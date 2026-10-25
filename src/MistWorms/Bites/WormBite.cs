@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using MistWorms.Config;
+using MistWorms.Drops;
 using MistWorms.Localization;
 using UnityEngine;
 
@@ -23,6 +24,7 @@ namespace MistWorms.Bites
             try
             {
                 ZRoutedRpc.instance.Register<ZDOID, float, float, Vector3, Vector3, ZPackage>(MWNames.RpcWormBite, OnBite);
+                ZRoutedRpc.instance.Register<ZDOID, ZDOID, int, int>(MWNames.RpcLastWormHit, OnLastWormHit);
             }
             catch (ArgumentException)
             {
@@ -46,16 +48,65 @@ namespace MistWorms.Bites
         }
 
         /// <summary>
-        /// Strike on a creature (phase 6 supplies the targets): plain vanilla damage, no context, pierce CobraCreatureDamage, no attacker
-        /// (a colony has no Character, decisions.md 1.1 line 20).
+        /// Strike on a creature or a tamed animal: plain vanilla damage, no context, pierce CobraCreatureDamage, no attacker (a colony has no Character,
+        /// decisions.md 1.1 line 20). The "last worm hit" registry is written first, on the peer that owns the victim (spec §7.4), so that the loot of a creature
+        /// this strike kills goes to the pool of the worm. Returns false if the target has no usable ZDO.
         /// </summary>
-        public static void HitCreature(Character target, Vector3 point, Vector3 dir)
+        public static bool HitCreature(Character target, Vector3 point, Vector3 dir, ZDOID colony, int slot, int generation)
         {
-            if (target == null) return;
+            if (target == null) return false;
+            NoteLastHit(target.GetZDOID(), target.GetOwner(), colony, slot, generation);
             HitData hit = NewHit(MWConfig.Worm.CobraCreatureDamage.Value, point, dir);
             hit.m_blockable = false;
             hit.m_dodgeable = false;
+            hit.m_skillRaiseAmount = CobraMark.Value;   // recognised as a cobra hit by the loot capture (decision 163)
             target.Damage(hit);
+            return true;
+        }
+
+        /// <summary>
+        /// Strike on a structure (a WearNTear piece or a dvergr Destructible): the same attackerless hit, blunt, with the damage of a creature strike
+        /// (Worm.CobraCreatureDamage). The vanilla resistances, tool tier and ward rules apply when the victim receives it. The registry is written first.
+        /// </summary>
+        public static bool HitStructure(Component target, Vector3 point, Vector3 dir, ZDOID colony, int slot, int generation)
+        {
+            IDestructible destructible = target != null ? target.GetComponent<IDestructible>() : null;
+            ZNetView view = target != null ? target.GetComponent<ZNetView>() : null;
+            if (destructible == null || view == null || !view.IsValid()) return false;
+            NoteLastHit(view.GetZDO().m_uid, view.GetZDO().GetOwner(), colony, slot, generation);
+            HitData hit = NewHit(0f, point, dir, 0f);
+            hit.m_damage.m_blunt = MWConfig.Worm.CobraCreatureDamage.Value;
+            hit.m_blockable = false;
+            hit.m_dodgeable = false;
+            hit.m_skillRaiseAmount = CobraMark.Value;
+            destructible.Damage(hit);
+            return true;
+        }
+
+        /// <summary>Writes the "last worm hit" registry on the peer that owns the victim: here when this peer owns it, by a routed RPC otherwise (it is sent before the damage, so it is there when the victim dies).</summary>
+        private static void NoteLastHit(ZDOID victim, long owner, ZDOID colony, int slot, int generation)
+        {
+            if (victim == ZDOID.None) return;
+            if (owner == 0L || owner == ZDOMan.GetSessionID())
+            {
+                DropCapture.Registry.Record(victim, colony, slot, generation, Time.time);
+                return;
+            }
+            ZRoutedRpc rpc = ZRoutedRpc.instance;
+            if (rpc != null) rpc.InvokeRoutedRPC(owner, MWNames.RpcLastWormHit, victim, colony, slot, generation);
+        }
+
+        private static void OnLastWormHit(long sender, ZDOID victim, ZDOID colony, int slot, int generation)
+        {
+            try
+            {
+                if (slot < 0 || generation < 0 || generation > ushort.MaxValue) return;
+                DropCapture.Registry.Record(victim, colony, slot, generation, Time.time);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogException("WormBite.OnLastWormHit", e);
+            }
         }
 
         internal static HitData NewHit(float pierce, Vector3 point, Vector3 dir, float pushForce = PushForce)
@@ -122,6 +173,19 @@ namespace MistWorms.Bites
             {
                 // A malformed tag: the strike still bites, what it eats just belongs to nobody.
             }
+        }
+
+        /// <summary>The character <paramref name="id"/> (a player, a creature, a tamed animal) when this peer owns it, otherwise null.</summary>
+        internal static Character FindOwnedCharacter(ZDOID id)
+        {
+            if (id == ZDOID.None) return null;
+            var all = Character.GetAllCharacters();
+            for (int i = 0; i < all.Count; i++)
+            {
+                Character c = all[i];
+                if (c != null && c.IsOwner() && c.GetZDOID() == id) return c;
+            }
+            return null;
         }
 
         internal static Player FindOwnedPlayer(ZDOID id)

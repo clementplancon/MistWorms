@@ -70,6 +70,32 @@ namespace MistWorms.Dev.Scenarios
             if (p.IsDebugFlying()) p.ToggleDebugFly();
             p.SetMouseLookForward(true);
             p.m_stamina = p.GetMaxStamina();
+            p.GetSEMan().RemoveAllStatusEffects();   // a status left by the previous scenario (Infested, Engulfed...) must not follow
+        }
+
+        /// <summary>Why the player cannot equip an item right now (the conditions of Humanoid.EquipItem and the states around them), or null when it can.</summary>
+        public static string EquipBlock(Player p)
+        {
+            if (p == null) return "no local player";
+            if (p.IsDead()) return "IsDead";
+            if (p.IsTeleporting()) return "IsTeleporting";
+            if (p.InAttack()) return "InAttack";
+            if (p.InDodge()) return "InDodge";
+            if (p.IsSwimming() && !p.IsOnGround()) return "swimming off the ground";
+            return null;
+        }
+
+        /// <summary>Waits up to <paramref name="seconds"/> for a player who can equip items (a scenario that ended mid-attack or mid-dodge leaves one that cannot); logs the reason if it never comes.</summary>
+        public IEnumerator WaitPlayerSane(float seconds)
+        {
+            float end = Time.realtimeSinceStartup + seconds;
+            string reason = EquipBlock(Player.m_localPlayer);
+            while (reason != null && Time.realtimeSinceStartup < end)
+            {
+                yield return null;
+                reason = EquipBlock(Player.m_localPlayer);
+            }
+            if (reason != null) Log($"the player is not ready after {seconds:0} s: {reason}");
         }
 
         // ---------------------------------------------------------------- results
@@ -200,7 +226,9 @@ namespace MistWorms.Dev.Scenarios
                 Log($"could not add '{prefab}'");
                 return null;
             }
-            if (equip && !player.EquipItem(item)) Log($"could not equip '{prefab}'");
+            if (equip && !player.EquipItem(item))
+                Log($"could not equip '{prefab}': {EquipBlock(player) ?? "no blocking state found (inventory, durability, DLC?)"}; staggering {player.IsStaggering()}, knocked back {player.IsKnockedBack()}, " +
+                    $"place mode {player.InPlaceMode()}, minor action {player.InMinorAction()}, on ground {player.IsOnGround()}, can move {player.CanMove()}");
             return item;
         }
 

@@ -9,7 +9,8 @@ namespace MistWorms.Mass
 {
     /// <summary>
     /// AI of a writhing mass (spec §4.6, §4.7, §5.3, §11.2, plan 4B-2). A <see cref="BaseAI"/>, not a MonsterAI: the MonsterAI chase needs a weapon and
-    /// starts vanilla attacks; this one only picks a player, walks to it with the vanilla pathfinding and engulfs it at contact (phase 5).
+    /// starts vanilla attacks; this one only picks a target (a player, a tamed animal, a creature or a structure, plan 6-2), walks to it with the vanilla
+    /// pathfinding and engulfs it at contact (phase 5).
     /// The prefab needs some BaseAI because <c>EnemyHud</c> calls <c>GetBaseAI()</c> without a null test.
     /// <list type="bullet">
     /// <item>Hunt: toward the target, stopping at r(n) + Mass.EngulfRange. Idle: wanders within 6 m of the last point of interest at half speed.</item>
@@ -28,6 +29,8 @@ namespace MistWorms.Mass
         private const float IdleSpeedFactor = 0.5f;      // spec plan 4B-2: wandering at half speed
         private const float WanderRange = 6f;            // spec §4.6
         private const float EyeHeight = 0.8f;
+        private const float HuntStopMargin = 0.25f;
+        private const float ObstacleCastRadius = 1.2f;   // the sweep toward a living target (decision 166): the radius of the mass, capped
         private const float ProbeHeight = 0.6f;          // height of the width probes: the chest of a passage
         private const float ProbeSideMargin = 1.5f;      // probes reach r + this on each side
         private const float ProbeSideCap = 3.5f;
@@ -35,7 +38,6 @@ namespace MistWorms.Mass
         private const float ProbeNearEnd = ProbeDistance;
         private const float ProbeDistance = MassStream.ProbeDistance;
         private const float CostLogPeriod = 10f;
-        private const string PlayerPrefab = "Player";
         private const float DevGoalStop = 0.4f;
 
         // Step assist (stairs of the mines): the capsule (r 0.6, a sphere resting on the floor) can stall against a step that a taller
@@ -54,27 +56,38 @@ namespace MistWorms.Mass
         private const float AssistReach = 0.5f;               // beyond the capsule radius
 
         private WritheMassState _state;
-        private Player _target;
+        private Player _target;                   // the target when it is a player
+        private readonly TargetScanner _scanner = new TargetScanner();
+        private readonly TargetBlacklist _blacklist = new TargetBlacklist(1);   // targets set aside after a stall (decision 163)
+        private ProgressWatch _watch;
+
+        // The target, whatever its kind (plan 6-2): a player (also _target), a creature or tamed animal (_tChar), or a structure (_tObj + its closest collider).
+        private TargetKind _tKind;
+        private Character _tChar;
+        private Component _tObj;
+        private Collider _tCol;
+        private ZDOID _tId;
+        private bool _obstacle;                   // the structure target stands in the way of a living target (decision 164): kept until destroyed or out of reach
 
         // Engulfing (owner only, plan 5, A1 to A5, A13, A15).
         private bool _engulfing;
-        private Player _engulfed;                 // the player the Infested effect was sent for
+        private Character _engulfed;              // the player or creature the Infested / Engulfed effect was sent for
         private BiteTicker _ticker;
         private DetachTracker _detach;
         private float _nextInfest;
         private Vector3 _biteDir;
         private bool _inTick, _tickParried;
         private float _nextFireCheck, _fleeUntil;
+        private float _fearUntil;                 // a mass that fled or keeps its distance from a fire is not stalled: no progress watch, no obstacle search until then
         private Vector3 _fleeFrom;
         private float _targetSeen;
+        private float _livingSeen = -1000f;       // last time a player or a creature was perceived (a structure is a fallback only after ForgetTime)
         private float _nextTarget;
         private float _nextProbe;
         private Vector3 _home;
         private bool _homeSet;
         private float _speedFactor = -1f;
         private bool _failed;
-        private string _excludedRaw;
-        private string[] _excluded = new string[0];
 
         // Cost and path statistics (read by the dev tools; a few integer increments per AI tick).
         private long _costTicks;
@@ -104,6 +117,11 @@ namespace MistWorms.Mass
         public Player DevForcedTarget { get; set; }
 
         public Player Target => _target;
+
+        /// <summary>The kind, the ZDOID and the object of the current target, whatever it is (dev checks, S12, S13).</summary>
+        public TargetKind CurrentKind => _tKind;
+        public ZDOID CurrentTargetId => _tId;
+        public Component TargetObject => _tKind == TargetKind.Structure ? _tObj : _tChar;
 
         /// <summary>Dev: walk to this point (stopping 0.4 m from it) instead of toward a target. Used by the stairs test.</summary>
         public Vector3? DevGoal { get; set; }
@@ -183,27 +201,97 @@ namespace MistWorms.Mass
             }
 
             bool seeking = _state.TryGetSeekGoal(out Vector3 seekGoal);
-            if (!_engulfing && !seeking && !DevGoal.HasValue && _target != null) TryBeginEngulf(now);
+            if (HasTarget) WatchProgress(now, now < _fearUntil || _engulfing || seeking || DevGoal.HasValue || _state.Merging || MassStateCodes.IsTransferring(_state.StateCode));
+            if (!_engulfing && !seeking && !DevGoal.HasValue && HasTarget) TryBeginEngulf(now);
             if (_engulfing && StepEngulf(dt, now)) return;
             if (seeking) Hunt(dt, seekGoal);
-            else if (_target != null || DevGoal.HasValue) Hunt(dt);
+            else if (HasTarget || DevGoal.HasValue) Hunt(dt);
             else Idle(dt);
         }
 
-        // ------------------------------------------------------------------ target (spec §5.3, players only in phase 4B)
+        // ------------------------------------------------------------------ target (spec §5.3, plan 6-2)
+
+        private bool HasTarget => _tKind != TargetKind.None;
+
+        /// <summary>The target still exists and may be attacked: a player alive and visible, a creature alive, a structure not destroyed.</summary>
+        private bool TargetValid()
+        {
+            switch (_tKind)
+            {
+                case TargetKind.Player: return Targetable(_target);
+                case TargetKind.Tamed:
+                case TargetKind.Creature: return _tChar != null && !_tChar.IsDead();
+                case TargetKind.Structure: return _tObj != null && _tCol != null;
+                default: return false;
+            }
+        }
+
+        /// <summary>Where the mass walks to: a character's position, the point of a structure's collider closest to the mass.</summary>
+        private Vector3 TargetPos()
+        {
+            if (_tKind == TargetKind.Structure) return _tCol != null ? TargetScanner.ClosestOn(_tCol, transform.position) : transform.position;
+            return _tChar != null ? _tChar.transform.position : transform.position;
+        }
+
+        /// <summary>
+        /// Progress watch (decisions 163, 164): the distance to the target must shrink by 0.5 m in 4 s while the mass walks to it (not engulfing, not seeking a
+        /// merge). When it does not, a structure within engulf reach in the half space toward a living target becomes the target (the mass gnaws the door the
+        /// player hides behind); else a creature or a structure is set aside for 10 s and dropped, and a new choice follows at once. A player is never set aside.
+        /// </summary>
+        private void WatchProgress(float now, bool exempt)
+        {
+            if (_tKind == TargetKind.None || _tId == ZDOID.None) return;
+            long key = TargetReach.Key(_tId.UserID, _tId.ID);
+            float distance = TargetValid() ? Vector3.Distance(transform.position, TargetPos()) : 0f;
+            if (!_watch.Update(key, distance, now, exempt)) return;
+            if (TargetRules.AfraidOfFire(now, _fearUntil)) return;   // never taken for a stall while the fire holds the mass off
+
+            if (_tKind != TargetKind.Structure && TakeObstacle(now)) return;
+            if (_tKind == TargetKind.Player) return;
+            _blacklist.Add(0, key, now);
+#if MW_DEV
+            Plugin.Log.LogInfo($"[Target] mass {_state.ZdoId} gives up {_tKind} (no progress, distance {distance:0.00} m)");
+#endif
+            Plugin.Log.LogDebug($"[Target] mass {_state.ZdoId} gives up {_tKind} {(TargetObject != null ? TargetObject.name : "?")}: no progress for {ProgressWatch.Window:0} s, set aside {TargetBlacklist.DefaultSeconds:0} s");
+            SetTarget((Player)null);
+            _nextTarget = 0f;
+        }
+
+        private float ObstacleReach() => MassMath.Radius(Mathf.Max(1, _state.N)) + MWConfig.Mass.EngulfRange.Value + 0.5f;
+
+        private bool TakeObstacle(float now)
+        {
+            if (!TargetValid()) return false;
+            Vector3 pos = transform.position;
+            float radius = Mathf.Min(MassMath.Radius(Mathf.Max(1, _state.N)), ObstacleCastRadius);
+            Vector3 center = pos + Vector3.up * radius;
+            Vector3 goal = _tChar != null ? _tChar.GetCenterPoint() : TargetPos();
+            if (!_scanner.PickObstacle(center, radius, pos.y, goal - center, ObstacleReach(), now, EngulfMath.MaxHeightGap, _blacklist, 0, out TargetChoice pick)) return false;
+#if MW_DEV
+            Plugin.Log.LogInfo($"[Target] mass {_state.ZdoId} takes {(pick.Object != null ? pick.Object.name : "?")} as an obstacle on the way to its {_tKind} target");
+#endif
+            Plugin.Log.LogDebug($"[Target] mass {_state.ZdoId} takes {(pick.Object != null ? pick.Object.name : "?")} as an obstacle on the way to its {_tKind} target");
+            SetTarget(pick);
+            _obstacle = true;
+            _targetSeen = now;
+            return true;
+        }
 
         private void ChooseTarget(float now)
         {
             // An engulfing mass keeps its target: StepEngulf decides when to let go, then a new choice is made.
-            if (_engulfing && _target != null)
+            if (_engulfing && HasTarget)
             {
                 _targetSeen = now;
+                if (_tKind != TargetKind.Structure) _livingSeen = now;
                 return;
             }
 
-            if (!MWConfig.Targets.AttackPlayers.Value && DevForcedTarget == null)
+            bool players = MWConfig.Targets.AttackPlayers.Value;
+            bool objects = MWConfig.Targets.AttackTamed.Value || MWConfig.Targets.AttackCreatures.Value || MWConfig.Targets.AttackStructures.Value;
+            if (!players && !objects && DevForcedTarget == null)
             {
-                SetTarget(null);
+                SetTarget((Player)null);
                 return;
             }
 
@@ -215,6 +303,17 @@ namespace MistWorms.Mass
                 return;
             }
 
+            // The structure that blocks the way to a living target is gnawed until it falls or is out of reach, then the hunt goes on (decision 164).
+            if (_obstacle)
+            {
+                if (_tKind == TargetKind.Structure && TargetValid() && Vector3.Distance(transform.position, TargetPos()) <= ObstacleReach() + 2f)
+                {
+                    _targetSeen = now;
+                    return;
+                }
+                _obstacle = false;
+            }
+
             Vector3 pos = transform.position;
             Vector3 eye = pos + Vector3.up * EyeHeight;
             float range = MWConfig.Mass.TargetRange.Value;
@@ -223,10 +322,10 @@ namespace MistWorms.Mass
 
             Player best = null;
             float bestScore = float.MaxValue;
-            var players = Player.GetAllPlayers();
-            for (int i = 0; i < players.Count; i++)
+            var all = Player.GetAllPlayers();
+            for (int i = 0; players && i < all.Count; i++)
             {
-                Player p = players[i];
+                Player p = all[i];
                 if (!Targetable(p) || IsExcluded(p)) continue;
 
                 float d = Vector3.Distance(pos, p.transform.position);
@@ -243,17 +342,28 @@ namespace MistWorms.Mass
                 }
             }
 
+            // A creature or a tamed animal that beats the best player (3D distance x weight, line of sight, Targets.*); a structure only when nobody else is perceived (decision 164).
+            if (objects && _scanner.Pick(pos, eye, range, bestScore, _tKind == TargetKind.Player ? ZDOID.None : _tId, m_character, now,
+                    EngulfMath.MaxHeightGap, _blacklist, 0, TargetRules.FallbackDelayElapsed(now, _livingSeen, ForgetTime), out TargetChoice pick))
+            {
+                _targetSeen = now;
+                if (pick.Kind != TargetKind.Structure) _livingSeen = now;
+                SetTarget(pick);
+                return;
+            }
+
             if (best != null)
             {
                 _targetSeen = now;
+                _livingSeen = now;
                 SetTarget(best);
                 return;
             }
             SenseNote = SenseSummary(pos, eye, range, interior);
 
             // Nobody perceived: keep the last target for a while (it may be behind a corner), then forget it.
-            if (_target != null && (!Targetable(_target) || now - _targetSeen > ForgetTime || Vector3.Distance(pos, _target.transform.position) > 2f * range))
-                SetTarget(null);
+            if (HasTarget && (!TargetValid() || now - _targetSeen > ForgetTime || Vector3.Distance(pos, TargetPos()) > 2f * range))
+                SetTarget((Player)null);
         }
 
         private string SenseSummary(Vector3 pos, Vector3 eye, float range, bool interior)
@@ -266,34 +376,43 @@ namespace MistWorms.Mass
                    $"view range {range}, line blocked={Physics.Linecast(eye, p.GetCenterPoint(), WormPhysics.ViewBlockMask, QueryTriggerInteraction.Ignore)}, attack players={MWConfig.Targets.AttackPlayers.Value}";
         }
 
+        /// <summary>A player (or null: no target).</summary>
         private void SetTarget(Player p)
         {
-            if (p == _target) return;
-            if (_target != null) { _home = _target.transform.position; _homeSet = true; }   // the last point of interest (spec §4.6)
-            _target = p;
-            _state.SetTarget(p != null ? p.GetZDOID() : ZDOID.None);
+            if (p == null)
+            {
+                if (_tKind != TargetKind.None) Switch(TargetKind.None, null, null, null, ZDOID.None);
+                return;
+            }
+            if (_tKind == TargetKind.Player && p == _target) return;
+            Switch(TargetKind.Player, p, null, null, p.GetZDOID());
+        }
+
+        /// <summary>A creature, a tamed animal or a structure chosen by the scanner.</summary>
+        private void SetTarget(in TargetChoice choice)
+        {
+            if (_tKind == choice.Kind && _tId == choice.Id) return;
+            Switch(choice.Kind, choice.Character, choice.Object, choice.Collider, choice.Id);
+        }
+
+        private void Switch(TargetKind kind, Character character, Component obj, Collider collider, ZDOID id)
+        {
+            if (HasTarget && TargetValid()) { _home = TargetPos(); _homeSet = true; }   // the last point of interest (spec §4.6)
+            _obstacle = false;
+            _tKind = kind;
+            _target = character as Player;
+            _tChar = character;
+            _tObj = obj != null ? obj : character;
+            _tCol = collider;
+            _tId = id;
+            _state.SetTarget(id);
         }
 
         /// <summary>Alive, visible to monsters and not mid-teleport (same rule as the free worms, spec §5.3).</summary>
         private static bool Targetable(Player p) => p != null && !p.IsDead() && !p.InGhostMode() && !p.IsDebugFlying() && !p.IsTeleporting();
 
         /// <summary>Targets.ExcludedPrefabs (SkyWhale, spec §10.4): never targeted. A player prefab is excluded only if the list names it.</summary>
-        private bool IsExcluded(Character c)
-        {
-            string raw = MWConfig.Targets.ExcludedPrefabs.Value ?? string.Empty;
-            if (!string.Equals(raw, _excludedRaw, StringComparison.Ordinal))
-            {
-                _excludedRaw = raw;
-                _excluded = raw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-                for (int i = 0; i < _excluded.Length; i++) _excluded[i] = _excluded[i].Trim();
-            }
-            if (_excluded.Length == 0) return false;
-            string name = Utils.GetPrefabName(c.gameObject);
-            if (string.IsNullOrEmpty(name)) name = PlayerPrefab;
-            for (int i = 0; i < _excluded.Length; i++)
-                if (string.Equals(_excluded[i], name, StringComparison.Ordinal)) return true;
-            return false;
-        }
+        private static bool IsExcluded(Character c) => TargetScanner.IsExcluded(c);
 
         // ------------------------------------------------------------------ movement
 
@@ -302,8 +421,9 @@ namespace MistWorms.Mass
             _state.SetMode(MassStateCodes.Hunt);
             SetSpeedFactor(1f);
 
-            Vector3 goal = seek ?? DevGoal ?? _target.transform.position;
-            float stop = seek.HasValue || DevGoal.HasValue ? DevGoalStop : MassMath.Radius(Mathf.Max(1, _state.N)) + MWConfig.Mass.EngulfRange.Value;
+            Vector3 goal = seek ?? DevGoal ?? TargetPos();
+            // A little inside the engulf range: the walk helper may stop a few tenths short of its stop distance, and the engulfing needs flat <= r + EngulfRange.
+            float stop = seek.HasValue || DevGoal.HasValue ? DevGoalStop : Mathf.Max(0.5f, MassMath.Radius(Mathf.Max(1, _state.N)) + MWConfig.Mass.EngulfRange.Value - HuntStopMargin);
 
             WalkTo(dt, goal, stop);
         }
@@ -352,18 +472,31 @@ namespace MistWorms.Mass
 
         private void TryBeginEngulf(float now)
         {
-            Player t = _target;
-            if (t == null || !Targetable(t) || _state.Merging || MassStateCodes.IsTransferring(_state.StateCode)) return;
-            if (!MWConfig.Targets.AttackPlayers.Value && DevForcedTarget == null) return;
+            if (!HasTarget || !TargetValid() || _state.Merging || MassStateCodes.IsTransferring(_state.StateCode)) return;
+            if (_tKind == TargetKind.Player && !MWConfig.Targets.AttackPlayers.Value && DevForcedTarget == null) return;
             Vector3 pos = transform.position;
-            Vector3 tp = t.transform.position;
+            Vector3 tp = TargetPos();
+            // A structure is engulfed only through a real surface point (a concave mesh may show none from here).
+            if (_tKind == TargetKind.Structure && !TargetScanner.TryClosestOn(_tCol, pos, out tp))
+            {
+                NoteRefusal(now, "no real surface point of the structure seen from the mass", pos, tp);
+                return;
+            }
             float flat = Utils.DistanceXZ(tp, pos);
-            if (Mathf.Abs(tp.y - pos.y) > EngulfMath.MaxHeightGap) return;
             float r = MassMath.Radius(Mathf.Max(1, _state.N));
-            if (!EngulfMath.InEngulfRange(flat, r, MWConfig.Mass.EngulfRange.Value)) return;
+            if (Mathf.Abs(tp.y - pos.y) > EngulfMath.MaxHeightGap)
+            {
+                NoteRefusal(now, $"height gap {Mathf.Abs(tp.y - pos.y):0.00} m over {EngulfMath.MaxHeightGap:0.0}", pos, tp);
+                return;
+            }
+            if (!EngulfMath.InEngulfRange(flat, r, MWConfig.Mass.EngulfRange.Value))
+            {
+                NoteRefusal(now, $"out of range: flat {flat:0.00} m over r {r:0.00} + {MWConfig.Mass.EngulfRange.Value:0.00} = {r + MWConfig.Mass.EngulfRange.Value:0.00}", pos, tp);
+                return;
+            }
 
             _engulfing = true;
-            _engulfed = t;
+            _engulfed = _tKind == TargetKind.Structure ? null : _tChar;
             EngulfCount++;
             _ticker.Start(now, MWConfig.Worm.BiteInterval.Value);
             _detach.Reset();
@@ -372,16 +505,30 @@ namespace MistWorms.Mass
             _biteDir = d.sqrMagnitude > 1e-4f ? d.normalized : transform.forward;
             _nextInfest = now;                                  // the effect goes out at once
             _state.SetMode(MassStateCodes.Engulf);
-            Plugin.Log.LogDebug($"[Engulf] {_state.ZdoId} (n={_state.N}) engulfs {t.GetPlayerName()} at {flat:0.00} m (r {r:0.00})");
+            Plugin.Log.LogDebug($"[Engulf] {_state.ZdoId} (n={_state.N}) engulfs {_tKind} {(TargetObject != null ? TargetObject.name : "?")} at {flat:0.00} m (r {r:0.00})");
         }
+
+        /// <summary>Why the last engulfing was refused while the mass was hunting its target (dev log, S13): reason, distances, vertical gap. Empty in a release build.</summary>
+        public string EngulfNote { get; private set; }
+
+        [Conditional("MW_DEV")]
+        private void NoteRefusal(float now, string reason, Vector3 pos, Vector3 target)
+        {
+            if (now < _nextRefusalLog) return;
+            _nextRefusalLog = now + 2f;
+            EngulfNote = $"engulf refused for {_tKind} {(TargetObject != null ? TargetObject.name : "?")}: {reason}; mass at {pos:0.00}, point {target:0.00}, 3D {Vector3.Distance(pos, target):0.00} m, vertical {target.y - pos.y:0.00} m";
+            Plugin.Log.LogInfo($"[Engulf] {_state.ZdoId} {EngulfNote}");
+        }
+
+        private float _nextRefusalLog;
 
         /// <summary>One AI tick of an engulfing. Returns false when the mass let go (the normal hunt or wandering then runs this tick).</summary>
         private bool StepEngulf(float dt, float now)
         {
-            Player t = _target;
-            bool valid = t != null && Targetable(t);
+            bool valid = HasTarget && TargetValid();
             Vector3 pos = transform.position;
-            float flat = valid ? Utils.DistanceXZ(t.transform.position, pos) : 0f;
+            Vector3 tp = valid ? TargetPos() : pos;
+            float flat = valid ? Utils.DistanceXZ(tp, pos) : 0f;
             float r = MassMath.Radius(Mathf.Max(1, _state.N));
             bool tooFar = valid && _detach.Update(now, flat, EngulfMath.DetachLimit(r, MWConfig.Mass.DetachDistance.Value), MWConfig.Mass.DetachDelay.Value);
             DetachReason reason = EngulfMath.Decide(valid, _state.Dissolving || m_character.IsDead(), now < _fleeUntil, tooFar);
@@ -393,11 +540,14 @@ namespace MistWorms.Mass
 
             _state.SetMode(MassStateCodes.Engulf);
             SetSpeedFactor(1f);
-            WalkTo(dt, t.transform.position, MassEngulf.WalkStop);
+            float reach = r + MWConfig.Mass.EngulfRange.Value;
+            if (_tKind != TargetKind.Structure) WalkTo(dt, tp, MassEngulf.WalkStop);
+            else if (flat > reach) WalkTo(dt, tp, reach);   // a structure is not walked onto: the mass stays against it
+            else StopMoving();
 
             if (flat > 0.4f)
             {
-                Vector3 d = t.transform.position - pos;
+                Vector3 d = tp - pos;
                 d.y = 0f;
                 _biteDir = d.normalized;
             }
@@ -407,14 +557,19 @@ namespace MistWorms.Mass
                 // A perfect parry reports back while the bite is sent (solo: synchronously) or later (another peer owns the player).
                 _inTick = true;
                 _tickParried = false;
-                MassEngulf.SendBite(_state, t, _biteDir);
+                switch (_tKind)
+                {
+                    case TargetKind.Player: MassEngulf.SendBite(_state, _target, _biteDir); break;
+                    case TargetKind.Structure: MassEngulf.HitStructure(_state, _tObj, tp, _biteDir); break;
+                    default: MassEngulf.HitCreature(_state, _tChar, _biteDir); break;
+                }
                 _inTick = false;
                 _ticker.Advance(now, MWConfig.Worm.BiteInterval.Value, _tickParried, EngulfMath.ParryDelay);
             }
-            if (now >= _nextInfest)
+            if (_engulfed != null && now >= _nextInfest)
             {
                 _nextInfest = now + MassEngulf.InfestRefresh;
-                MassEngulf.SendInfest(t, true);
+                MassEngulf.SendInfest(_engulfed, true);
             }
             return true;
         }
@@ -425,7 +580,7 @@ namespace MistWorms.Mass
             LastDetach = reason;
             _ticker.Stop();
             _detach.Reset();
-            Player p = _engulfed;
+            Character p = _engulfed;
             _engulfed = null;
             if (p != null) MassEngulf.SendInfest(p, false);
             if (reason == DetachReason.TargetInvalid) _nextTarget = 0f;   // a new target is chosen at once (spec §9.3)
@@ -447,6 +602,7 @@ namespace MistWorms.Mass
         // ------------------------------------------------------------------ fear of fire (spec 9.1, plan 5, A16)
 
         private const float FireCheckPeriod = 0.25f;
+        private const float FearGrace = 4f;           // after the flight: the mass walks back, it must not be taken for a stalled hunt
         private const float FireMargin = 0.6f;       // what the mass walks between two checks: it turns before the fear line
 
         /// <summary>True while the mass flees a fire (dev checks).</summary>
@@ -473,12 +629,13 @@ namespace MistWorms.Mass
             {
                 // Burning: no known source, run from the target (or backwards).
                 afraid = true;
-                from = _target != null ? _target.transform.position : pos - transform.forward;
+                from = HasTarget ? TargetPos() : pos - transform.forward;
             }
             if (!afraid) return;
             if (now >= _fleeUntil) FireFlights++;
             _fleeFrom = from;
             _fleeUntil = now + MWConfig.Fire.FearDuration.Value;
+            _fearUntil = _fleeUntil + FearGrace;
         }
 
         private const float FleeReach = 8f;
@@ -500,7 +657,7 @@ namespace MistWorms.Mass
             _engulfing = false;
             try
             {
-                Player p = _engulfed;
+                Character p = _engulfed;
                 _engulfed = null;
                 if (p != null && ZRoutedRpc.instance != null) MassEngulf.SendInfest(p, false);
             }
@@ -538,7 +695,7 @@ namespace MistWorms.Mass
             if (_rb == null || _capsule == null) return;
 
             // Direction of the wanted move (the body may face another way while it turns): toward the target if any, else its forward.
-            Vector3 fwd = DevGoal.HasValue ? DevGoal.Value - pos : _target != null ? _target.transform.position - pos : transform.forward;
+            Vector3 fwd = DevGoal.HasValue ? DevGoal.Value - pos : HasTarget ? TargetPos() - pos : transform.forward;
             fwd.y = 0f;
             if (fwd.sqrMagnitude < 1e-4f) return;
             fwd.Normalize();
@@ -597,7 +754,7 @@ namespace MistWorms.Mass
 
                 // The staircases of the mines are steeper (about 50 degrees, risers of 0.4 m on treads of 0.3 m) than a sphere of 0.6 m can walk: it
                 // rests on the noses. The body is then hopped one stride toward the goal onto the floor found there.
-                Vector3 goalPoint = DevGoal ?? (_target != null ? _target.transform.position : pos);
+                Vector3 goalPoint = DevGoal ?? (HasTarget ? TargetPos() : pos);
                 Vector3 toGoal = goalPoint - pos;
                 float distance = toGoal.magnitude;
                 if (distance < 0.3f) return;

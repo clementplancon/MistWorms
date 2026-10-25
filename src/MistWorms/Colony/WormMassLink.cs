@@ -247,7 +247,7 @@ namespace MistWorms.Colony
             }
             if (FireCheck(i, false)) { SetState(i, WormState.Fleeing, now); return; }
 
-            bool targeted = s.targetId[i] != 0 && Targetable(FindPlayer(s.targetId[i]));
+            bool targeted = ResolveTarget(i, out _);
             if (!GatheringEnabled)
             {
                 if (targeted) SetState(i, WormState.Hunting, now);

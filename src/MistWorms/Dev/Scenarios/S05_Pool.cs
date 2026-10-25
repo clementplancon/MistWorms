@@ -116,7 +116,7 @@ namespace MistWorms.Dev.Scenarios
                 yield return ctx.Shot("pool_filled");
 
                 // ---- a second, identical mass 25 m away with the same pool
-                WritheMassState second = MassDev.SpawnAt(player.transform.position + fwd * SecondMassDistance, WormCount, ZDOID.None, freezeAI: true);
+                WritheMassState second = SpawnSecond(ctx, player, first, fwd);
                 if (!ctx.Assert("second_mass_created", second != null && second.Valid, "a valid mass", second != null ? second.ZdoId.ToString() : "none")) yield break;
                 yield return ctx.WaitFrames(3);
                 second.DevAddToPool(AsWhole(pool, hashes));
@@ -203,6 +203,37 @@ namespace MistWorms.Dev.Scenarios
             var parts = new List<string>();
             for (int r = 0; r < hashes.Count; r++) parts.Add($"{Prefab(hashes[r])} x{counts[r]}");
             return string.Join(", ", parts);
+        }
+
+        /// <summary>
+        /// The second mass, for sure: along the wanted direction at SecondMassDistance, then 25, 50, 90 degrees to either side and at 1, 0.8 and 0.6 of the distance; a
+        /// spot is kept when it has a floor within 2.5 m of the player's height and is 12 m or more from the first mass. The attempt that worked is logged.
+        /// </summary>
+        private static WritheMassState SpawnSecond(ScenarioContext ctx, Player player, WritheMassState first, Vector3 fwd)
+        {
+            float[] scales = { 1f, 0.8f, 0.6f };
+            float[] angles = { 0f, 25f, -25f, 50f, -50f, 90f, -90f };
+            Vector3 origin = player.transform.position;
+            int tried = 0;
+            foreach (float k in scales)
+                foreach (float a in angles)
+                {
+                    tried++;
+                    Vector3 at = origin + Quaternion.AngleAxis(a, Vector3.up) * fwd * (SecondMassDistance * k);
+                    WritheMassState m = MassDev.SpawnAt(at, WormCount, ZDOID.None, freezeAI: true);
+                    if (m == null) continue;
+                    bool level = Mathf.Abs(m.transform.position.y - origin.y) <= 2.5f;
+                    bool apart = first == null || !first.Valid || Utils.DistanceXZ(m.transform.position, first.transform.position) >= 12f;
+                    if (!level || !apart)
+                    {
+                        MassDev.Destroy(m);
+                        continue;
+                    }
+                    ctx.Log($"second mass spawned at attempt {tried} (scale {k}, angle {a})");
+                    return m;
+                }
+            ctx.Log($"second mass: no spot in {tried} attempts around {origin}");
+            return null;
         }
 
         private static Vector3 Flat(Vector3 v)

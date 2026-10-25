@@ -296,30 +296,36 @@ La colonie ne s'éveille que pour un joueur ; une fois éveillée, elle dévore 
 | Joueurs | oui | `Targets.AttackPlayers` | 0,6 (`Targets.PlayerWeight`) |
 | Créatures apprivoisées | oui | `Targets.AttackTamed` | 0,8 |
 | Créatures sauvages (fouineurs, tiques, couvains, soldats, dvergar…) | oui | `Targets.AttackCreatures` | 1,0 |
-| Structures (`WearNTear` : pièces construites par les joueurs, portes ; `Destructible` dvergr de la mine, ci-dessous) | oui | `Targets.AttackStructures` | 1,5 |
+| Structures (`WearNTear` : pièces construites par les joueurs, portes ; `Destructible` dvergr de la mine, ci-dessous) | oui, en repli ou en obstacle seulement (ci-dessous) | `Targets.AttackStructures` | 1,5 (départage les structures entre elles) |
 | Nids, vers, amas, pierres tombales, portails, objets non destructibles | jamais | — | — |
 
 Structures cibles : les `WearNTear` et les `Destructible` dvergr de la mine, reconnus par préfixe de prefab (`dvergrtown_`, `dvergrprops_`, constantes de `VanillaNames`). Ce ne sont jamais les nids, ni d'autres `Destructible`.
 
 Choix de cible, réévalué toutes les 0,5 s :
 
-- **Distance** : 3D, au point le plus proche (`Character` : son centre ; structure : le collider le plus proche).
+- **Distance** : 3D, au point le plus proche (`Character` : son centre ; structure : le collider le plus proche). Un collider `MeshCollider` non convexe est mesuré sur sa surface réelle (rayon vers le centre de ses bounds, puis vers le point le plus proche de ses bounds) ; sans surface touchée, il n'y a pas de contact et la structure n'est pas une cible. La frappe du cobra et l'engloutissement utilisent la même mesure.
+- **Atteignabilité** : l'écart vertical entre la cible (structure : son point le plus proche ; `Character` : l'étendue verticale de son collider) et le sol de l'attaquant doit être inférieur ou égal à sa portée verticale réelle : œil 0,15 m + `Worm.CobraRange` pour un ver, `Mass`/engloutissement `MaxHeightGap` (2,5 m) pour un amas. Une poutre à 3 m au-dessus d'un ver, ou une chauve-souris, n'est pas une cible.
+- **Liste noire** : si la distance à une cible (créature ou structure) ne diminue pas d'au moins 0,5 m en 4 s hors frappe, hors engloutissement et hors portée de frappe, la cible est écartée 10 s pour ce ver ou cet amas (4 entrées par ver et par amas, sans allocation).
 - **Visibilité** : linecast `ViewBlockMask` depuis l'œil du ver ou de l'amas jusqu'au centre de la cible, en ignorant le collider de la cible.
-- **Score** : `distance × poids` ; parmi les cibles visibles à moins de `Mass.TargetRange` (20 m), la plus petite valeur gagne.
+- **Score** : `distance × poids` ; parmi les cibles **vivantes** (joueurs, apprivoisés, créatures) visibles à moins de `Mass.TargetRange` (20 m), la plus petite valeur gagne. Une **structure** n'entre pas dans cette comparaison : elle n'est choisie que si aucune cible vivante n'est perçue (repli : la colonie ronge les constructions quand personne n'est là), et `Targets.StructureWeight` ne sert alors qu'à départager les structures entre elles (décision 164).
+- **Règle d'obstacle** : pendant la chasse d'une cible vivante, si la progression cale (même veille de 4 s que la liste noire), la **première structure ciblable touchée** par un `SphereCast` du centre de l'attaquant vers la cible, à portée d'engloutissement (`r(n)` + `Mass.EngulfRange` + 0,5 m) ou de cobra, devient la cible : on ronge la porte derrière laquelle le joueur se cache. Les pièces dont le haut est sous les pieds + 0,3 m (sols) sont ignorées ; la liste noire est respectée. Elle reste la cible jusqu'à sa destruction, un détachement ou son éloignement, puis la chasse reprend. Un joueur n'est jamais mis sur liste noire par cette veille. Le repli sur structure n'est permis qu'après `ForgetTime` (5 s) sans cible vivante perçue (décision 166).
 - Le `FindEnemy` vanilla n'est pas utilisé : il n'a pas de poids.
 
 Suite : une cible engloutie est conservée jusqu'au détachement (§4.9). Un ver seul suit les mêmes règles avec `Worm.ViewRange` (20 m) pour portée de ciblage (§3.1). Les vers virtuels ne sont pas des `Character` : leur ciblage applique la règle de faction de l'amas (§5.4) par notre propre code, sans patch d'`IsEnemy`. Les prefabs listés dans `Targets.ExcludedPrefabs` (défaut `SW_DivineWhale`) ne sont jamais ciblés, ni par les vers ni par les amas (§10.4 ; phase 6, plus la sélection de cibles de l'amas en 4B). Les joueurs sont donc préférés à distance égale, mais un fouineur collé à l'amas sera mangé avant un joueur à 15 m.
 
 ### 5.4 Factions et guerre dans la mine
 
-L'amas doit être ennemi de toutes les factions, y compris `MistlandsMonsters` et `Dverger`, pour que fouineurs et dvergar ripostent et pour que la mine devienne un champ de bataille à trois camps. Implémentation : faction `PlayerSpawned`, la seule hostile à toutes les autres dans les deux sens (`Faction.Boss` ne convient pas, décision 1.1 ligne 28), sans postfix sur `BaseAI.IsEnemy` pour l'amas. Conséquence voulue : les créatures de la mine tuent les amas (décision 121). Le harnais (§15) imprime la matrice `IsEnemy` réelle (un amas contre une créature de chaque faction présente) et S19 la compare à la matrice attendue ci-dessous.
+L'amas doit être ennemi de toutes les factions, y compris `MistlandsMonsters` et `Dverger`, pour que fouineurs et dvergar ripostent et pour que la mine devienne un champ de bataille à trois camps. Implémentation : faction `PlayerSpawned`, hostile à toutes les autres dans les deux sens, sauf le mannequin d'entraînement qui ne riposte pas (`Faction.Boss` ne convient pas, décision 1.1 ligne 28), sans postfix sur `BaseAI.IsEnemy` pour l'amas. Conséquence voulue : les créatures de la mine tuent les amas (décision 121). Le harnais (§15) imprime la matrice `IsEnemy` réelle (un amas contre une créature de chaque faction présente) et S19 la compare exactement à la matrice ci-dessous, lue dans `BaseAI.IsEnemy` (`BaseAI.cs` : cas `PlayerSpawned` du `switch`, ligne 1232 ; cas `TrainingDummy`, lignes 1285-1286 ; branche apprivoisée, lignes 1214-1221).
 
 | Autre côté | `IsEnemy(amas, autre)` | `IsEnemy(autre, amas)` |
 | --- | --- | --- |
 | Toute faction vanilla (joueurs, `MistlandsMonsters`, `Dverger`, `ForestMonsters`, etc.) | true | true |
 | `PlayerSpawned` (autre amas) | false | false |
-| `TrainingDummy` (exception vanilla) | false | false |
+| `TrainingDummy` | true | false |
+| Créature apprivoisée, de n'importe quelle faction | true | true |
 | Baleine SkyWhale (postfix SkyWhale, §10.4) | false | false |
+
+`IsEnemy(amas, mannequin)` est vrai parce que le cas `PlayerSpawned` n'a pas d'exception ; `IsEnemy(mannequin, amas)` est faux parce que le mannequin ne combat que les joueurs. Le ciblage du mod ignore tout de même le mannequin (`TargetRules.FactionTargetable`). Pour une créature apprivoisée, les exceptions vanilla ne concernent que les joueurs, les Dverger et un autre apprivoisé : contre l'amas, vrai dans les deux sens.
 
 Les vers virtuels suivent la même règle (§5.3).
 
@@ -405,8 +411,9 @@ Exemple : une cuirasse rembourrée q1 (10 fer, 20 fil de lin, 1000 de durabilit�
 
 ### 7.4 Créatures et structures dévorées
 
-- **Créature tuée par un amas** (dernier coup `m_lastHit.m_attacker` = l'amas) : la liste de drop vanilla (`CharacterDrop.GenerateDropList`, étoiles et modificateurs de monde compris) est calculée normalement puis **capturée** dans le pool au lieu d'être créée au sol. Un postfix de `GenerateDropList` (méthode d'instance) capture la liste dans le pool et **vide** la liste retournée : le ragdoll stocke alors une liste vide, ce qui évite les doublons. L'amas n'a pas de `Ragdoll`, même chemin. Les trophées et objets à chance en font partie tels qu'obtenus (§10.3).
-- **Créature tuée par un ver seul** : le cobra reste sans attaquant (§11.1). Un **registre « dernier coup de ver »** est écrit au coup de cobra : clé = `ZDOID` de la créature, valeur = la colonie et l'heure, expiration au bout de 2 s. Le postfix de `GenerateDropList` le consulte en plus de `m_lastHit.m_attacker`. Le butin capturé va dans le pool du ver tueur, ou de la colonie si le ver n'existe plus.
+- **Créature tuée par un amas** (dernier coup `m_lastHit.m_attacker` = l'amas) : la liste de drop vanilla (`CharacterDrop.GenerateDropList`, étoiles et modificateurs de monde compris) est calculée normalement puis **capturée** dans le pool au lieu d'être créée au sol. Un postfix de `GenerateDropList` (méthode d'instance) capture dans le pool les entrées qui sont des objets (prefab avec `ItemDrop`) et les **retire** de la liste retournée : le ragdoll ne stocke plus ces objets, ce qui évite les doublons. Les autres entrées (les `Blob` d'un `BlobElite`, le `BlobMorkMini` d'un `BlobMork` sont des créatures) restent dans la liste vanilla. L'amas n'a pas de `Ragdoll`, même chemin. Les trophées et objets à chance en font partie tels qu'obtenus (§10.3).
+- **Créature tuée par un ver seul** : le cobra reste sans attaquant (§11.1). Un **registre « dernier coup de ver »** est écrit au coup de cobra : clé = `ZDOID` de la créature, valeur = la colonie et l'heure, expiration au bout de 2 s. Le coup de cobra porte une marque (`m_skillRaiseAmount` = 0,0625, champ que le jeu ne lit que pour un attaquant joueur). Le postfix de `GenerateDropList` consulte le registre en plus de `m_lastHit.m_attacker`, mais seulement si le coup mortel, le dernier appliqué à la victime, est un coup de cobra sans attaquant : une brûlure, un poison, une chute ou une noyade qui tue après le cobra n'est pas attribuée au ver. Le butin capturé va dans le pool du ver tueur, ou de la colonie si le ver n'existe plus.
+- **Selle d'un animal apprivoisé** tué par un amas ou un ver (même attribution) : `Tameable.OnDeath` ne fait pas tomber la selle, elle va dans le pool.
 - **Structure détruite par un amas ou un ver** : les ressources sont capturées de la même façon ; les dégâts partiels ne rendent rien.
     - `WearNTear` : ce que `Piece.DropResources` aurait rendu, avec la règle vanilla ÷3 si la pièce n'a pas été posée par un joueur.
     - `Destructible` dvergr (§5.3) : ce que `DropOnDestroyed` aurait rendu.
@@ -553,6 +560,7 @@ Le pair propriétaire simule la colonie et ses amas ; chaque morsure voyage comm
 | `HitData.m_pushForce` (point exact choisi au dump) | prefix | Recul de l'amas × `clamp(10/n, KnockbackMinFactor, 1)` (§4.8) |
 | `Character.GetHoverName` | postfix pour `MW_WritheMass` | Nom avec compteur (§4.3) |
 | `CharacterDrop.GenerateDropList` (instance) | postfix | Si `m_lastHit.m_attacker` est un amas, ou si le registre « dernier coup de ver » désigne la créature (§7.4) : capture la liste dans le pool et **vide** la liste retournée (le ragdoll stocke une liste vide) ; l'effet de mort de l'amas n'a pas de `Ragdoll` |
+| `Tameable.OnDeath` | prefix | Si la mort nous est attribuée (comme `GenerateDropList`), la selle va dans le pool au lieu d'être créée au sol ; inerte sinon |
 | Registre « dernier coup de ver » (pas un patch) | écrit au coup de cobra | `ZDOID` de la créature → colonie + heure, expire en 2 s (§7.4, §11.1) |
 | `WearNTear.Damage` + `WearNTear.Destroy` + `Piece.DropResources` | prefix/postfix | Mémoriser le dernier attaquant par pièce ; capturer les ressources d'une pièce détruite par l'amas ou un ver, règle vanilla ÷3 comprise ; une pièce qui s'effondre sans attaquant n'est pas capturée (§7.4) |
 | `Destructible` dvergr (`DropOnDestroyed`) | prefix/postfix | Capturer les drops d'un `Destructible` dvergr (préfixes `dvergrtown_`, `dvergrprops_`) détruit par l'amas ou un ver ; inerte sur tout autre `Destructible`, nids compris (§5.3, §7.4) |
@@ -974,7 +982,7 @@ Le mod est livrable quand chaque case est cochée avec, pour les règles de jeu,
 - [ ] Tout est cible une fois éveillé (joueurs, apprivoisés, créatures, dvergar, structures) ; rien ne s'éveille sans joueur ; ce qui est dévoré va dans le pool (S12, S13) ; « rien ne s'éveille sans joueur » relève de S14, donc du critère de la phase 7
 - [ ] Drops natifs : appâts pondérés par rareté, entrailles, sac de sang ; aucun trophée ; aucun asset nouveau pour les items (S01)
 - [ ] Un nid par salle éligible + vers isolés ; ponte toutes les 20 s ; plafonds 50 / 200 / 400 ; mine propre une fois les nids détruits ; jamais hors mine (S09, S10, S16)
-- [ ] Factions : l'amas est ennemi de toutes les factions vanilla dans les deux sens, sauf `PlayerSpawned`, `TrainingDummy` et la baleine SkyWhale (S19)
+- [ ] Factions : l'amas est ennemi de toutes les factions vanilla dans les deux sens, sauf `PlayerSpawned` et la baleine SkyWhale ; contre le mannequin, vrai de l'amas vers lui et faux dans l'autre sens ; contre un apprivoisé, vrai dans les deux sens (S19)
 - [ ] Dormance et réveil conservent compteurs et pools ; sauvegarde/rechargement idem (S14, S15)
 - [ ] Performance : 400 vers actifs + 2 amas de 200 ≤ 1,0 ms de simulation, ≤ 0,6 ms de rendu, ≤ 64 appels instanciés au total, GC stable, ≤ 6 Ko/s (S11, S17)
 - [ ] Multijoueur : config imposée par le serveur, client sans mod refusé, amas frappable depuis un non-propriétaire (S17)

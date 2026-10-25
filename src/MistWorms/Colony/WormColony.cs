@@ -150,6 +150,7 @@ namespace MistWorms.Colony
             _nview.Register<int, int, ZPackage>(MWNames.RpcWormHit, RPC_WormHit);
             _nview.Register<ZDOID, int, Vector3, ZPackage>(MWNames.RpcMassDissolve, RPC_MassDissolve);
             InitPaths();
+            InitTargetCache(capacity);
             InitMassLink(capacity);
 
             ZDO zdo = _nview.GetZDO();
@@ -223,6 +224,10 @@ namespace MistWorms.Colony
             float now = Time.time;
             int i = Store.Alloc(position, headingRad, state, MWConfig.Worm.Health.Value, now);
             if (i < 0) return -1;
+            _blacklist.Clear(i);
+            _watch[i].Reset();
+            _obstacleKey[i] = 0L;
+            _livingSeen[i] = -1000f;
 #if MW_DEV
             if (_histCount != null) { _histCount[i] = 0; RecordHistory(i, state, now); }
 #endif

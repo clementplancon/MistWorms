@@ -157,12 +157,24 @@ namespace MistWorms.Colony
                 return;
             }
 
-            // A struck active worm turns on its attacker when that is a player it may hunt (spec §3.3).
-            if (attacker is Player player && MWConfig.Targets.AttackPlayers.Value && Targetable(player)
-                && (s.state[i] == (byte)WormState.Idle || s.state[i] == (byte)WormState.Gathering))
+            // A struck active worm turns on its attacker when that is a player or a creature it may hunt (spec §3.3).
+            if (attacker != null && (s.state[i] == (byte)WormState.Idle || s.state[i] == (byte)WormState.Gathering))
             {
-                s.targetKind[i] = (byte)TargetKind.Player;
-                s.targetId[i] = player.GetPlayerID();
+                if (attacker is Player player)
+                {
+                    if (!MWConfig.Targets.AttackPlayers.Value || !Targetable(player) || TargetScanner.IsExcluded(player)) return;
+                    s.SetPlayerTarget(i, player.GetPlayerID());
+                }
+                else
+                {
+                    bool tamed = attacker.IsTamed();
+                    if (!(tamed ? MWConfig.Targets.AttackTamed.Value : MWConfig.Targets.AttackCreatures.Value) || attacker.IsDead()) return;
+                    if (!tamed && !TargetRules.FactionTargetable(attacker.GetFaction())) return;
+                    if (Mass.WritheMassState.TryGet(attacker, out _) || TargetScanner.IsExcluded(attacker)) return;
+                    ZDOID id = attacker.GetZDOID();
+                    if (id == ZDOID.None) return;
+                    s.SetObjectTarget(i, TargetRules.KindOfCharacter(tamed), id.UserID, id.ID);
+                }
                 s.lastSeen[i] = Time.time;
                 SetState(i, WormState.Hunting, Time.time);
             }
@@ -188,34 +200,46 @@ namespace MistWorms.Colony
             long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
             _frameStrikeFxMs += (t1 - t0) * 1000f / System.Diagnostics.Stopwatch.Frequency;
 #endif
-            Player target = (TargetKind)s.targetKind[i] == TargetKind.Player ? FindPlayer(s.targetId[i]) : null;
-            // Phase 6: other target kinds (tamed animals, creatures through WormBite.HitCreature, structures).
-
             bool landed = false;
-            if (target != null && Targetable(target))
+            if (ResolveTarget(i, out TargetView target))
             {
                 float h = s.heading[i];
                 var forward = new Vector3(Mathf.Sin(h), 0f, Mathf.Cos(h));
                 float reach = Mathf.Max(0f, MWConfig.Worm.CobraRange.Value - StrikeRadius + StrikeReachMargin);
                 Vector3 center = s.pos[i] + forward * reach + Vector3.up * StrikeHeight;
-                CapsuleCollider collider = target.GetCollider();
+                Collider collider = target.IsStructure ? target.Collider : target.Character.GetCollider();
                 if (collider != null)
                 {
-                    Vector3 closest = collider.ClosestPoint(center);
+                    // The same surface measure as the scan (a concave mesh is measured on its real surface; no contact, no hit).
+                    bool contact = TargetScanner.TryClosestOn(collider, center, out Vector3 closest);
 #if MW_DEV
-                    LastStrikeGap = (closest - center).magnitude;
+                    LastStrikeGap = contact ? (closest - center).magnitude : -1f;
 #endif
-                    if ((closest - center).sqrMagnitude <= StrikeRadius * StrikeRadius)
+                    if (contact && (closest - center).sqrMagnitude <= StrikeRadius * StrikeRadius)
                     {
                         Vector3 dir = closest - s.pos[i];
                         dir.y = 0f;
                         dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : forward;
-                        landed = WormBite.SendToPlayer(target, closest, dir, ZdoId, i, s.generation[i]);
+                        // A player's owner applies the bite (durability rule); a creature or a structure takes a plain attackerless hit (decision 20)
+                        // after the "last worm hit" registry was written on the peer that owns it (spec §7.4).
+                        switch (target.Kind)
+                        {
+                            case TargetKind.Player:
+                                landed = WormBite.SendToPlayer(target.Player, closest, dir, ZdoId, i, s.generation[i]);
+                                break;
+                            case TargetKind.Structure:
+                                landed = WormBite.HitStructure(target.Object, closest, dir, ZdoId, i, s.generation[i]);
+                                break;
+                            default:
+                                landed = WormBite.HitCreature(target.Character, closest, dir, ZdoId, i, s.generation[i]);
+                                break;
+                        }
                     }
                 }
             }
 #if MW_DEV
             _frameStrikeBiteMs += (System.Diagnostics.Stopwatch.GetTimestamp() - t1) * 1000f / System.Diagnostics.Stopwatch.Frequency;
+            if (landed && Store.targetKind[i] != (byte)TargetKind.Player) Plugin.Log.LogInfo($"[Worm] {i} struck its {(TargetKind)Store.targetKind[i]} target");
             if (landed) StrikesLanded++;
             else StrikesMissed++;
 #endif

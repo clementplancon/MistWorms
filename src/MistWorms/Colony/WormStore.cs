@@ -31,7 +31,9 @@ namespace MistWorms.Colony
         public readonly float[] hp;
         public readonly short[] nestIndex;        // -1 = none (nests arrive in phase 7)
         public readonly byte[] targetKind;        // TargetKind
-        public readonly long[] targetId;          // player id for TargetKind.Player, 0 = none
+        public readonly long[] targetId;          // player id for TargetKind.Player, 0 = none; any other kind: a non zero key of the object (see SetObjectTarget)
+        public readonly long[] targetZdoUser;     // ZDOID.UserID of a Tamed / Creature / Structure target (spec §11.3), 0 otherwise
+        public readonly uint[] targetZdoId;       // ZDOID.ID of it
         public readonly int[] poolIndex;          // index in Pools, -1 while the worm has eaten nothing (spec 7.1)
         public readonly bool[] alive;
         public readonly ushort[] generation;      // bumped on every reuse of the slot (proxies, phase 3B)
@@ -100,6 +102,8 @@ namespace MistWorms.Colony
             nestIndex = new short[capacity];
             targetKind = new byte[capacity];
             targetId = new long[capacity];
+            targetZdoUser = new long[capacity];
+            targetZdoId = new uint[capacity];
             poolIndex = new int[capacity];
             alive = new bool[capacity];
             generation = new ushort[capacity];
@@ -171,6 +175,8 @@ namespace MistWorms.Colony
             nestIndex[i] = -1;
             targetKind[i] = (byte)TargetKind.None;
             targetId[i] = 0;
+            targetZdoUser[i] = 0;
+            targetZdoId[i] = 0;
             poolIndex[i] = -1;
             proxyIndex[i] = -1;
 
@@ -212,6 +218,33 @@ namespace MistWorms.Colony
             pathExpire[i] = 0f;
             nextPathTime[i] = 0f;
             return i;
+        }
+
+        /// <summary>Hunts a player (spec §5.3): the player id is the target key.</summary>
+        public void SetPlayerTarget(int i, long playerId)
+        {
+            targetKind[i] = (byte)TargetKind.Player;
+            targetId[i] = playerId;
+            targetZdoUser[i] = 0;
+            targetZdoId[i] = 0;
+        }
+
+        /// <summary>Hunts a creature, a tamed animal or a structure (spec §11.3): the ZDOID is stored as (user, id) and <see cref="targetId"/> gets a non zero key of it.</summary>
+        public void SetObjectTarget(int i, TargetKind kind, long zdoUser, uint zdoId)
+        {
+            targetKind[i] = (byte)kind;
+            targetZdoUser[i] = zdoUser;
+            targetZdoId[i] = zdoId;
+            targetId[i] = TargetRules.ObjectKey(zdoUser, zdoId);
+        }
+
+        /// <summary>No target.</summary>
+        public void ClearTarget(int i)
+        {
+            targetKind[i] = (byte)TargetKind.None;
+            targetId[i] = 0;
+            targetZdoUser[i] = 0;
+            targetZdoId[i] = 0;
         }
 
         /// <summary>Releases a slot. A dead or already free slot is ignored.</summary>

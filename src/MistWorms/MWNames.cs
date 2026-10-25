@@ -18,6 +18,9 @@ namespace MistWorms
         public const string StatusInfestedNameToken = "$mw_se_infested_name";
         public const string StatusInfestedDescToken = "$mw_se_infested_desc";
 
+        // Hidden status effect of an engulfed creature (spec §6.5): the slow only, no icon.
+        public const string StatusEngulfed = "MW_SE_Engulfed";
+
         // ZDO keys of the colony (spec §11.3/§11.4). Phase 3 only persists the kind and the box; the snapshot comes in phase 7.
         public const string ZdoKind = "mw_kind";               // int: WormColony.ColonyKind
         public const string ZdoBoxCenter = "mw_box_c";         // Vector3, world space (spec §8.4)
@@ -43,6 +46,7 @@ namespace MistWorms
         public const string RpcMassAdd = "MW_MassAdd";         // ZNetView RPC to the mass owner: int k worms to add, ZPackage pool they bring (MassPool.Write)
         public const string RpcConsumed = "MW_Consumed";       // routed RPC to the mass owner: ZDOID mass, ZPackage (int count <= 16, then int prefab hash + float quantity <= 50 per entry)
         public const string RpcWormConsumed = "MW_WormConsumed"; // routed RPC to the colony owner: ZDOID colony, int slot, int generation, ZPackage (same payload as MW_Consumed)
+        public const string RpcLastWormHit = "MW_LastHit";     // routed RPC to the owner of a creature or a structure: ZDOID victim, ZDOID colony, int slot, int generation ("last worm hit" registry, spec §7.4)
         public const string RpcMassDissolve = "MW_Dissolve";   // ZNetView RPC to the colony owner: ZDOID mass, int n, Vector3 position, ZPackage pool
     }
 }

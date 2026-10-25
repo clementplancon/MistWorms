@@ -343,7 +343,9 @@ namespace MistWorms.Dev.Scenarios
             {
                 ctx.Assert(tag + "_tread_ratio", tread.Count >= 20 && ratio >= 1.6f && ratio <= 2.4f, "median top flux speed / mass speed in [1.6, 2.4]", $"{ratio:0.00} ({tread.Count} samples)");
                 ctx.Assert(tag + "_poured_worms_still", poured.Count >= 5 && pourMedian <= 0.25f * vMean, "median poured worm speed <= 0.25 x the mass speed", $"{pourMedian:0.00} m/s ({poured.Count} samples)");
-                ctx.Assert(tag + "_border_pulled_forward", front + rear > 0 && front >= 2 * Math.Max(rear, 1) - 1, "front border >= 2 x rear border", $"front {front}, rear {rear}");
+                // Factor 1.5 up to n50, 2 beyond: an isotropic border gives 1.0, the per-second median measured 1.8 to 1.9 at n50 (4.5 at n200), decision 165.
+                float factor = n <= 50 ? 1.5f : 2f;
+                ctx.Assert(tag + "_border_pulled_forward", front + rear > 0 && front >= factor * Math.Max(rear, 1) - 1, $"front border >= {factor:0.#} x rear border (isotropic = 1.0, measured per-second median 1.8 to 1.9 at n50)", $"front {front}, rear {rear}");
             }
             ctx.Assert(tag + "_arm_toward_target", armSeen && armExtension >= 0.3f && armRampNear > 0.5f, "a drawn worm >= 0.3 m beyond the footprint toward the player within r + 4 m", $"{(armSeen ? armExtension.ToString("0.00") : "none")} m, ramp {armRampNear:0.00} while near, distance now {Vector3.Distance(visual.Root, player.transform.position):0.0} m");
 

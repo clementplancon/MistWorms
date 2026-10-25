@@ -56,6 +56,11 @@ namespace MistWorms
         public const string WoodDoor = "wood_door";                    // unverified (spec §20.1)
         public const string Wolf = "Wolf";                             // unverified (spec §20.1)
 
+        // ---- Structures of the mines that worms and masses may destroy (spec §5.3, plan 6, A3) ----
+        // Prefix of the dvergr destructibles (props, walls, beams of the mines). Confirmed by the dump (docs/vanilla-reference-dump.md section 3): dvergrtown_arch,
+        // dvergrtown_wood_*, dvergrprops_barrel, dvergrprops_pickaxe... Never a nest or another Destructible.
+        public static readonly string[] DvergrStructurePrefixes = { "dvergrtown_", "dvergrprops_" };
+
         // ---- Infested mines (spec §8.3) ----
         // Confirmed (decompiled Room.cs:7-27): Room.Theme is a bitmask, so always test with '&', never '=='.
         // Confirmed by the dump (L626-643): DvergerTown = 128 (48 rooms), DvergerBoss = 256 (18 rooms); the mine
@@ -129,6 +134,7 @@ namespace MistWorms
         public const string LayerDefault = "Default";             // confirmed
         public const string LayerStaticSolid = "static_solid";    // confirmed
         public const string LayerPiece = "piece";                 // confirmed
+        public const string LayerPieceNonsolid = "piece_nonsolid"; // confirmed (BaseAI.m_monsterTargetRayMask, BaseAI.cs:223): with piece, Default, static_solid, Default_small, vehicle
         public const string LayerTerrain = "terrain";             // confirmed
         // Masks of the worm simulation = the lists of BaseAI.m_solidRayMask / m_viewBlockMask.
         public const string LayerDefaultSmall = "Default_small";  // confirmed (BaseAI.cs:221-222)

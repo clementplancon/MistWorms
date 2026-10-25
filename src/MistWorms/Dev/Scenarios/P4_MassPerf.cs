@@ -136,6 +136,7 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert("D_lod_both_2", _va.LastLod == 2 && _vb.LastLod == 2, "2 and 2", $"{_va.LastLod} and {_vb.LastLod}");
                 ctx.Assert("D_drawn_at_most_lod2_cap", _va.LastDrawn <= MassLayoutConst.Lod2Cap && _vb.LastDrawn <= MassLayoutConst.Lod2Cap, $"<= {MassLayoutConst.Lod2Cap} each", $"{_va.LastDrawn} / {_vb.LastDrawn}");
                 Budgets(ctx, "D", sd, false);
+                DevCamera.Free(eye, eye + fwd * 10f);   // back to the aim of the near phases
 
                 // ---- E: the difference in frame time with and without the masses (worst case placement), ABABAB
                 _anchorA = player.transform.position + fwd * 6f;
@@ -304,6 +305,11 @@ namespace MistWorms.Dev.Scenarios
                 }
                 _anchorA = a; _anchorB = b; _perp = side;
                 Place(a, b);
+                // The camera was aimed along the first direction: when another one is used, both masses must stay in its view (a mass out of the frustum is not drawn, its LOD stays 0).
+                Vector3 eyePoint = origin + Vector3.up * 1.7f;
+                Vector3 middle = (a + b) * 0.5f;
+                middle.y = eyePoint.y;
+                DevCamera.Free(eyePoint, middle);
                 yield return Frames(15, scale, (f) => Walk());
                 Vector3 cam = Camera.main != null ? Camera.main.transform.position : origin + Vector3.up * 1.7f;
                 float da = Vector3.Distance(cam, _va.Root) - _va.P.R, db = Vector3.Distance(cam, _vb.Root) - _vb.P.R;

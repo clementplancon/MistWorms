@@ -588,6 +588,8 @@ namespace MistWorms.Dev
                 { "proxyLayer", Colony.ProxyLayer.LayerName },
                 { "bites", BitesJson() },
                 { "drops", DropsJson() },
+                { "targeting", TargetingJson() },
+                { "factions", FactionDev.StateJson() },
                 { "player", playerJson },
             };
         }
@@ -598,6 +600,15 @@ namespace MistWorms.Dev
             { "durabilityEaten", Bites.WormBiteContext.DurabilityEaten },
             { "healthBites", Bites.WormBiteContext.HealthBites },
             { "healthDamage", Bites.WormBiteContext.HealthDamage },
+        };
+
+        /// <summary>Counters of the target scanner (decision 163): scans whose collider buffer was full, pieces left out of the 48 nearest, candidates dropped by the reach filter and by the blacklist.</summary>
+        private static Dictionary<string, object> TargetingJson() => new Dictionary<string, object>
+        {
+            { "colliderOverflows", Colony.TargetScanner.ColliderOverflows },
+            { "structureOverflows", Colony.TargetScanner.StructureOverflows },
+            { "unreachable", Colony.TargetScanner.Unreachable },
+            { "blacklisted", Colony.TargetScanner.Blacklisted },
         };
 
         private static Dictionary<string, object> DropsJson() => new Dictionary<string, object>
@@ -612,6 +623,10 @@ namespace MistWorms.Dev
             { "poolRpcSent", Drops.PoolRpc.Sent },
             { "poolRpcReceived", Drops.PoolRpc.Received },
             { "poolRpcIgnored", Drops.PoolRpc.IgnoredEntries },
+            { "creatureCaptures", Drops.DropCapture.CreatureCaptures },
+            { "structureCaptures", Drops.DropCapture.StructureCaptures },
+            { "lastCaptureVictim", Drops.DropCapture.LastVictim },
+            { "lastCaptureKiller", Drops.DropCapture.LastKiller },
         };
 
         /// <summary>

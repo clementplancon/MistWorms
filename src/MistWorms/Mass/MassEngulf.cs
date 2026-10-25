@@ -12,8 +12,11 @@ namespace MistWorms.Mass
     /// <item><c>MW_MassBite</c>: one aggregated tick. The target's owner builds one HitData attributed to the mass (a real Character, so the vanilla
     /// block, riposte and dodge frames work) and runs it through the vanilla <c>Damage</c> inside a <see cref="WormBiteContext"/>, exactly like the
     /// cobra: the damage patches then turn it into a durability bite (rest of P to health).</item>
-    /// <item><c>MW_Infest</c>: applies (or renews) / removes the Infested effect.</item>
+    /// <item><c>MW_Infest</c>: applies (or renews) / removes the Infested effect (a player) or the hidden slow <see cref="EngulfedEffect"/> (a creature).</item>
     /// </list>
+    /// A creature or a structure needs no RPC for the tick (plan 6, pass 6-2): the mass owner builds the same aggregated HitData, attributed to the mass, and
+    /// sends it with the plain vanilla <c>Damage</c>, which routes it to the owner of the victim; armor, resistances and the retaliation are then vanilla's.
+    /// No <see cref="WormBiteContext"/> is opened for them, so the durability patches stay inert.
     /// In solo both owners are the same peer; the code goes through the RPCs all the same (a routed RPC to oneself is handled synchronously).
     /// No <c>byte[]</c> travels in a routed RPC.
     /// </summary>
@@ -34,10 +37,14 @@ namespace MistWorms.Mass
         // Debug counters read by the scenarios (S04).
         public static float LastTickTime;
         public static int TicksSent, TicksReceived, TicksDroppedNoAttacker, TicksInvincible, Parries, InfestSent, InfestReceived;
+        public static int CreatureTicks, StructureTicks;
+        public static float LastCreatureTickDamage, LastStructureTickDamage;
 
         public static void ResetCounters()
         {
             TicksSent = TicksReceived = TicksDroppedNoAttacker = TicksInvincible = Parries = InfestSent = InfestReceived = 0;
+            CreatureTicks = StructureTicks = 0;
+            LastCreatureTickDamage = LastStructureTickDamage = 0f;
         }
 #endif
 
@@ -83,8 +90,49 @@ namespace MistWorms.Mass
             return true;
         }
 
-        /// <summary>Applies (<paramref name="on"/>) or removes the Infested effect on <paramref name="target"/>, wherever its owner is.</summary>
-        public static bool SendInfest(Player target, bool on)
+        /// <summary>
+        /// One aggregated tick on a creature or a tamed animal: n x Worm.CreatureDamagePerBite piercing damage, blockable and dodgeable like any monster
+        /// attack, attributed to the mass (a real Character: the creature's AI answers it, and the loot of a kill goes to the mass, spec §7.4). Called by the owner of the mass.
+        /// </summary>
+        public static bool HitCreature(WritheMassState mass, Character target, Vector3 dir)
+        {
+            if (mass == null || target == null || target.IsDead()) return false;
+            int n = Math.Max(1, mass.N);
+            HitData hit = WormBite.NewHit(n * MWConfig.Worm.CreatureDamagePerBite.Value, target.GetCenterPoint(), dir, TickPushForce);
+            hit.m_attacker = mass.ZdoId;
+            hit.m_hitType = HitData.HitType.EnemyHit;
+            target.Damage(hit);
+#if MW_DEV
+            TicksSent++;
+            CreatureTicks++;
+            LastCreatureTickDamage = hit.m_damage.m_pierce;
+#endif
+            return true;
+        }
+
+        /// <summary>One aggregated tick on a structure: n x Worm.StructureDamagePerBite blunt damage at <paramref name="point"/>, attributed to the mass.</summary>
+        public static bool HitStructure(WritheMassState mass, Component target, Vector3 point, Vector3 dir)
+        {
+            IDestructible destructible = mass != null && target != null ? target.GetComponent<IDestructible>() : null;
+            if (destructible == null) return false;
+            int n = Math.Max(1, mass.N);
+            HitData hit = WormBite.NewHit(0f, point, dir, 0f);
+            hit.m_damage.m_blunt = n * MWConfig.Worm.StructureDamagePerBite.Value;
+            hit.m_blockable = false;
+            hit.m_dodgeable = false;
+            hit.m_attacker = mass.ZdoId;
+            hit.m_hitType = HitData.HitType.EnemyHit;
+            destructible.Damage(hit);
+#if MW_DEV
+            TicksSent++;
+            StructureTicks++;
+            LastStructureTickDamage = hit.m_damage.m_blunt;
+#endif
+            return true;
+        }
+
+        /// <summary>Applies (<paramref name="on"/>) or removes the Infested effect (player) or the hidden slow (creature) on <paramref name="target"/>, wherever its owner is.</summary>
+        public static bool SendInfest(Character target, bool on)
         {
             ZRoutedRpc rpc = ZRoutedRpc.instance;
             if (rpc == null || target == null) return false;
@@ -193,19 +241,31 @@ namespace MistWorms.Mass
         {
             try
             {
-                Player target = WormBite.FindOwnedPlayer(targetId);
+                Character target = WormBite.FindOwnedCharacter(targetId);
                 if (target == null) return;
 #if MW_DEV
                 InfestReceived++;
 #endif
+                if (target is Player player)
+                {
+                    if (on)
+                    {
+                        if (player.IsDead()) return;
+                        InfestedEffect.Apply(player);
+                    }
+                    else
+                    {
+                        InfestedEffect.Remove(player);
+                    }
+                    return;
+                }
                 if (on)
                 {
-                    if (target.IsDead()) return;
-                    InfestedEffect.Apply(target);
+                    if (!target.IsDead()) EngulfedEffect.Apply(target);
                 }
                 else
                 {
-                    InfestedEffect.Remove(target);
+                    EngulfedEffect.Remove(target);
                 }
             }
             catch (Exception e)

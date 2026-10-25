@@ -296,9 +296,9 @@ namespace MistWorms.Colony
                 }
             }
 
-            Player target = FindPlayer(s.targetId[i]);
-            if (target == null || !Targetable(target)) { LoseTarget(i, now); return; }
+            if (!ResolveTarget(i, out TargetView target)) { LoseTarget(i, now); return; }
             if (FireCheck(i, false)) { SetState(i, WormState.Fleeing, now); return; }
+            if (WatchProgress(i, target, now)) { LoseTarget(i, now); return; }
 
             Vector3 pos = s.pos[i];
             Vector3 goal = ApproachGoal(i, target, now);
@@ -322,19 +322,23 @@ namespace MistWorms.Colony
             MoveWorm(i, goal, MWConfig.Worm.MoveSpeed.Value, now, dt, noiseWeight: 0f, stopAtGoal: s.approachMode[i] == 1);
         }
 
-        /// <summary>Distance to the target's surface: eye to capsule centre minus its radius (spec 3.3).</summary>
-        private float SurfaceDistance(int i, Player target) =>
-            Vector3.Distance(Store.pos[i] + Vector3.up * EyeHeight, target.GetCenterPoint()) - target.GetRadius();
-
         /// <summary>
         /// Where a hunter heads (plan 4A-3 point 3): its own place around the target, at CobraRange x 0.9, chosen by rank x golden angle from
         /// the bearing at which the first hunter of that target arrived. The rank is kept as long as the worm hunts the same target. The
         /// point is validated (floor, no wall from the target) every 0.5 s; otherwise the worm aims at the target itself.
         /// </summary>
-        private Vector3 ApproachGoal(int i, Player target, float now)
+        private Vector3 ApproachGoal(int i, in TargetView target, float now)
         {
             WormStore s = Store;
-            Vector3 tp = target.transform.position;
+            if (target.IsStructure)
+            {
+                // A structure has no place around it to reserve: the worm walks to the point of its collider closest to it and strikes from where it stands.
+                s.approachRank[i] = 0;
+                s.approachTarget[i] = s.targetId[i];
+                s.approachMode[i] = 2;
+                return target.Position;
+            }
+            Vector3 tp = target.Position;
             if (s.approachRank[i] < 0 || s.approachTarget[i] != s.targetId[i])
             {
                 Vector3 from = s.pos[i] - tp;
@@ -398,24 +402,24 @@ namespace MistWorms.Colony
                 if (phase == StrikePhase.Strike) OnStrike(i, now);
             }
 
-            Player target = FindPlayer(s.targetId[i]);
-            if (phase == StrikePhase.Windup && target != null)
+            bool haveTarget = ResolveTarget(i, out TargetView target);
+            if (phase == StrikePhase.Windup && haveTarget)
             {
                 // Immobile but facing the target.
-                Vector3 d = target.transform.position - s.pos[i];
+                Vector3 d = target.Position - s.pos[i];
                 s.heading[i] = WormMath.TurnToward(s.heading[i], WormMath.HeadingOf(d.x, d.z),
                     MWConfig.Worm.TurnSpeed.Value * Mathf.Deg2Rad * dt);
                 WindupNudge(i, target, now, dt);
             }
 
             if (FireCheck(i, false)) { SetState(i, WormState.Fleeing, now); return; }
-            if (phase == StrikePhase.Recovery && target != null && Targetable(target)) RecoverMove(i, target, now, dt);
+            if (phase == StrikePhase.Recovery && haveTarget) RecoverMove(i, target, now, dt);
             else Rest(i, now);
 
             if (t >= windup + StrikeDuration + cooldown)
             {
                 // Phase 4: re-evaluate "somebody to join?" after each recovery.
-                if (target != null && Targetable(target)) SetState(i, WormState.Hunting, now);
+                if (haveTarget) SetState(i, WormState.Hunting, now);
                 else LoseTarget(i, now);
             }
         }
@@ -428,7 +432,7 @@ namespace MistWorms.Colony
         /// A worm winding up does not crawl, so the separation could not act on it and its neighbours kept overlapping it (S18 a). It may slide
         /// sideways away from the neighbours, slowly, without turning (the heading stays on the target) and never out of cobra range.
         /// </summary>
-        private void WindupNudge(int i, Player target, float now, float dt)
+        private void WindupNudge(int i, in TargetView target, float now, float dt)
         {
             WormStore s = Store;
             Vector3 pos = s.pos[i];
@@ -449,7 +453,7 @@ namespace MistWorms.Colony
             s.nextGroundTime[i] = now + GroundInterval;
         }
 
-        private void RecoverMove(int i, Player target, float now, float dt)
+        private void RecoverMove(int i, in TargetView target, float now, float dt)
         {
             WormStore s = Store;
             Vector3 before = s.pos[i];
@@ -473,8 +477,7 @@ namespace MistWorms.Colony
 
         private void ClearTarget(int i)
         {
-            Store.targetKind[i] = (byte)TargetKind.None;
-            Store.targetId[i] = 0;
+            Store.ClearTarget(i);
             Store.hasLos[i] = false;
             Store.approachRank[i] = -1;
         }

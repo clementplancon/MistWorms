@@ -22,11 +22,13 @@ namespace MistWorms.Colony
         Recovery = 2,
     }
 
-    /// <summary>What a worm hunts (spec §5.3). Only players exist in phase 3; creatures, tamed animals and structures come with phase 6.</summary>
+    /// <summary>What a worm hunts (spec §5.3, §11.3). A player is stored by its player id, the other kinds by the ZDOID of the object.</summary>
     internal enum TargetKind : byte
     {
         None = 0,
         Player = 1,
-        // Phase 6: Tamed, Creature, Structure.
+        Tamed = 2,
+        Creature = 3,
+        Structure = 4,
     }
 }

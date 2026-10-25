@@ -47,6 +47,7 @@ namespace MistWorms
             PrefabManager.OnVanillaPrefabsAvailable += OnVanillaPrefabsAvailable;
             ItemManager.OnItemsRegistered += Drops.BaitWeightsInit.OnItemsRegistered;
             Bites.InfestedEffect.Register();
+            Bites.EngulfedEffect.Register();
             ItemManager.OnItemsRegistered += OnItemsRegistered;
 
 #if MW_DEV
