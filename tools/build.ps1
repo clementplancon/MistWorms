@@ -83,6 +83,7 @@ function Deploy-Plugin([string]$gameDir) {
     else { Write-Warning "No localization folder at $locSrc" }
 
     if (Test-Path $assetsBuild) {
+        if (-not (Test-Path (Join-Path $assetsBuild 'mistworms_shaders'))) { Write-Warning 'assets/build/mistworms_shaders is missing (tools/build-shaders.ps1): the GPU worm spike will not load.' }
         # assets/build/previews/ holds dev-only reference renders; never ship them.
         $assetsDest = Join-Path $dest 'assets'
         New-Item -ItemType Directory -Force $assetsDest | Out-Null

@@ -25,6 +25,7 @@ namespace MistWorms
             CommandManager.Instance.AddConsoleCommand(new GlossCommand());
             CommandManager.Instance.AddConsoleCommand(new MassCommand());
             CommandManager.Instance.AddConsoleCommand(new MassEngulfCommand());
+            CommandManager.Instance.AddConsoleCommand(new GpuWormsCommand());
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_nest", "- place a worm nest in front of the player", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_wake", "- wake every dormant group of the current mine", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_calm", "- send every active group of the current mine back to dormancy", 7));
@@ -168,6 +169,29 @@ namespace MistWorms
                 Mass.WritheMassState mass = Dev.MassDev.SpawnInFront(n, withColony, out Colony.WormColony colony, out string how);
                 mass.FreezeAI = frozen;
                 Print(context, $"mw_mass: mass {mass.ZdoId} of {mass.N} worms (hp {mass.Health:0.#}, radius {mass.TargetRadius:0.00} m), {(colony != null ? how + " colony " + colony.ZdoId : "no colony")}");
+            }
+        }
+
+        private sealed class GpuWormsCommand : MWCommand
+        {
+            public override string Name => "mw_gpuworms";
+            public override string Help => "[dev] <count> - GPU worm spike: a field of count (0..16384) GPU-deformed worms around the player; 0 clears it";
+            public override bool IsCheat => true;
+
+            public override List<string> CommandOptionList() => new List<string> { "0", "1000", "5000", "10000" };
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                if (args.Length == 0 || !int.TryParse(args[0], out int n) || n < 0)
+                {
+                    Print(context, "usage: mw_gpuworms <count>");
+                    return;
+                }
+
+                Player player = Player.m_localPlayer;
+                if (n > 0 && player == null) { Print(context, "mw_gpuworms: no local player"); return; }
+                bool ok = Dev.GpuWorms.Spawn(n, player != null ? player.transform.position : UnityEngine.Vector3.zero, out string how);
+                Print(context, $"mw_gpuworms: {(ok ? how : "FAILED " + how)}; main thread {Dev.GpuWorms.AvgMs:0.000} ms/frame");
             }
         }
 

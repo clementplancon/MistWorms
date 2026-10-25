@@ -3,8 +3,8 @@
   Regenerates every asset from the versioned Blender scripts (spec §13.1): headless Blender,
   no Unity, no hand-made binaries.
 .DESCRIPTION
-  Runs, in order: make_worm.py, make_mass.py, make_nest.py, make_mass_preview.py (previews + mass_layout_golden.json),
-  render_icon.py, validate_assets.py
+  Runs, in order: make_worm.py, make_knots.py, make_strands.py, make_nest.py, make_mass_preview.py (legacy layout previews +
+  mass_layout_golden.json), render_icon.py, validate_assets.py
   (common.py is a helper module imported by the others, never run directly). Missing scripts are
   skipped with a notice.
   Each Blender script is started as:
@@ -24,7 +24,7 @@ param(
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-$order = @('make_worm', 'make_mass', 'make_nest', 'make_mass_preview', 'render_icon', 'validate_assets')
+$order = @('make_worm', 'make_knots', 'make_strands', 'make_nest', 'make_mass_preview', 'render_icon', 'validate_assets')
 if ($Only) {
     $unknown = $Only | Where-Object { $order -notcontains $_ }
     if ($unknown) { throw "Unknown script(s): $($unknown -join ', '). Known: $($order -join ', ')" }

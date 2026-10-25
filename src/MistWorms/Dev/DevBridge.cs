@@ -250,6 +250,10 @@ namespace MistWorms.Dev
                     req.RequireMethod("POST");
                     MassRoute(req, reply);
                     return null;
+                case "/gpuworms":
+                    req.RequireMethod("POST");
+                    GpuWormsRoute(req, reply);
+                    return null;
                 case "/mass-visual":
                     req.RequireMethod("GET");
                     MassVisualRoute(req, reply);
@@ -514,6 +518,18 @@ namespace MistWorms.Dev
             reply.Body = body;
         }
 
+        /// <summary>POST /gpuworms {"count": n}: the GPU worm spike field around the player (0 clears it); returns the state block.</summary>
+        private static void GpuWormsRoute(BridgeRequest req, BridgeReply reply)
+        {
+            RequirePlayer();
+            int n = MiniJson.GetInt(req.Body, "count", 0);
+            if (n < 0 || n > GpuWorms.MaxWorms) throw new BridgeException(400, $"'count' must be 0..{GpuWorms.MaxWorms}");
+            if (!GpuWorms.Spawn(n, Player.m_localPlayer.transform.position, out string how)) throw new BridgeException(409, how);
+            Dictionary<string, object> body = GpuWorms.StateJson();
+            body["how"] = how;
+            reply.Body = body;
+        }
+
         /// <summary>GET /mass-visual[?id=user:id]: what the swarm renderer did for a mass (the closest to the player without id), plus the renderer totals.</summary>
         private static void MassVisualRoute(BridgeRequest req, BridgeReply reply)
         {
@@ -584,6 +600,7 @@ namespace MistWorms.Dev
             {
                 { "colonies", colonies },
                 { "masses", MassDev.JsonList() },
+                { "gpuWorms", GpuWorms.StateJson() },
                 { "frozen", Colony.WormColony.Frozen },
                 { "proxyLayer", Colony.ProxyLayer.LayerName },
                 { "bites", BitesJson() },

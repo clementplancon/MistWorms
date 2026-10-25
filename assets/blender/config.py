@@ -4,6 +4,8 @@ SEED = 20261024
 GENERATOR = "Blender 4.5.5 + assets/blender/*.py"
 
 # name -> (frames, fps, loop). Order matters: it is the order in manifest.json.
+# V2 (visual rework, x2 revision 2026-10-25): the worm is 30 cm long, 1.8 cm thick; heaps are made of KNOTS (8 / 20 / 40 tangled worms, precomputed) and
+# STRANDS (twisted worms); mass_core / mass_boil are gone.
 ANIMATIONS = {
     "worm_crawl": (16, 12, True),
     "worm_idle": (8, 6, True),
@@ -14,52 +16,67 @@ ANIMATIONS = {
     "worm_crawl_lod1": (8, 6, True),      # LOD1: frame j = pose 2j of the LOD0 loop, half the rate
     "worm_idle_lod1": (4, 3, True),
     "worm_coil_lod1": (6, 5, True),
-    "mass_boil": (8, 8, True),            # legacy dome, removed in pass D
-    "mass_core_t1": (1, 0, False),        # heap core, same geometry, UV x {1, 1.8, 3}
-    "mass_core_t2": (1, 0, False),
-    "mass_core_t3": (1, 0, False),
+    "knot_s_a": (12, 12, True),           # swarming loop of a knot: 12 frames; LOD1 = frames 2j at half the rate
+    "knot_s_b": (12, 12, True),
+    "knot_m_a": (12, 12, True),
+    "knot_m_b": (12, 12, True),
+    "knot_l_a": (12, 12, True),
+    "knot_l_b": (12, 12, True),
+    "knot_s_a_lod1": (6, 6, True),
+    "knot_s_b_lod1": (6, 6, True),
+    "knot_m_a_lod1": (6, 6, True),
+    "knot_m_b_lod1": (6, 6, True),
+    "knot_l_a_lod1": (6, 6, True),
+    "knot_l_b_lod1": (6, 6, True),
+    "strand_a": (12, 12, True),           # 6 twisted worms along ~40 cm (along Z)
+    "strand_a_lod1": (6, 6, True),
     "nest_idle": (1, 0, False),
 }
 
-# name -> (width, height, linear)
+# name -> (width, height, linear). Knots and strands use the worm material.
 TEXTURES = {
     "worm_albedo": (128, 128, False),
     "worm_normal": (128, 128, True),
     "worm_gloss": (128, 128, True),      # RGBA: RGB = 0, alpha = lustre (the only texture with alpha)
-    "mass_albedo": (1024, 1024, False),   # legacy dome, removed in pass D
-    "mass_normal": (1024, 1024, True),
-    "mass_core_albedo": (256, 256, False),
-    "mass_core_normal": (256, 256, True),
-    "mass_core_gloss": (256, 256, True),  # RGBA: alpha = lustre (every *_gloss carries alpha)
     "nest_albedo": (1024, 1024, False),
     "nest_normal": (1024, 1024, True),
 }
 
-# mesh prefix -> (min, max) triangles per frame. The key is chosen per mesh by suffix, then longest prefix:
-# any name containing "_lod1" uses "worm_lod1"; otherwise the longest key the name starts with.
+# mesh prefix -> (min, max) triangles per frame. The key is chosen per mesh: for a name containing "_lod1" the longest key
+# that prefixes the name before "_lod1" gets "_lod1" appended; otherwise the longest key the name starts with.
 TRI_BUDGET = {
-    "worm": (600, 900),
-    "worm_lod1": (200, 300),
-    "mass": (1500, 2500),                 # legacy dome
-    "mass_core": (1200, 1800),
+    "worm": (250, 300),                   # 18 rings x 8 around + 2 mandibles = 282
+    "worm_lod1": (70, 100),               # 8 rings x 6 around = 84
+    "knot_s": (700, 1000),                # 8 worms x 110
+    "knot_s_lod1": (200, 260),            # 8 worms x 30
+    "knot_m": (1800, 2500),               # 20 worms
+    "knot_m_lod1": (500, 650),
+    "knot_l": (3600, 4500),               # 40 worms
+    "knot_l_lod1": (1000, 1250),
+    "strand": (900, 1150),                # 6 worms x 170
+    "strand_lod1": (250, 330),            # 6 worms x 48
     "nest": (1700, 2300),
 }
 
-CORE_TILES = {"mass_core_t1": 1.0, "mass_core_t2": 1.8, "mass_core_t3": 3.0}   # UV multiplier of each core mesh
+# Knots: worm count and nominal volume (m) per size; used by make_knots.py, validate_assets.py (-> manifest "knots").
+KNOT_WORMS = {"s": 8, "m": 20, "l": 40}
+KNOT_VOLUME = {"s": 0.12, "m": 0.20, "l": 0.30}
+KNOT_EXTENT = {"s": (0.09, 0.17), "m": (0.15, 0.27), "l": (0.23, 0.38)}   # largest bounding-box side of EVERY frame (strays included); make_knots asks 12 % more
+STRAND_WORMS = 6
+STRAND_NOMINAL_LENGTH = 0.40
+STRAND_LENGTH = (0.34, 0.46)         # extent of the strand (Z)
+STRAND_WIDTH_MAX = 0.12              # X and Y extents
 
 WORM_TEXTURE_MAX = 128               # worm_* textures follow the vanilla creatures (dump section 1)
-WORM_LENGTH = (0.38, 0.42)          # extent along Z of crawl/sleep frames
-WORM_LENGTH_LOD1 = (0.36, 0.42)     # LOD1 has no mandibles (about 0.02 m shorter)
+WORM_LENGTH = (0.29, 0.32)         # extent along Z of crawl/sleep frames (30 cm worm)
+WORM_LENGTH_LOD1 = (0.28, 0.32)     # LOD1 has no mandibles (about 0.02 m shorter)
 NEST_FOOTPRINT = (0.85, 0.95)       # X and Z extent
 NEST_HEIGHT = (0.45, 0.55)
-DOME_RADIUS = (0.95, 1.08)          # X and Z half-extent
 
 # Coil (worm_coil_*): lengths in metres, angles in radians unless noted
-COIL_EXTENT_XZ_MAX = 0.30
-COIL_HEIGHT_MAX = 0.10
-COIL_RING_MIN_DIST = 0.056              # min distance between centres of non-adjacent rings
-CORE_HALF_EXTENT = (0.95, 1.12)         # mass_core_t*: XZ half extent and y max
-CORE_Y_MIN = -0.06
+COIL_EXTENT_XZ_MAX = 0.24
+COIL_HEIGHT_MAX = 0.08
+COIL_RING_MIN_DIST = 0.0168             # min distance between centres of non-adjacent rings (body diameter 0.018)
 
 # ---------------------------------------------------------------------------------------------------------------
 # MASS_LAYOUT: the constants of the heap layout (plan 4B-3 section 3.1). SINGLE SOURCE FOR THE PYTHON REFERENCE

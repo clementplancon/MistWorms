@@ -1,7 +1,8 @@
 """Worm flipbook meshes + textures (spec §13.1, §13.4).
 
-One base topology (a 14-segment larva with two tiny mandibles) is deformed per frame, so every
-animation frame has identical vertex/index counts. Run: blender --background --python make_worm.py
+V2 worm (x2 revision of 2026-10-25): 30 cm long, 1.8 cm thick (head 2.1 cm). One base topology
+(an 18-ring, 8-around larva with two small mandibles, 282 triangles) is deformed per frame, so every animation frame has identical
+vertex/index counts. Run: blender --background --python make_worm.py
 """
 import os
 import sys
@@ -13,18 +14,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
 import config  # noqa: E402
 
-RINGS = 28            # intervals along the body; ring i sits at u = i / RINGS (2 rings per segment)
-AROUND = 14
-BODY_LEN = 0.385
-HEAD_INSET = 0.007
-TAIL_INSET = 0.004    # blunt tail: the pole sits slightly inside the first ring
-SEGMENTS = 14
+RINGS = 18            # intervals along the body; ring i sits at u = i / RINGS (1 ring per segment)
+AROUND = 8
+BODY_LEN = 0.30
+HEAD_INSET = 0.0054
+TAIL_INSET = 0.0032   # blunt tail: the pole sits slightly inside the first ring
+SEGMENTS = 18         # texture folds, one per mesh ring
 RING_BULGE = 0.02     # alternate rings +-2 % (was 5 %: tyre look)
 FLAT = 0.92           # belly flattening of the cross-section
 
-# Radius profile along u (tail 0 -> head 1): tail 0.012, body 0.030, head bulb 0.035.
-PROFILE_U = [0.0, 1 / 28, 0.08, 0.2, 0.35, 0.5, 0.7, 0.8, 0.88, 0.94, 27 / 28, 1.0]
-PROFILE_R = [0.0, 0.0105, 0.0125, 0.0215, 0.0285, 0.0300, 0.0305, 0.0335, 0.0350, 0.0330, 0.0285, 0.0]
+# Radius profile along u (tail 0 -> head 1): tail 0.0032, body 0.009 (diameter 1.8 cm), head bulb 0.0105 (2.1 cm).
+PROFILE_U = [0.0, 1 / 18, 0.2, 0.35, 0.5, 0.7, 0.8, 0.88, 17 / 18, 1.0]
+PROFILE_R = [0.0, 0.0032, 0.0064, 0.0086, 0.0090, 0.0092, 0.0100, 0.0105, 0.0086, 0.0]
 
 
 def smoothstep(x):
@@ -33,7 +34,7 @@ def smoothstep(x):
 
 def topology(rings=RINGS, around=AROUND, mandibles=True):
     """Faces (F,3) and per-loop UVs (F,3,2); vertex layout: 0 tail pole, rings 1..rings-1, head pole, mandibles.
-    Defaults: the LOD0 worm (28 x 14 + 2 mandibles = 766 triangles); LOD1 uses rings=16, around=8, no mandibles (240)."""
+    Defaults: the LOD0 worm (18 x 8 + 2 mandibles = 282 triangles); LOD1 uses rings=8, around=6, no mandibles (84)."""
     def vid(i, j):
         return 1 + (i - 1) * around + (j % around)
     tail, head = 0, 1 + (rings - 1) * around
@@ -73,20 +74,20 @@ def ring_u(rings=RINGS):
 
 CRAWL_FRAMES = 16
 IDLE_FRAMES = 8
-LOD1_RINGS = 16       # LOD1: 16 intervals x 8 around, no mandibles, no ring bulge = 240 triangles
-LOD1_AROUND = 8
+LOD1_RINGS = 8        # LOD1: 8 intervals x 6 around, no mandibles, no ring bulge = 84 triangles
+LOD1_AROUND = 6
 
 # Crawl (plan 4A-1 point 2): lateral wave travelling head -> tail, peristalsis and stretch travelling tail -> head.
-CRAWL_WAVE_LEN = 0.35
-CRAWL_AMP_HEAD = 0.02
-CRAWL_AMP_TAIL = 0.045
-CRAWL_PERI_LEN = 0.13
+CRAWL_WAVE_LEN = 0.274
+CRAWL_AMP_HEAD = 0.016
+CRAWL_AMP_TAIL = 0.035
+CRAWL_PERI_LEN = 0.10
 CRAWL_PERI_AMP = 0.25
 CRAWL_STRETCH = 0.06
 # Idle (point 3): head yaw sweep, slow lateral undulation, light peristalsis.
 IDLE_YAW_DEG = 15.0
-IDLE_WAVE_LEN = 0.40
-IDLE_WAVE_AMP = 0.01
+IDLE_WAVE_LEN = 0.312
+IDLE_WAVE_AMP = 0.008
 IDLE_PERI_AMP = 0.08
 IDLE_HEAD_START = 0.75   # the front 25 % of the body carries the sweep
 IDLE_HEAD_RAMP = 0.12
@@ -119,7 +120,7 @@ def pose(rear=0.0, lunge=0.0, crawl_k=None, pulse=1.0, flat=FLAT, sink=0.0, curl
     z = np.concatenate([[0.0], np.cumsum(np.cos(psi_mid) * np.cos(th_mid) * ds)])
     y = np.concatenate([[0.0], np.cumsum(np.sin(th_mid) * ds)])
     # --- front lunge (strike): the front part stretches forward, the radius thins to keep volume
-    z = z + lunge * smoothstep((s - 0.15) / 0.20)
+    z = z + lunge * smoothstep((s - 0.116) / 0.156)
     # --- lateral motion
     peri = np.zeros(rings + 1)
     if crawl_k is not None:
@@ -166,9 +167,9 @@ def pose(rear=0.0, lunge=0.0, crawl_k=None, pulse=1.0, flat=FLAT, sink=0.0, curl
     hP, hT, hB, hN = P[-1], T[-1], B[-1], N[-1]
     ka = 2 * np.pi * np.arange(5) / 5
     for side_s in (-1.0, 1.0):
-        centre = hP - 0.006 * hT + side_s * 0.007 * hB - 0.006 * flat * hN
-        ring = centre[None, :] + 0.0045 * (np.cos(ka)[:, None] * hB[None, :] + np.sin(ka)[:, None] * hN[None, :])
-        tip = centre + 0.024 * hT - side_s * 0.007 * hB - 0.003 * hN
+        centre = hP - 0.0046 * hT + side_s * 0.005 * hB - 0.0046 * flat * hN
+        ring = centre[None, :] + 0.0018 * (np.cos(ka)[:, None] * hB[None, :] + np.sin(ka)[:, None] * hN[None, :])
+        tip = centre + 0.0188 * hT - side_s * 0.0054 * hB - 0.0024 * hN
         verts += [ring, tip[None, :]]
     return np.concatenate(verts, 0)
 
@@ -182,9 +183,9 @@ COIL_YAW_U0 = 0.78
 COIL_PITCH_DEG = 12.0      # head pitch on u > COIL_PITCH_U0
 COIL_PITCH_U0 = 0.85
 COIL_PERI_AMP = 0.12       # peristalsis, tail -> head
-COIL_PERI_LEN = 0.13
+COIL_PERI_LEN = 0.10
 COIL_TWIST_DEG = 35.0      # roll of the cross-section about the tangent, travelling along the body
-COIL_RISE = 0.025          # arch of the middle of the body (m)
+COIL_RISE = 0.020          # arch of the middle of the body (m)
 
 
 def coil_pose(k, rings=RINGS, around=AROUND, mandibles=True, bulge=RING_BULGE, flat=FLAT):
@@ -241,9 +242,9 @@ def coil_pose(k, rings=RINGS, around=AROUND, mandibles=True, bulge=RING_BULGE, f
         hP, hT, hB, hN = P[-1], T[-1], B[-1], N[-1]
         ka = 2 * np.pi * np.arange(5) / 5
         for side_s in (-1.0, 1.0):
-            centre = hP - 0.006 * hT + side_s * 0.007 * hB - 0.006 * flat * hN
-            ring = centre[None, :] + 0.0045 * (np.cos(ka)[:, None] * hB[None, :] + np.sin(ka)[:, None] * hN[None, :])
-            tip = centre + 0.024 * hT - side_s * 0.007 * hB - 0.003 * hN
+            centre = hP - 0.0046 * hT + side_s * 0.005 * hB - 0.0046 * flat * hN
+            ring = centre[None, :] + 0.0018 * (np.cos(ka)[:, None] * hB[None, :] + np.sin(ka)[:, None] * hN[None, :])
+            tip = centre + 0.0188 * hT - side_s * 0.0054 * hB - 0.0024 * hN
             verts += [ring, tip[None, :]]
     return np.concatenate(verts, 0)
 
@@ -261,8 +262,8 @@ def coil_frames(rings=RINGS, around=AROUND, mandibles=True, bulge=RING_BULGE, st
     return out
 
 
-REAR_S0 = 0.07
-REAR_W = 0.15
+REAR_S0 = 0.054
+REAR_W = 0.116
 
 
 TEX = 128             # final texture size (Valheim creature textures are 64 to 128 px, Point filtered)
@@ -374,8 +375,24 @@ def make_textures(out_dir):
     C.write_png(os.path.join(out_dir, "worm_gloss.png"), rgba)
 
 
+PV = BODY_LEN / 0.385     # the previews were composed for a 38.5 cm worm: positions and sizes x PV, light energy x PV^2
+LEGACY_GLB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "legacy", "worm_v1_crawl_00.glb")   # the 38.5 cm worm of V1
+
+
+def pv(v):
+    return C.gltf_to_blender(np.asarray(v, dtype=np.float64) * PV)
+
+
+def light(kind, pos, energy, size, target, color=(1.0, 1.0, 1.0)):
+    return C.add_light(kind, pv(pos), energy * PV * PV, color=color, size=size * PV, target=pv(target))
+
+
+def camera(pos, target, lens):
+    return C.add_camera(pv(pos), pv(target), lens=lens)
+
+
 def preview(items, out_dir):
-    """items: list of (name, verts, faces, uv, x_offset[, z_offset])."""
+    """items: list of (name, verts, faces, uv, x_offset[, z_offset]) (offsets in V1 preview units: multiplied by PV)."""
     import bpy
     C.reset_scene()
     C.setup_world((0.05, 0.055, 0.06), 1.0)
@@ -386,11 +403,29 @@ def preview(items, out_dir):
         name, verts, faces, uv, xo = it[:5]
         zo = it[5] if len(it) > 5 else 0.0
         # turn the worm to face +X so a side-on camera sees its profile
-        v = np.stack([verts[:, 2] + xo, verts[:, 1], -verts[:, 0] + zo], 1)
+        v = np.stack([verts[:, 2] + xo * PV, verts[:, 1], -verts[:, 0] + zo * PV], 1)
         o = C.make_object("p_" + name, v, faces, uv)
         o.data.materials.append(mat)
-    C.add_ground(3.0, (0.16, 0.16, 0.17))
+    C.add_ground(3.0 * PV, (0.16, 0.16, 0.17))
     return bpy
+
+
+def import_legacy_mesh():
+    """The 38.5 cm V1 worm (crawl_00) as numpy glTF-space vertices, faces and per-loop UVs, read back from the stored .glb."""
+    import bpy
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=LEGACY_GLB)
+    obj = [o for o in bpy.data.objects if o not in before and o.type == "MESH"][0]
+    me = obj.data
+    co = np.array([tuple(v.co) for v in me.vertices], dtype=np.float64)
+    verts = np.stack([co[:, 0], co[:, 2], -co[:, 1]], 1)               # Blender -> glTF space
+    faces = np.array([tuple(p.vertices) for p in me.polygons], dtype=np.int64)
+    uv = np.array([tuple(d.uv) for d in me.uv_layers[0].data], dtype=np.float64).reshape(-1, 3, 2)
+    uv[..., 1] = 1.0 - uv[..., 1]
+    for o in [o for o in bpy.data.objects if o not in before]:
+        bpy.data.objects.remove(o, do_unlink=True)
+    bpy.data.meshes.remove(me)
+    return verts, faces, uv
 
 
 def render_previews(out_dir, prev_dir, frames, extra=None):
@@ -399,21 +434,21 @@ def render_previews(out_dir, prev_dir, frames, extra=None):
     pick = [("crawl0", frames["worm_crawl_00"]), ("crawl4", frames["worm_crawl_04"]),
             ("idle2", frames["worm_idle_02"]), ("rear5", frames["worm_rear_05"]),
             ("strike3", frames["worm_strike_03"]), ("sleep0", frames["worm_sleep_00"])]
-    # row of poses, true scale, with a ruler (dark/light = 5 cm)
+    # row of poses, true scale, with a ruler (dark/light = 2 cm)
     items = [(n, v, faces, uvs, -1.05 + 0.42 * i) for i, (n, v) in enumerate(pick)]
     preview(items, out_dir)
-    C.add_scale_bar((-0.2, 0.0, 0.2), 0.4, 0.05)
-    C.add_light("AREA", C.gltf_to_blender((0.4, 1.6, 1.2)), 60, size=1.5, target=C.gltf_to_blender((0.0, 0.1, 0.0)))
-    C.add_light("AREA", C.gltf_to_blender((-1.5, 0.8, -1.0)), 40, size=1.5, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0.0, 0.1, 0.0)))
-    C.add_camera(C.gltf_to_blender((0.0, 0.8, 5.0)), C.gltf_to_blender((0.0, 0.12, 0.0)), lens=60)
+    C.add_scale_bar((-0.2 * PV, 0.0, 0.2 * PV), 0.4 * PV, 0.02, height=0.002, depth=0.004)
+    light("AREA", (0.4, 1.6, 1.2), 60, 1.5, (0.0, 0.1, 0.0))
+    light("AREA", (-1.5, 0.8, -1.0), 40, 1.5, (0.0, 0.1, 0.0), color=(0.7, 0.8, 1.0))
+    camera((0.0, 0.8, 5.0), (0.0, 0.12, 0.0), 60)
     C.configure_render(1400, 520, 48)
     C.render_to(os.path.join(prev_dir, "worm_poses.png"))
 
     # close-up of a single crawling worm from a 3/4 high angle
     preview([("close", frames["worm_crawl_02"], faces, uvs, 0.0)], out_dir)
-    C.add_light("AREA", C.gltf_to_blender((0.5, 0.8, 0.6)), 10, size=0.8, target=C.gltf_to_blender((0.0, 0.03, 0.0)))
-    C.add_light("AREA", C.gltf_to_blender((-0.6, 0.4, -0.5)), 4, size=0.8, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0.0, 0.03, 0.0)))
-    C.add_camera(C.gltf_to_blender((0.28, 0.20, 0.42)), C.gltf_to_blender((0.0, 0.02, 0.0)), lens=60)
+    light("AREA", (0.5, 0.8, 0.6), 10, 0.8, (0.0, 0.03, 0.0))
+    light("AREA", (-0.6, 0.4, -0.5), 4, 0.8, (0.0, 0.03, 0.0), color=(0.7, 0.8, 1.0))
+    camera((0.28, 0.20, 0.42), (0.0, 0.02, 0.0), 60)
     C.configure_render(1000, 700, 64)
     C.render_to(os.path.join(prev_dir, "worm_closeup.png"))
 
@@ -422,14 +457,40 @@ def render_previews(out_dir, prev_dir, frames, extra=None):
     for k in range(CRAWL_FRAMES):
         items.append(("c%02d" % k, frames["worm_crawl_%02d" % k], faces, uvs, -0.75 + 0.5 * (k % 4), -0.75 + 0.5 * (k // 4)))
     preview(items, out_dir)
-    C.add_light("AREA", C.gltf_to_blender((0.0, 2.5, 0.5)), 160, size=2.5, target=C.gltf_to_blender((0.0, 0.0, 0.0)))
-    C.add_light("AREA", C.gltf_to_blender((-1.5, 1.0, -1.0)), 40, size=1.5, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0.0, 0.0, 0.0)))
-    C.add_camera(C.gltf_to_blender((0.0, 3.0, 1.9)), C.gltf_to_blender((0.0, 0.0, 0.0)), lens=45)
+    light("AREA", (0.0, 2.5, 0.5), 160, 2.5, (0.0, 0.0, 0.0))
+    light("AREA", (-1.5, 1.0, -1.0), 40, 1.5, (0.0, 0.0, 0.0), color=(0.7, 0.8, 1.0))
+    camera((0.0, 3.0, 1.9), (0.0, 0.0, 0.0), 45)
     C.configure_render(1400, 1100, 32)
     C.render_to(os.path.join(prev_dir, "worm_crawl_sheet.png"))
 
     if extra:
         render_coil_previews(out_dir, prev_dir, extra)
+        render_v1_compare(out_dir, prev_dir, frames)
+
+
+def render_v1_compare(out_dir, prev_dir, frames):
+    """The V2 worm (30 cm) next to the V1 worm (38.5 cm), same texture, true scale, with a 1 cm graduated ruler (dark/light = 1 cm,
+    taller block every 5 cm), seen from the side and from above at 3/4."""
+    import bpy
+    faces, uvs, _ = topology()
+    v1, f1, uv1 = import_legacy_mesh()
+    items = [("v1", v1, f1, uv1, -0.28 / PV, 0.0), ("v2", frames["worm_crawl_00"], faces, uvs, 0.22 / PV, 0.0)]
+    for lens, cam_p, cam_t, name, size in (
+            (35, (-0.03, 0.20, 1.25), (-0.03, 0.04, 0.0), "worm_v2_vs_v1.png", (1500, 640)),
+            (35, (-0.03, 0.95, 0.85), (-0.03, 0.0, 0.0), "worm_v2_vs_v1_34.png", (1500, 900))):
+        preview(items, out_dir)
+        for i in range(80):
+            blk = 0.004 if i % 5 else 0.008
+            lo, hi = (-0.50 + 0.01 * i, 0.0, 0.20), (-0.50 + 0.01 * (i + 1), blk, 0.208)
+            vv, ff = C._box(lo, hi)
+            C.make_object("ruler%d" % i, vv, ff).data.materials.append(
+                C.flat_material("ruler", (0.02, 0.02, 0.02) if i % 2 == 0 else (0.9, 0.9, 0.9), 0.8))
+        bpy.context.scene.world.node_tree.nodes["Background"].inputs["Color"].default_value = (0.2, 0.2, 0.22, 1.0)
+        C.add_light("AREA", C.gltf_to_blender((0.3, 1.0, 0.8)), 60, size=0.6, target=C.gltf_to_blender((-0.03, 0.0, 0.0)))
+        C.add_light("AREA", C.gltf_to_blender((-0.7, 0.6, -0.4)), 20, size=0.6, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((-0.03, 0.0, 0.0)))
+        C.add_camera(C.gltf_to_blender(cam_p), C.gltf_to_blender(cam_t), lens=lens)
+        C.configure_render(size[0], size[1], 48)
+        C.render_to(os.path.join(prev_dir, name))
 
 
 def render_coil_previews(out_dir, prev_dir, extra):
@@ -440,17 +501,17 @@ def render_coil_previews(out_dir, prev_dir, extra):
     for k in range(COIL_FRAMES):
         items.append(("k%02d" % k, cf[k], faces, uvs, -0.60 + 0.40 * (k % 4), -0.40 + 0.40 * (k // 4)))
     preview(items, out_dir)
-    C.add_light("AREA", C.gltf_to_blender((0.0, 2.5, 0.5)), 160, size=2.5, target=C.gltf_to_blender((0.0, 0.0, 0.0)))
-    C.add_light("AREA", C.gltf_to_blender((-1.5, 1.0, -1.0)), 40, size=1.5, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0.0, 0.0, 0.0)))
-    C.add_camera(C.gltf_to_blender((0.0, 2.4, 1.6)), C.gltf_to_blender((0.0, 0.0, 0.0)), lens=45)
+    light("AREA", (0.0, 2.5, 0.5), 160, 2.5, (0.0, 0.0, 0.0))
+    light("AREA", (-1.5, 1.0, -1.0), 40, 1.5, (0.0, 0.0, 0.0), color=(0.7, 0.8, 1.0))
+    camera((0.0, 2.4, 1.6), (0.0, 0.0, 0.0), 45)
     C.configure_render(1400, 1000, 32)
     C.render_to(os.path.join(prev_dir, "worm_coil_sheet.png"))
 
     items = [("close", cf[2], faces, uvs, 0.0)]
     preview(items, out_dir)
-    C.add_light("AREA", C.gltf_to_blender((0.5, 0.8, 0.6)), 10, size=0.8, target=C.gltf_to_blender((0.0, 0.03, 0.0)))
-    C.add_light("AREA", C.gltf_to_blender((-0.6, 0.4, -0.5)), 4, size=0.8, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0.0, 0.03, 0.0)))
-    C.add_camera(C.gltf_to_blender((0.30, 0.34, 0.40)), C.gltf_to_blender((0.0, 0.02, 0.0)), lens=60)
+    light("AREA", (0.5, 0.8, 0.6), 10, 0.8, (0.0, 0.03, 0.0))
+    light("AREA", (-0.6, 0.4, -0.5), 4, 0.8, (0.0, 0.03, 0.0), color=(0.7, 0.8, 1.0))
+    camera((0.30, 0.34, 0.40), (0.0, 0.02, 0.0), 60)
     C.configure_render(1000, 700, 64)
     C.render_to(os.path.join(prev_dir, "worm_coil_closeup.png"))
 
@@ -458,9 +519,9 @@ def render_coil_previews(out_dir, prev_dir, extra):
     items = [("a0", extra["crawl0"], faces, uvs, -0.45, -0.25), ("a1", extra["crawl1"], f1, u1, 0.05, -0.25),
              ("b0", cf[2], faces, uvs, -0.45, 0.25), ("b1", extra["coil1"][1], f1, u1, 0.05, 0.25)]
     preview(items, out_dir)
-    C.add_light("AREA", C.gltf_to_blender((0.0, 2.5, 0.5)), 120, size=2.5, target=C.gltf_to_blender((0.0, 0.0, 0.0)))
-    C.add_light("AREA", C.gltf_to_blender((-1.5, 1.0, -1.0)), 30, size=1.5, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0.0, 0.0, 0.0)))
-    C.add_camera(C.gltf_to_blender((0.0, 1.5, 0.9)), C.gltf_to_blender((0.0, 0.0, 0.0)), lens=45)
+    light("AREA", (0.0, 2.5, 0.5), 120, 2.5, (0.0, 0.0, 0.0))
+    light("AREA", (-1.5, 1.0, -1.0), 30, 1.5, (0.0, 0.0, 0.0), color=(0.7, 0.8, 1.0))
+    camera((0.0, 1.5, 0.9), (0.0, 0.0, 0.0), 45)
     C.configure_render(1200, 700, 32)
     C.render_to(os.path.join(prev_dir, "worm_lod_compare.png"))
 
@@ -483,10 +544,10 @@ def main():
         frames["worm_rear_%02d" % k] = pose(rear=k / 5.0)
     for k in range(4):
         e = k / 3.0
-        frames["worm_strike_%02d" % k] = pose(rear=0.85 * (1.0 - e), lunge=0.15 * e)
+        frames["worm_strike_%02d" % k] = pose(rear=0.85 * (1.0 - e), lunge=0.116 * e)
     for k in range(4):
         frames["worm_sleep_%02d" % k] = pose(pulse=1.0 + 0.05 * np.sin(2 * np.pi * k / 4.0),
-                                             flat=0.62, sink=0.28, curl=0.03)
+                                             flat=0.62, sink=0.28, curl=0.024)
 
     # origin under the centre of mass: shift every frame by the same Z (rest-pose mean of the body)
     ref = pose()[: 1 + (RINGS - 1) * AROUND + 1]
@@ -494,7 +555,7 @@ def main():
     for name in frames:
         frames[name] = frames[name] - np.array([0.0, 0.0, zc])
 
-    C.check_outward(frames["worm_crawl_00"], faces, "worm")
+    C.check_outward(pose(), faces, "worm")   # straight: the wave fools the centroid test
     print("worm: %d vertices, %d triangles" % (nverts, len(faces)))
     for name in ("worm_crawl_00", "worm_crawl_05", "worm_idle_02", "worm_rear_05", "worm_strike_03", "worm_sleep_01"):
         v = frames[name]
@@ -521,7 +582,7 @@ def main():
     cf1 = coil_frames(LOD1_RINGS, LOD1_AROUND, False, 0.0, step=2, frames=COIL_FRAMES // 2)
     for j, v in enumerate(cf1):
         lod1["worm_coil_lod1_%02d" % j] = v
-    C.check_outward(lod1["worm_crawl_lod1_00"], faces1, "worm_lod1")
+    C.check_outward(pose(rings=LOD1_RINGS, around=LOD1_AROUND, mandibles=False, bulge=0.0), faces1, "worm_lod1")   # straight: the wave fools the centroid test
     print("worm lod1: %d vertices, %d triangles; coil: %d triangles" % (nverts1, len(faces1), len(faces)))
     for name in ("worm_coil_00", "worm_coil_03", "worm_coil_06", "worm_coil_09"):
         v = cframes[int(name[-2:])]

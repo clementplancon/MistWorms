@@ -26,6 +26,8 @@ namespace MistWorms.Dev
                     if (a.BridgePort > 0) DevBridge.Start(a.BridgePort);
                 }
 
+                GpuWorms.Load();      // the GPU worm spike: bundle, mesh, compute test (logged; never fatal)
+
                 // QuickStart also owns Dev.AutoDevCommands (first spawn, -mwdev only), so it is not repeated here.
                 QuickStart.Init(a);
             }
