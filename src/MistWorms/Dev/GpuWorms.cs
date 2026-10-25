@@ -8,6 +8,7 @@ using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Profiling;
 using UnityEngine.Rendering;
+using MistWorms.Render.Gpu;
 
 namespace MistWorms.Dev
 {
@@ -21,7 +22,6 @@ namespace MistWorms.Dev
     internal static class GpuWorms
     {
         public const int MaxWorms = 16384;
-        public const string BundleFile = "mistworms_shaders";
 
         /// <summary>Per worm data (48 bytes), the layout of <c>WormInst</c> in WormGPU.shader.</summary>
         [StructLayout(LayoutKind.Sequential)]
@@ -32,7 +32,6 @@ namespace MistWorms.Dev
             public Vector4 Wave;        // phase (cycles), amplitude 0..1, frequency (Hz), bend -1..1
         }
 
-        private static AssetBundle s_bundle;
         private static Shader s_shader;
         private static Material s_material;
         private static ComputeShader s_compute;
@@ -44,7 +43,7 @@ namespace MistWorms.Dev
         private static GpuWormsDriver s_driver;
 
         public static bool Loaded { get; private set; }
-        public static bool BundleLoaded => s_bundle != null;
+        public static bool BundleLoaded => GpuWormBundle.BundleLoaded;
         public static string Error { get; private set; }
         public static bool ShaderSupported { get; private set; }
         public static bool ComputeSupported { get; private set; }
@@ -81,30 +80,12 @@ namespace MistWorms.Dev
             if (Loaded || Error != null) return;
             try
             {
-                GraphicsDeviceType api = SystemInfo.graphicsDeviceType;
                 ComputeSupported = SystemInfo.supportsComputeShaders;
-                Plugin.Log.LogInfo($"[GpuWorms] graphics={api} compute={ComputeSupported} maxComputeBufferInputsVertex={SystemInfo.maxComputeBufferInputsVertex} " +
-                                   $"shaderLevel={SystemInfo.graphicsShaderLevel} colorSpace={QualitySettings.activeColorSpace} instancing={SystemInfo.supportsInstancing}");
-                if (api == GraphicsDeviceType.Null || Application.isBatchMode) { Error = "no graphics device (batch mode / dedicated server)"; Plugin.Log.LogInfo("[GpuWorms] skipped: " + Error); return; }
-
-                string path = Path.Combine(Plugin.PluginDir, "assets", BundleFile);
-                if (!File.Exists(path)) { Error = "bundle not found: " + path + " (tools/build-shaders.ps1)"; Plugin.Log.LogWarning("[GpuWorms] " + Error); return; }
-
-                s_bundle = AssetBundle.LoadFromFile(path);
-                if (s_bundle == null) { Error = "AssetBundle.LoadFromFile returned null (bundle already loaded or built for another Unity version)"; Plugin.Log.LogError("[GpuWorms] " + Error); return; }
-
-                s_shader = s_bundle.LoadAsset<Shader>("Assets/Shaders/WormGPU.shader");
-                Material source = s_bundle.LoadAsset<Material>("Assets/Materials/WormGPU.mat");
-                s_compute = s_bundle.LoadAsset<ComputeShader>("Assets/Shaders/MWTest.compute");
-                var variants = s_bundle.LoadAsset<ShaderVariantCollection>("Assets/Materials/WormGPU.shadervariants");
-                if (s_shader == null || source == null || s_compute == null) { Error = $"missing assets in the bundle (shader {s_shader != null}, material {source != null}, compute {s_compute != null})"; Plugin.Log.LogError("[GpuWorms] " + Error); return; }
-
-                ShaderSupported = s_shader.isSupported;
-                s_shader.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-                s_compute.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-                s_material = new Material(source) { name = "MW_WormGPU", hideFlags = HideFlags.DontUnloadUnusedAsset, enableInstancing = true };
-                Plugin.Log.LogInfo($"[GpuWorms] bundle loaded: shader {s_shader.name} isSupported={ShaderSupported}, compute shader {s_compute.name}, " +
-                                   $"variants {(variants != null ? variants.shaderCount + " shader(s), " + variants.variantCount + " variant(s), warmed up: " + WarmUp(variants) : "missing")}");
+                if (!GpuWormBundle.Load()) { Error = GpuWormBundle.Error; return; }
+                s_shader = GpuWormBundle.GpuShader;
+                s_compute = GpuWormBundle.TestCompute;
+                s_material = GpuWormBundle.GpuMaterial;
+                ShaderSupported = GpuWormBundle.GpuShaderSupported;
 
                 s_mesh = GpuWormMesh.Build();
                 s_mesh.hideFlags = HideFlags.DontUnloadUnusedAsset;
@@ -126,12 +107,6 @@ namespace MistWorms.Dev
                 Error = e.Message;
                 Plugin.LogException("GpuWorms.Load", e);
             }
-        }
-
-        private static string WarmUp(ShaderVariantCollection svc)
-        {
-            try { svc.WarmUp(); return svc.isWarmedUp.ToString(); }
-            catch (Exception e) { return "failed (" + e.Message + ")"; }
         }
 
         /// <summary>One dispatch of the trivial kernel: Result[i] = i * 2 + 7 for 64 entries, read back once (startup, not a per frame path).</summary>

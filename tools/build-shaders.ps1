@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Builds the AssetBundle "mistworms_shaders" (WormGPU shader, material, MWTest compute, variant collection) with the Unity editor in batchmode
+  Builds the AssetBundle "mistworms_shaders" (WormRope and WormGPU shaders, materials, WormSim and MWTest compute shaders, variant collection) with the Unity editor in batchmode
   and copies it to assets/build/mistworms_shaders. tools/build.ps1 ships assets/build/** to <plugin>/assets, so the bundle lands next to the DLL
   (the mod loads <plugin>/assets/mistworms_shaders with AssetBundle.LoadFromFile).
 .DESCRIPTION
@@ -21,6 +21,14 @@ if (Test-Path $log) { Remove-Item $log }
 # The textures of the bundle are the worm textures of assets/build (so the bundle never lags behind make_worm.py).
 foreach ($t in 'worm_albedo', 'worm_gloss', 'worm_normal') {
     Copy-Item (Join-Path $RepoRoot "assets/build\$t.png") (Join-Path $project "Assets\Textures\$t.png") -Force
+}
+
+# The C# of the simulation host and its CPU reference are copied into the Editor folder of the project (ignored by git): SimCheck.cs runs the real
+# compute shader and the real host in the editor (tools/check-shaders.ps1).
+$gen = Join-Path $project 'Assets\Editor\Generated'
+New-Item -ItemType Directory -Force $gen | Out-Null
+foreach ($f in 'GpuWormTypes', 'WormSimRef', 'GpuWormTube', 'GpuWormHost', 'GpuSkinAnchors', 'GpuSkinSet', 'GpuSkinMetrics', 'GpuSolidMaps') {
+    Copy-Item (Join-Path $RepoRoot "src\MistWorms\Render\Gpu\$f.cs") (Join-Path $gen "$f.cs") -Force
 }
 
 Write-Step 'Unity batchmode: BuildBundles.Build'

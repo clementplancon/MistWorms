@@ -7,3 +7,5 @@ Build/
 *.csproj
 *.sln
 *.slnx
+Assets/Editor/Generated/
+Assets/Editor/Generated.meta

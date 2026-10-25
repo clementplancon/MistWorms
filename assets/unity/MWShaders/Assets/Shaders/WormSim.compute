@@ -1,0 +1,1027 @@
+// MistWorms worm rope simulation (visual v2, pass B1). One rope of K = 8 nodes per worm, position based dynamics at a fixed step of 1/60 s, many masses in the same
+// buffers (one segment of worms per mass, one MassParams per mass). Everything is in the local frame of the mass (world position minus MassParams.origin).
+//
+// Per step, in four dispatches (each one reads what the previous one wrote, so no thread ever reads what another writes in the same dispatch):
+//   KClear     empties the hashed grid.
+//   KPredict   per worm: Verlet integration, soft gravity, pull toward the home point of the worm in the target shape, conveyor belt, creep along the own axis;
+//              writes the predicted nodes (_Pred), the kinematic displacement (into _Prev) and inserts the 15 collision points (8 nodes, 7 midpoints) in the grid.
+//   KSeparate  per point: separation from the points of other worms, read from the grid and _Pred; writes _Delta.
+//   KSolve     per worm: applies the separation, then the length, curvature, containment, primitive and ground constraints on its own nodes; writes _Pos and _Prev.
+//
+// Skin engulf (a being wrapped by a mass): once per frame KSkin skins the anchors on the surface of the target (position and normal = sum of weight x matrix x vertex, the matrices
+// of the bones are uploaded by the host, about 53 per frame). Then each worm of the mass is in one of four modes (SkinStep): 0 pile on the ground, 1 transit (the head follows a path
+// of anchors up the body), 2 settled on the surface, 3 falling. A worm of the sleeve lies on the surface along its whole length: at every iteration each node is projected on the
+// tangent plane of its nearest anchor, among the anchor it was last on and the 8 neighbours of that anchor (_Knn).
+//
+// Determinism: the grid keeps, per cell, the SLOTS smallest ids (insertion by InterlockedMin with carry: the result does not depend on the order of the
+// atomics), neighbours are visited in a fixed order, every other write goes to the slot of the thread. WormSimRef.cs (src/MistWorms/Render/Gpu) is the exact CPU port
+// (same formulas, same order): the constants below are the ones of WormSimConst.
+#pragma kernel KInit
+#pragma kernel KClear
+#pragma kernel KPredict
+#pragma kernel KSeparate
+#pragma kernel KSolve
+#pragma kernel KShift
+#pragma kernel KSkin
+
+#define K 8
+#define NP 15
+#define SLOTS 8
+#define GRID_MASK 524287u
+#define EMPTY 0xFFFFFFFFu
+#define HN 16
+#define MAXA 512
+#define MAXB 128
+#define KN 8
+
+static const float DT = 1.0 / 60.0;
+static const float SEG = 0.30 / 7.0;
+static const float RAD = 0.009;
+static const float SEPD = 0.024;
+static const float CELL_INV = 40.0;
+static const float DAMP = 0.985;
+static const float GRAV = 3.0;
+static const float SEP_K = 0.9;
+static const float MAX_SEP = 0.01;
+static const float BEND_MIN = 1.35 * (0.30 / 7.0);
+static const float BEND_K = 0.3;
+static const float CONTAIN_K = 0.5;
+static const float ADH_RANGE = 0.05;
+static const float ATTRACT_K = 0.4;
+static const float CLIMB = 0.05;
+static const float HOME_MAX = 0.01;
+static const float BODY_PULL_MAX = 0.03;      // a worm on a moving body keeps up with a walk (1.8 m/s)
+static const float BODY_DAMP = 0.7;
+static const float SKIN_OFF = 0.011;          // distance of a node from the skin: the radius of the worm and 2 mm
+static const float LAYER_GAP = 0.016;         // the worms of the second layer lie on the first one
+static const float PROJ_R = 0.12;             // a node is projected on the plane of its anchor within this distance
+static const float ORIENT_K = 0.10;           // pull of the nodes toward the line of the worm (tangent to the surface, up or diagonal)
+static const float LEASH_K = 0.07;            // pull of the worm toward its place on the body
+static const float TRANSIT_K = 0.5;           // pull of the head toward the next anchor of its path
+static const float ADV_R = 0.06;              // the head is at the anchor of the path when it is this close
+static const float FALL_TIME = 2.5;           // a worm that lets go falls for this long at most
+static const float HOP_TIME = 0.5;            // a head that has not reached the anchor of its path in this time goes on to the next one
+static const float PEND_SHARE = 0.08;         // share of the worms of the sleeve that hang by one end
+#define ITERATIONS 4
+
+struct WormData { uint mass; uint seed; float speed; float phase; };
+struct MassParams
+{
+    float4 origin;      // xyz world origin, w = simulated
+    float4 center;      // xyz centre of the dome base, w = r
+    float4 heading;     // xyz horizontal forward, w = speed
+    float4 shape;       // x along the heading, y up, z across, w forward shift
+    float4 motion;      // x conveyor, y creep scale, z home pull, w engulf
+    float4 sleeve;      // x mode (0 dome, 1 engulf), y shell thickness, z adhesive capsule index, w ground friction
+    uint4 ranges;       // x first worm, y worm count, z prim count, w mass index
+    float4 gridRect;    // x, y min x and z of the height grid, z spacing, w 1 / spacing
+    float4 skin;        // x anchors (0 = none), y engulf, z height of the target, w area of its surface
+    float4 side;        // x lowest height of the side maps (local), y spacing, z 1 / spacing, w valid
+    float4 plan;        // skin sleeve: x worms of the sleeve S, y worms per anchor, z height (rel) of the top of the covered surface, w anchors covered
+    float4 plan2;       // x anchors of the base (where a worm enters the body)
+};
+struct Prim { float4 a; float4 b; float4 c; float4 d; };
+struct Anchor { float4 a; float4 b; };     // a: xyz position; b: xyz normal, w height over the height of the target (0 foot, 1 top, fixed at the selection)
+struct SkinVert { float4 pr; float4 nu; uint4 bi; float4 bw; float4 body; };     // anchor vertex: rest position and height, rest normal, bones and weights, position on the body (m)
+
+RWStructuredBuffer<float4> _Pos;       // [worm * K + node], xyz position, w radius scale (not touched by the simulation)
+RWStructuredBuffer<float4> _Prev;
+RWStructuredBuffer<float4> _Pred;
+RWStructuredBuffer<float4> _Delta;     // [worm * 16 + point], xyz separation, w neighbour count
+RWStructuredBuffer<uint> _Grid;        // [cell * SLOTS + slot]
+StructuredBuffer<WormData> _Worms;
+StructuredBuffer<MassParams> _Masses;
+StructuredBuffer<float> _Height;       // [mass * 144 + z * 12 + x]
+StructuredBuffer<Prim> _Prims;         // [mass * 24 + i]
+StructuredBuffer<Anchor> _Anchors;     // [mass * 512 + i]
+RWStructuredBuffer<Anchor> _AnchorsOut;    // the same buffer, written by KSkin
+StructuredBuffer<SkinVert> _SkinVerts; // [mass * 512 + i]
+StructuredBuffer<float4x4> _Bones;     // [mass * MAXB + b]: the Matrix4x4 of Unity as it is in memory (column major, the default of HLSL): world matrix of the bone x bind pose, relative to the origin of the mass
+StructuredBuffer<uint> _Knn;           // [(mass * 512 + i) * 8 + e]: the 8 anchors nearest to anchor i, nearest first (itself when there are fewer)
+StructuredBuffer<uint> _Order;         // [mass * 512 + j]: the anchors by height, lowest first
+StructuredBuffer<uint> _Hop;           // [mass * 65536 + target * 128 + (src >> 2)]: byte src & 3: the neighbour (0..7) of src on the shortest path to target, 255 none
+RWStructuredBuffer<float4> _SkinState; // [worm]: x mode, y anchor of the path, z time in the mode
+RWStructuredBuffer<uint> _NodeAnchor;  // [worm * K + node]: the anchor each node is on
+StructuredBuffer<float> _Sides;        // [mass * 1280 + map * 256 + a * 16 + b]: maps of the obstacles seen from the west, east, south and north (the x or z of the first surface met; none = +-1e6) and from above (the y of their top; none = -1e6)
+
+uint _WormCount;       // worms in use: [0, _WormCount)
+uint _StepIndex;
+uint _InitFirst;
+uint _InitCount;
+float3 _Shift;
+
+// ---------------------------------------------------------------- helpers (mirrored in WormSimRef)
+
+uint Hash(uint x)
+{
+    x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16;
+    return x;
+}
+
+float Hash01(uint seed, uint lane)
+{
+    return (Hash(seed * 8u + lane) & 0xFFFFFFu) * 5.9604645e-8;
+}
+
+float Cbrt01(float x)
+{
+    float y = 0.5 + 0.5 * x;
+    [unroll] for (int i = 0; i < 3; i++) y = y - (y * y * y - x) / (3.0 * y * y);
+    return y;
+}
+
+float L(float a, float b, float t) { return a + t * (b - a); }
+
+float Smooth(float a, float b, float x)
+{
+    float t = saturate((x - a) / (b - a));
+    return t * t * (3.0 - 2.0 * t);
+}
+
+float3 Norm(float3 v, float3 fallback)
+{
+    float l2 = dot(v, v);
+    return l2 < 1e-12 ? fallback : v / sqrt(l2);
+}
+
+float3 Side(float3 fwd) { return float3(fwd.z, 0.0, -fwd.x); }
+
+uint HashCell(int3 c, uint mass)
+{
+    uint h = ((uint)c.x * 73856093u) ^ ((uint)c.y * 19349663u) ^ ((uint)c.z * 83492791u) ^ (mass * 2654435761u);
+    h ^= h >> 15; h *= 0x2c1b3c6du; h ^= h >> 12;
+    return h & GRID_MASK;
+}
+
+float3 Rot(float4 q, float3 v)
+{
+    float3 t = 2.0 * cross(q.xyz, v);
+    return v + q.w * t + cross(q.xyz, t);
+}
+
+float3 RotInv(float4 q, float3 v) { return Rot(float4(-q.xyz, q.w), v); }
+
+float Ground(uint mi, MassParams m, float x, float z)
+{
+    float gx = clamp((x - m.gridRect.x) * m.gridRect.w, 0.0, 14.999);
+    float gz = clamp((z - m.gridRect.y) * m.gridRect.w, 0.0, 14.999);
+    int ix = (int)gx, iz = (int)gz;
+    float fx = gx - (float)ix, fz = gz - (float)iz;
+    uint b = mi * (HN * HN) + (uint)iz * HN + (uint)ix;
+    float a = L(_Height[b], _Height[b + 1], fx);
+    float c = L(_Height[b + HN], _Height[b + HN + 1], fx);
+    return L(a, c, fz);
+}
+
+// Signed distance from p to the surface of a primitive (negative inside) and the outward normal.
+float PrimDist(Prim pr, float3 p, out float3 n)
+{
+    int type = (int)(pr.d.x + 0.5);
+    n = float3(0, 1, 0);
+    if (type == 0)
+    {
+        float3 d = p - pr.a.xyz;
+        float l = sqrt(dot(d, d));
+        n = l > 1e-6 ? d / l : float3(0, 1, 0);
+        return l - pr.a.w;
+    }
+    if (type == 1)
+    {
+        float3 p0 = pr.a.xyz;
+        float3 ab = pr.b.xyz - p0;
+        float t = saturate(dot(p - p0, ab) / max(dot(ab, ab), 1e-8));
+        float3 d = p - (p0 + ab * t);
+        float l = sqrt(dot(d, d));
+        n = l > 1e-6 ? d / l : float3(0, 1, 0);
+        return l - pr.a.w;
+    }
+    float3 lp = RotInv(pr.c, p - pr.a.xyz);
+    float3 q = abs(lp) - pr.b.xyz;
+    float3 qo = max(q, 0.0);
+    float lo = sqrt(dot(qo, qo));
+    float3 s = float3(lp.x >= 0.0 ? 1.0 : -1.0, lp.y >= 0.0 ? 1.0 : -1.0, lp.z >= 0.0 ? 1.0 : -1.0);
+    float3 ln;
+    float dist;
+    if (lo > 1e-6)
+    {
+        ln = s * qo / lo;
+        dist = lo;
+    }
+    else
+    {
+        dist = max(q.x, max(q.y, q.z));
+        if (q.x > q.y && q.x > q.z) ln = float3(s.x, 0, 0);
+        else if (q.y > q.z) ln = float3(0, s.y, 0);
+        else ln = float3(0, 0, s.z);
+    }
+    n = Rot(pr.c, ln);
+    return dist;
+}
+
+// Collision and adhesion of a node against the primitives of its mass; returns how much the node is attached to an adhesive one (0..1, continuous so that a
+// rounding difference between two runs never flips a decision by more than a hair).
+float ResolvePrims(uint mi, MassParams m, inout float3 x)
+{
+    float attached = 0.0;
+    for (uint k = 0; k < m.ranges.z; k++)
+    {
+        Prim pr = _Prims[mi * 24 + k];
+        float3 n;
+        float d = PrimDist(pr, x, n);
+        if (d < RAD)
+        {
+            x += n * (RAD - d);
+            d = RAD;
+        }
+        float adh = pr.d.y;
+        float fall = 1.0 - saturate((d - RAD) / (ADH_RANGE - RAD));
+        if (adh > 0.0 && fall > 0.0)
+        {
+            x -= n * ((d - RAD) * adh * ATTRACT_K * fall);
+            attached = max(attached, adh * fall);
+            if (pr.d.x > 0.5 && pr.d.x < 1.5)
+            {
+                float3 ab = pr.b.xyz - pr.a.xyz;
+                float len = sqrt(dot(ab, ab));
+                float3 ax = len > 1e-6 ? ab / len : float3(0, 1, 0);
+                float along = dot(x - pr.a.xyz, ax) + pr.a.w;
+                float top = pr.d.z * (len + 2.0 * pr.a.w);
+                if (along < top) x += ax * (CLIMB * adh * fall * DT);
+                else x -= ax * (min(along - top, 0.01) * fall);
+            }
+        }
+    }
+    return attached;
+}
+
+// Slope of the ground (dh/dx, dh/dz) from the height grid, by central differences over one sample spacing.
+float2 GroundGrad(uint mi, MassParams m, float x, float z)
+{
+    float s = m.gridRect.z * 0.5;
+    return float2((Ground(mi, m, x + s, z) - Ground(mi, m, x - s, z)) / (2.0 * s), (Ground(mi, m, x, z + s) - Ground(mi, m, x, z - s)) / (2.0 * s));
+}
+
+// Thickness of the layer of worms at (x, z): the profile of the mass (a dome: ay * sqrt(1 - qh^2), qh = normalised distance to the centre in the footprint), thinner where the
+// ground is steep. The mass is a layer that follows the height grid, not a rigid dome: it flows over a rock and down its flanks.
+float DomeThick(uint mi, MassParams m, float x, float z, float qh)
+{
+    float2 gr = GroundGrad(mi, m, x, z);
+    float slope = sqrt(dot(gr, gr));
+    // full height up to a slope of 0.6, none at 1.5 (a rock flank): the excess flows down by gravity
+    return max(m.shape.y * sqrt(max(0.0, 1.0 - qh * qh)) * saturate((1.5 - slope) / 0.9), 0.03);
+}
+
+// Engulf (sleeve.x = number k of adhesive capsules, the first one at sleeve.z). A worm is either on the body (a member of the sleeve) or in the base pile on the ground.
+// Members are chosen by chance up to what the covered surface holds with one to two worms of thickness, and not where the density noise (patches, vertical streaks, holes,
+// moving) is low. A member lies on the surface, along a helix that goes up (or up and across): that is its line, and the creep makes it climb. Its upper edge is ragged
+// and moving, and a few members fall and climb again. Returns whether the worm is a member.
+bool SleeveParams(uint mi, MassParams m, uint seed, float t, out Prim pr, out float h, out float a, out float thick, out float phi, out float sgn)
+{
+    uint kc = (uint)(m.sleeve.x + 0.5);
+    float tot = 0.0;
+    for (uint c0 = 0; c0 < kc; c0++)
+    {
+        Prim q = _Prims[mi * 24 + (uint)(m.sleeve.z + 0.5) + c0];
+        float3 qab = q.b.xyz - q.a.xyz;
+        tot += (sqrt(dot(qab, qab)) + 2.0 * q.a.w) * q.a.w * (q.d.z + 0.02);
+    }
+    float frac0 = saturate(tot * 907.0 / (max((float)m.ranges.y, 1.0) * 0.7));
+    bool member = Hash01(seed, 12) < frac0;
+    float pick = Hash01(seed, 4) * tot;
+    uint ci = 0;
+    float acc = 0.0;
+    for (uint c1 = 0; c1 < kc; c1++)
+    {
+        Prim q = _Prims[mi * 24 + (uint)(m.sleeve.z + 0.5) + c1];
+        float3 qab = q.b.xyz - q.a.xyz;
+        acc += (sqrt(dot(qab, qab)) + 2.0 * q.a.w) * q.a.w * (q.d.z + 0.02);
+        ci = c1;
+        if (pick < acc) break;
+    }
+    pr = _Prims[mi * 24 + (uint)(m.sleeve.z + 0.5) + ci];
+    float3 ab = pr.b.xyz - pr.a.xyz;
+    float len = sqrt(dot(ab, ab));
+    a = Hash01(seed, 0) * 6.2831853;
+    float fullTop = pr.d.z * (len + 2.0 * pr.a.w);
+    float rag = 0.86 + 0.14 * sin(a * 4.0 + t * 0.9 + fullTop * 3.0);
+    h = Hash01(seed, 1) * fullTop * rag;
+    float nz = 0.5 + 0.2 * sin(a * 2.0 + h * 4.0 + t * 0.4) + 0.2 * sin(a * 3.0 - h * 3.0 - t * 0.6 + 1.7) + 0.15 * sin(a * 5.0 + t * 0.25 + h * 1.5);
+    if (nz < 0.42) member = false;
+    if (Hash01(seed, 10) < 0.12)
+    {
+        float cyc = frac(t * 0.06 + Hash01(seed, 9));
+        h *= 1.0 - 0.9 * Smooth(0.9, 0.94, cyc) * (1.0 - Smooth(0.97, 1.0, cyc));
+    }
+    thick = 0.012 + m.sleeve.y * (0.15 + 0.85 * Hash01(seed, 11)) * (0.6 + 0.8 * nz);
+    phi = (0.05 + 0.95 * Hash01(seed, 13)) * 0.7;
+    sgn = Hash01(seed, 14) < 0.5 ? 1.0 : -1.0;
+    return member;
+}
+
+// Node j of a member: on the helix of the surface that goes up at the angle phi from the axis.
+float3 SleeveNode(Prim pr, float h, float a, float thick, float phi, float sgn, float j)
+{
+    float3 ab = pr.b.xyz - pr.a.xyz;
+    float len = sqrt(dot(ab, ab));
+    float3 ax = len > 1e-6 ? ab / len : float3(0, 1, 0);
+    float3 e1 = Norm(cross(ax, float3(1, 0, 0)), float3(0, 0, 1));
+    float3 e2 = cross(ax, e1);
+    float off = (j - 3.5) * SEG;
+    float hj = h + off * cos(phi);
+    float aj = a + sgn * off * sin(phi) / (pr.a.w + thick);
+    float3 rd = e1 * cos(aj) + e2 * sin(aj);
+    return pr.a.xyz + ax * (hj - pr.a.w) + rd * (pr.a.w + thick);
+}
+
+// ---------------------------------------------------------------- skin engulf (mirrored in WormSimRef)
+
+// Rank of a worm in its mass, in [0, V): a fixed permutation of the worms (7919 is prime and larger than V) plus a fraction. The worms of rank below S are the sleeve (exactly S of
+// them), and the rank is also the place of the worm in the stack of the anchors by height: the worms of low rank are the first to enter and sit low.
+float SkinRank(uint w, MassParams m, uint seed)
+{
+    uint v = max(m.ranges.y, 1u);
+    return (float)(((w - m.ranges.x) * 7919u) % v) + Hash01(seed, 12);
+}
+
+// Whether the worm may be on the body now, and its anchor (slotA). It has a rank below S (the plan: all a worm on its way up asks), its anchor is under the ragged and moving upper
+// edge of the covered surface, and the density noise there (holes that move over the body, glued to it: coordinates of the body) is not low. Hysteresis: a worm that waits on the
+// ground (mode 0) enters when the noise is above 0.20, a settled one (mode 2) leaves when it falls under 0.14.
+bool SkinEligible(uint mi, MassParams m, uint seed, float t, float rk, uint mode, out uint slotA)
+{
+    slotA = 0u;
+    uint nc = (uint)(m.plan.w + 0.5);
+    if (nc == 0u || rk >= m.plan.x) return false;
+    uint j = min((uint)(rk / m.plan.y), nc - 1u);
+    slotA = _Order[mi * MAXA + j];
+    if (mode == 1u) return true;
+    SkinVert sv = _SkinVerts[mi * MAXA + slotA];
+    float rag = 0.9 + 0.1 * sin(sv.body.x * 17.0 + sv.body.z * 13.0 + t * 0.9);
+    if (sv.pr.w > m.plan.z * rag) return false;
+    float nz = 0.5 + 0.22 * sin(sv.body.x * 23.0 + sv.body.y * 9.0 + t * 0.2) + 0.22 * sin(sv.body.z * 27.0 - sv.body.y * 11.0 - t * 0.28 + 1.3);
+    return nz >= (mode == 2u ? 0.14 : 0.20);
+}
+
+// Distance of the nodes of a worm from the skin: SKIN_OFF, and one layer higher for half of the worms (two layers of worms).
+float SkinOff(uint seed) { return Hash01(seed, 33) < 0.5 ? SKIN_OFF + LAYER_GAP : SKIN_OFF; }
+
+// A tenth of the worms let go from time to time (every 25 s, on their own phase) and fall.
+bool SkinDrops(uint seed, float t)
+{
+    if (Hash01(seed, 10) >= 0.12) return false;
+    float cyc = frac(t * 0.04 + Hash01(seed, 9));
+    return cyc >= 0.95;
+}
+
+// The anchor nearest to x among anchor cur and its 8 neighbours.
+uint NearestAnchor(uint mi, uint cur, float3 x)
+{
+    uint basei = mi * MAXA;
+    float3 d = x - _Anchors[basei + cur].a.xyz;
+    float best = dot(d, d);
+    uint bi = cur;
+    [unroll] for (uint e = 0; e < KN; e++)
+    {
+        uint nb = _Knn[(basei + cur) * KN + e];
+        float3 d2 = x - _Anchors[basei + nb].a.xyz;
+        float l2 = dot(d2, d2);
+        if (l2 < best) { best = l2; bi = nb; }
+    }
+    return bi;
+}
+
+uint HopOf(uint mi, uint target, uint src)
+{
+    uint word = _Hop[mi * 65536u + target * 128u + (src >> 2)];
+    return (word >> ((src & 3u) * 8u)) & 255u;
+}
+
+// Where a worm enters the body: the anchor of the base (the lowest ones) nearest to its head.
+uint EntryAnchor(uint mi, MassParams m, float3 from)
+{
+    uint nb = max((uint)(m.plan2.x + 0.5), 1u);
+    uint best = _Order[mi * MAXA];
+    float3 d0 = from - _Anchors[mi * MAXA + best].a.xyz;
+    float bd = dot(d0, d0);
+    for (uint i = 1u; i < nb; i++)
+    {
+        uint a = _Order[mi * MAXA + i];
+        float3 d = from - _Anchors[mi * MAXA + a].a.xyz;
+        float l2 = dot(d, d);
+        if (l2 < bd) { bd = l2; best = a; }
+    }
+    return best;
+}
+
+// Direction of a worm settled on the surface at a point of normal n: up the surface, turned by an angle of up to 52 degrees either side (most worms are up or diagonal), or down for
+// one that hangs.
+float3 SkinDir(float3 n, uint seed, bool pend)
+{
+    float3 u0 = float3(0, 1, 0) - n * n.y;
+    float l2 = dot(u0, u0);
+    if (l2 > 0.04) u0 = u0 / sqrt(l2);
+    else
+    {
+        float ha = Hash01(seed, 3) * 6.2831853;
+        float3 alt = float3(cos(ha), 0, sin(ha));
+        alt = alt - n * dot(alt, n);
+        u0 = Norm(alt, cross(n, float3(1, 0, 0)));
+    }
+    float phi = (Hash01(seed, 13) * 2.0 - 1.0) * 0.9;
+    float3 d = u0 * cos(phi) + cross(n, u0) * sin(phi);
+    return pend ? -d : d;
+}
+
+// A node on the plane of its nearest anchor: at off from the skin along the normal (attract), or only pushed out when it is behind the surface. Only within PROJ_R of the anchor.
+float3 SkinSurface(uint mi, uint cur, float3 x, bool attract, float off, inout float att)
+{
+    uint bi = NearestAnchor(mi, cur, x);
+    Anchor an = _Anchors[mi * MAXA + bi];
+    float3 d = x - an.a.xyz;
+    if (dot(d, d) >= PROJ_R * PROJ_R) return x;
+    float dn = dot(d, an.b.xyz);
+    if (attract) { x += an.b.xyz * (off - dn); att = 1.0; }
+    else if (dn < RAD + 0.003) x += an.b.xyz * (RAD + 0.003 - dn);
+    return x;
+}
+
+// The worms of the pile and the falling ones do not go through the body: a node that is behind the surface of the nearest anchor is pushed out along its normal.
+float3 SkinPush(uint mi, MassParams m, float3 x)
+{
+    float3 dc = x - m.center.xyz;
+    if (dc.x * dc.x + dc.z * dc.z > 1.0 || x.y < m.center.y - 0.3 || x.y > m.center.y + m.skin.z + 0.4) return x;
+    uint n = (uint)(m.skin.x + 0.5);
+    uint basei = mi * MAXA;
+    float best = 1e9;
+    uint bi = 0;
+    for (uint i = 0; i < n; i++)
+    {
+        float3 d = x - _Anchors[basei + i].a.xyz;
+        float l2 = dot(d, d);
+        if (l2 < best) { best = l2; bi = i; }
+    }
+    if (best > 0.0081) return x;
+    Anchor an = _Anchors[basei + bi];
+    float dn = dot(x - an.a.xyz, an.b.xyz);
+    if (dn < RAD + 0.003) x += an.b.xyz * (RAD + 0.003 - dn);
+    return x;
+}
+
+// The obstacles (rocks, pieces, the scenery) as the visual hull of six depth maps seen from the sides and from above (the ground itself is the height grid). A node is inside
+// when it is behind the first surface for every direction that sees it: between the west and the east surface, between the south and the north one, and under the top. The
+// maps are read dilated (the 2 x 2 cells around, so that an edge is not missed) and the node leaves by the axis of the smallest penetration.
+float3 SolidPush(uint mi, MassParams m, float3 x)
+{
+    if (m.side.w < 0.5) return x;
+    float fx = (x.x - m.gridRect.x) * m.gridRect.w;
+    float fz = (x.z - m.gridRect.y) * m.gridRect.w;
+    float fy = (x.y - m.side.x) * m.side.z;
+    if (fx < 0.0 || fz < 0.0 || fy < 0.0 || fx > 15.0 || fz > 15.0 || fy > 15.0) return x;
+    int ix = (int)min(fx, 14.0), iz = (int)min(fz, 14.0), iy = (int)min(fy, 14.0);
+    uint b = mi * 1280u;
+    float wmin = 1e6, emax = -1e6, smin = 1e6, nmax = -1e6, tmax = -1e6;
+    [unroll] for (int dy = 0; dy < 2; dy++)
+    [unroll] for (int du = 0; du < 2; du++)
+    {
+        wmin = min(wmin, _Sides[b + (uint)((iy + dy) * 16 + iz + du)]);
+        emax = max(emax, _Sides[b + 256u + (uint)((iy + dy) * 16 + iz + du)]);
+        smin = min(smin, _Sides[b + 512u + (uint)((iy + dy) * 16 + ix + du)]);
+        nmax = max(nmax, _Sides[b + 768u + (uint)((iy + dy) * 16 + ix + du)]);
+        tmax = max(tmax, _Sides[b + 1024u + (uint)((iz + dy) * 16 + ix + du)]);
+    }
+    if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax)) return x;
+    float best = tmax - x.y;
+    int dir = 4;
+    float pw = x.x - wmin, pe = emax - x.x, ps = x.z - smin, pn = nmax - x.z;
+    if (pw < best) { best = pw; dir = 0; }
+    if (pe < best) { best = pe; dir = 1; }
+    if (ps < best) { best = ps; dir = 2; }
+    if (pn < best) { best = pn; dir = 3; }
+    if (dir == 0) x.x = wmin - RAD;
+    else if (dir == 1) x.x = emax + RAD;
+    else if (dir == 2) x.z = smin - RAD;
+    else if (dir == 3) x.z = nmax + RAD;
+    else x.y = tmax + RAD;
+    return x;
+}
+
+// Where a worm wants to be (centre of its line). Dome: a point of the layer, on the ground plus a fraction of the local thickness.
+float3 HomePoint(uint mi, MassParams m, uint seed, float t)
+{
+    if (m.sleeve.x > 0.5 && m.skin.x < 0.5)
+    {
+        Prim spr; float sh, sa, sth, sphi, ssg;
+        if (SleeveParams(mi, m, seed, t, spr, sh, sa, sth, sphi, ssg)) return SleeveNode(spr, sh, sa, sth, sphi, ssg, 3.5);
+    }
+    float a2 = Hash01(seed, 0) * 6.2831853;
+    float cz = Hash01(seed, 1);
+    float rr = Cbrt01(Hash01(seed, 2)) * 0.92;
+    float sn = sqrt(max(0.0, 1.0 - cz * cz));
+    float3 u = float3(sn * cos(a2), cz, sn * sin(a2)) * rr;
+    float3 fwd = m.heading.xyz;
+    float3 pos = m.center.xyz + fwd * (m.shape.w + u.x * m.shape.x) + Side(fwd) * (u.z * m.shape.z);
+    float qh = sqrt(u.x * u.x + u.z * u.z);
+    pos.y = Ground(mi, m, pos.x, pos.z) + RAD + u.y * DomeThick(mi, m, pos.x, pos.z, qh);
+    return pos;
+}
+
+// Correction that brings x back into the target shape: the layer over the ground (footprint ellipse, ceiling = ground + local thickness), plus the sleeve of the nearest
+// adhesive capsule when engulfing.
+float3 ContainCorr(uint mi, MassParams m, float3 x)
+{
+    float3 fwd = m.heading.xyz;
+    float3 side = Side(fwd);
+    float3 d = x - m.center.xyz;
+    float qx = (dot(d, fwd) - m.shape.w) / m.shape.x, qz = dot(d, side) / m.shape.z;
+    float qh = sqrt(qx * qx + qz * qz);
+    float3 dc = float3(0, 0, 0);
+    if (qh > 1.0)
+    {
+        float sx = qx / qh, sz = qz / qh;
+        float3 target = m.center.xyz + fwd * (sx * m.shape.x + m.shape.w) + side * (sz * m.shape.z);
+        dc.x = target.x - x.x;
+        dc.z = target.z - x.z;
+    }
+    float ceilY = Ground(mi, m, x.x, x.z) + RAD + DomeThick(mi, m, x.x, x.z, qh);
+    if (x.y > ceilY) dc.y = ceilY - x.y;
+    if (m.sleeve.x > 0.5)
+    {
+        uint kc = (uint)(m.sleeve.x + 0.5);
+        float3 sc = float3(0, 0, 0);
+        float best = 1e30;
+        for (uint ci = 0; ci < kc; ci++)
+        {
+            Prim pr = _Prims[mi * 24 + (uint)(m.sleeve.z + 0.5) + ci];
+            float3 ab = pr.b.xyz - pr.a.xyz;
+            float len = sqrt(dot(ab, ab));
+            float3 ax = len > 1e-6 ? ab / len : float3(0, 1, 0);
+            float t = clamp(dot(x - pr.a.xyz, ax), 0.0, len);
+            float3 rv = x - (pr.a.xyz + ax * t);
+            float r = sqrt(dot(rv, rv));
+            float maxr = pr.a.w + 0.024 + m.sleeve.y * 1.4;
+            float3 c = float3(0, 0, 0);
+            if (r > maxr) c -= rv / r * (r - maxr);
+            float along = dot(x - pr.a.xyz, ax) + pr.a.w;
+            float top = pr.d.z * (len + 2.0 * pr.a.w) + 0.12;
+            if (along > top) c -= ax * (along - top);
+            float cm = dot(c, c);
+            if (cm < best) { best = cm; sc = c; }
+        }
+        // the nearer of the two regions, blended where they are equally near (no jump of the correction when the choice changes)
+        float md = sqrt(dot(dc, dc)), ms = sqrt(dot(sc, sc));
+        float wb = saturate(0.5 + (md - ms) * 10.0);
+        dc = dc + (sc - dc) * wb;
+    }
+    return dc;
+}
+
+void InsertPoint(uint id, float3 pos, uint mass)
+{
+    int3 c = (int3)floor(pos * CELL_INV);
+    uint cell = HashCell(c, mass);
+    uint v = id;
+    [loop] for (uint s = 0; s < SLOTS; s++)
+    {
+        uint old;
+        InterlockedMin(_Grid[cell * SLOTS + s], v, old);
+        if (old == EMPTY) break;
+        if (old > v) v = old;
+    }
+}
+
+// ---------------------------------------------------------------- kernels
+
+// Puts the worms [_InitFirst, _InitFirst + _InitCount) straight at their home point, at rest.
+[numthreads(64, 1, 1)]
+void KInit(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _InitCount) return;
+    uint w = _InitFirst + id.x;
+    WormData wd = _Worms[w];
+    MassParams m = _Masses[wd.mass];
+    float3 hp = HomePoint(wd.mass, m, wd.seed, (float)_StepIndex * DT);
+    float ha = Hash01(wd.seed, 3) * 6.2831853;
+    float3 dir = float3(cos(ha), 0, sin(ha));
+    float g = Ground(wd.mass, m, hp.x, hp.z) + RAD;
+    hp.y = max(hp.y, g);
+    [unroll] for (int i = 0; i < K; i++)
+    {
+        float3 p = hp + dir * (((float)i - 3.5) * SEG);
+        p.y = max(p.y, Ground(wd.mass, m, p.x, p.z) + RAD);
+        _Pos[w * K + i] = float4(p, 1.0);
+        _Prev[w * K + i] = float4(p, 1.0);
+        _Pred[w * K + i] = float4(p, 1.0);
+        _NodeAnchor[w * K + i] = 0u;
+    }
+    _SkinState[w] = float4(0, 0, 0, 0);
+}
+
+[numthreads(256, 1, 1)]
+void KClear(uint3 id : SV_DispatchThreadID)
+{
+    _Grid[id.x] = EMPTY;
+}
+
+// Skins the anchors of the masses: id.x = anchor, id.y = mass. Position and normal = sum of weight x matrix x vertex over the four bones of the vertex.
+[numthreads(64, 1, 1)]
+void KSkin(uint3 id : SV_DispatchThreadID)
+{
+    uint mi = id.y;
+    MassParams m = _Masses[mi];
+    uint n = (uint)(m.skin.x + 0.5);
+    if (id.x >= n || m.origin.w < 0.5) return;
+    SkinVert v = _SkinVerts[mi * MAXA + id.x];
+    float3 p = float3(0, 0, 0);
+    float3 nn = float3(0, 0, 0);
+    [unroll] for (uint k = 0; k < 4; k++)
+    {
+        float wgt = v.bw[k];
+        if (wgt > 0.0)
+        {
+            float4x4 b = _Bones[mi * MAXB + v.bi[k]];
+            p += mul(b, float4(v.pr.xyz, 1.0)).xyz * wgt;
+            nn += mul(b, float4(v.nu.xyz, 0.0)).xyz * wgt;
+        }
+    }
+    _AnchorsOut[mi * MAXA + id.x].a = float4(p, 0.0);
+    float nl2 = dot(nn, nn);     // a rig of scale 0.01 gives short normals: renormalised unless they vanish
+    _AnchorsOut[mi * MAXA + id.x].b = float4(nl2 < 1e-20 ? float3(0, 1, 0) : nn / sqrt(nl2), v.pr.w);
+}
+
+[numthreads(64, 1, 1)]
+void KPredict(uint3 id : SV_DispatchThreadID)
+{
+    uint w = id.x;
+    if (w >= _WormCount) return;
+    WormData wd = _Worms[w];
+    MassParams m = _Masses[wd.mass];
+    if (m.origin.w < 0.5) return;
+
+    float3 p[K];
+    float3 pr[K];
+    float3 cen = float3(0, 0, 0);
+    [unroll] for (int i = 0; i < K; i++)
+    {
+        p[i] = _Pos[w * K + i].xyz;
+        pr[i] = _Prev[w * K + i].xyz;
+        cen += p[i];
+    }
+    cen *= 0.125;
+
+    float t = (float)_StepIndex * DT;
+    Prim spr = _Prims[wd.mass * 24];
+    float sh = 0.0, sa = 0.0, sth = 0.0, sphi = 0.0, ssg = 1.0;
+    bool member = false;
+    if (m.sleeve.x > 0.5 && m.skin.x < 0.5) member = SleeveParams(wd.mass, m, wd.seed, t, spr, sh, sa, sth, sphi, ssg);
+    float3 pull = (HomePoint(wd.mass, m, wd.seed, t) - cen) * m.motion.z;
+    float pl2 = dot(pull, pull);
+    if (pl2 > HOME_MAX * HOME_MAX) pull = pull / sqrt(pl2) * HOME_MAX;
+    pull.y *= member ? 1.0 : 0.6;       // the pile is held in height by the ground and gravity, the pull is mostly horizontal
+
+    float3 fwd = m.heading.xyz;
+    float freq = 1.0 + 0.5 * Hash01(wd.seed, 5);
+    float cyc = frac(t * freq + wd.phase);
+
+    // Skin engulf. Modes: 0 pile (the dome), 1 transit (the head follows a path of anchors from the base of the body to the anchor of the worm, the rope trails behind), 2 settled
+    // (leashed to its anchor, lying on the surface up or diagonally, or hanging by one end), 3 falling (real gravity, nothing pulls it). kx is the kinematic pull of the nodes.
+    uint mode = 0u;
+    float3 kx[K];
+    [unroll] for (int q = 0; q < K; q++) kx[q] = float3(0, 0, 0);
+    float creepScale = 1.0;
+    if (m.skin.x > 0.5)
+    {
+        uint mi = wd.mass;
+        uint basei = mi * MAXA;
+        float4 st = _SkinState[w];
+        mode = (uint)(st.x + 0.5);
+        uint pathA = (uint)(st.y + 0.5);
+        float timer = st.z;
+        float off = SkinOff(wd.seed);
+        float rk = SkinRank(w, m, wd.seed);
+        uint slotA;
+        bool elig = SkinEligible(mi, m, wd.seed, t, rk, mode, slotA);
+        bool entered = false;
+        if (mode == 0u)
+        {
+            if (elig)
+            {
+                mode = 1u;
+                timer = 0.0;
+                pathA = EntryAnchor(mi, m, p[7]);
+                entered = true;
+            }
+        }
+        else if (mode == 1u)
+        {
+            if (!elig) { mode = 3u; timer = 0.0; }
+            else
+            {
+                // the head is at the anchor of the path (or has been trying for HOP_TIME: a body in the way): on to the next anchor, or settled at the last one
+                timer += DT;
+                Anchor pa = _Anchors[basei + pathA];
+                float3 dh = pa.a.xyz + pa.b.xyz * off - p[7];
+                if (dot(dh, dh) < ADV_R * ADV_R || timer > HOP_TIME)
+                {
+                    timer = 0.0;
+                    if (pathA == slotA) mode = 2u;
+                    else
+                    {
+                        uint hb = HopOf(mi, slotA, pathA);
+                        if (hb < KN) pathA = _Knn[(basei + pathA) * KN + hb];
+                        else mode = 2u;
+                    }
+                }
+            }
+        }
+        else if (mode == 2u)
+        {
+            if (!elig || SkinDrops(wd.seed, t)) { mode = 3u; timer = 0.0; }
+        }
+        else
+        {
+            timer += DT;
+            if (timer > FALL_TIME || cen.y < Ground(wd.mass, m, cen.x, cen.z) + 0.15) mode = 0u;
+        }
+        _SkinState[w] = float4((float)mode, (float)pathA, timer, 0.0);
+
+        if (mode == 1u || mode == 2u)
+        {
+            // the anchor of each node follows the node over the surface (twice: the body can move by more than one neighbour in a step)
+            uint nodeA[K];
+            [unroll] for (int j0 = 0; j0 < K; j0++)
+            {
+                uint a0 = entered ? pathA : _NodeAnchor[w * K + j0];
+                a0 = NearestAnchor(mi, a0, p[j0]);
+                a0 = NearestAnchor(mi, a0, p[j0]);
+                _NodeAnchor[w * K + j0] = a0;
+                nodeA[j0] = a0;
+            }
+            if (mode == 1u)
+            {
+                Anchor pa = _Anchors[basei + pathA];
+                float3 tgt = pa.a.xyz + pa.b.xyz * off;
+                // on the surface the pull does not go into the body (it would only fight the projection): the head slides along it, or leaves it toward a neighbouring surface (an arm)
+                float3 hd = tgt - p[7];
+                Anchor ha = _Anchors[basei + nodeA[7]];
+                float3 hrel = p[7] - ha.a.xyz;
+                if (dot(hrel, hrel) < PROJ_R * PROJ_R) hd -= ha.b.xyz * min(dot(hd, ha.b.xyz), 0.0);
+                float3 hv = hd * TRANSIT_K;
+                float cap = (1.1 + 0.5 * Hash01(wd.seed, 32)) * DT;
+                float hl2 = dot(hv, hv);
+                if (hl2 > cap * cap) hv = hv / sqrt(hl2) * cap;
+                [unroll] for (int j1 = 0; j1 < K; j1++)
+                    kx[j1] = hv * (0.85 + 0.15 * ((float)j1 / 7.0));
+            }
+            else
+            {
+                bool pend = Hash01(wd.seed, 19) < PEND_SHARE;
+                Anchor ca = _Anchors[basei + nodeA[3]];
+                float3 d = SkinDir(ca.b.xyz, wd.seed, pend);
+                Anchor sn = _Anchors[basei + slotA];
+                float tw = 4.0 + 6.0 * Hash01(wd.seed, 17);
+                float drift = pend ? 0.0 : 0.05 * sin(6.2831853 * (t / tw + Hash01(wd.seed, 18)));
+                float3 ps = sn.a.xyz + sn.b.xyz * off + d * drift;
+                if (pend)
+                {
+                    // hangs by its first node, the others are free
+                    float3 pc0 = (ps - p[0]) * 0.3;
+                    float pl0 = dot(pc0, pc0);
+                    if (pl0 > BODY_PULL_MAX * BODY_PULL_MAX) pc0 = pc0 / sqrt(pl0) * BODY_PULL_MAX;
+                    kx[0] = pc0;
+                    creepScale = 0.0;
+                }
+                else
+                {
+                    float3 pc = (ps - cen) * LEASH_K;
+                    float pcl = dot(pc, pc);
+                    if (pcl > BODY_PULL_MAX * BODY_PULL_MAX) pc = pc / sqrt(pcl) * BODY_PULL_MAX;
+                    float3 sd = cross(ca.b.xyz, d);
+                    [unroll] for (int j2 = 0; j2 < K; j2++)
+                    {
+                        float3 tj = cen + d * (((float)j2 - 3.5) * SEG) + sd * (0.006 * sin(6.2831853 * (cyc - (float)j2 * 0.11)));
+                        kx[j2] = pc + (tj - p[j2]) * ORIENT_K;
+                    }
+                }
+            }
+        }
+    }
+    bool onBody = mode == 1u || mode == 2u;
+    bool dropping = m.skin.x > 0.5 && mode == 3u;
+
+    float3 pn[K];
+    [unroll] for (int j = 0; j < K; j++)
+    {
+        float3 v = (p[j] - pr[j]) * DAMP;
+        float gh = Ground(wd.mass, m, p[j].x, p[j].z);
+        // on the ground, the slope pulls downhill (the mass pools at the foot of a rock)
+        float2 gr = GroundGrad(wd.mass, m, p[j].x, p[j].z);
+        float tg = saturate(1.0 - (p[j].y - gh) / 0.02);
+        float sk = 2.0 * GRAV * DT * DT * tg;
+        float3 a = float3(-gr.x * sk, -GRAV * DT * DT, -gr.y * sk);
+        float3 pj = pull;
+        if (onBody)
+        {
+            pj = float3(0, 0, 0);           // the pulls of the sleeve are kinematic (kx)
+        }
+        else if (dropping)
+        {
+            pj = float3(0, 0, 0);           // a worm that lets go falls with the real gravity, and nothing pulls it
+            a.y = -9.8 * DT * DT;
+        }
+        else if (member)
+        {
+            pj = (SleeveNode(spr, sh, sa, sth, sphi, ssg, (float)j) - p[j]) * (m.motion.z * 8.0);
+            float jl2 = dot(pj, pj);
+            if (jl2 > HOME_MAX * HOME_MAX) pj = pj / sqrt(jl2) * HOME_MAX;
+        }
+        float hf = saturate((p[j].y - gh) / max(m.shape.y, 0.05));
+        float3 conv = fwd * (m.motion.x * m.heading.w * DT * Smooth(0.25, 0.9, hf));
+        float3 axis = Norm(p[min(j + 1, K - 1)] - p[max(j - 1, 0)], fwd);
+        float wave = 0.5 + 0.5 * sin(6.2831853 * (cyc - (float)j * 0.11));
+        float3 creep = axis * (wd.speed * m.motion.y * DT * wave * creepScale);
+        pn[j] = p[j] + v + a + pj + conv + creep + kx[j];
+        _Pred[w * K + j] = float4(pn[j], 1.0);
+        // The creep, the conveyor and the pulls of the sleeve are kinematic: they move the node without giving it momentum (a tangential push that fed the Verlet velocity
+        // would be a follower force, and the rope would flutter). The previous position is no longer needed: KSolve reads the displacement here.
+        _Prev[w * K + j] = float4(creep + conv + kx[j], _Pos[w * K + j].w);
+    }
+
+    [unroll] for (int k = 0; k < K; k++) InsertPoint(w * 16u + (uint)k, pn[k], wd.mass);
+    [unroll] for (int s = 0; s < K - 1; s++) InsertPoint(w * 16u + 8u + (uint)s, 0.5 * (pn[s] + pn[s + 1]), wd.mass);
+}
+
+float3 PredPoint(uint w, uint k)
+{
+    if (k < 8u) return _Pred[w * K + k].xyz;
+    return 0.5 * (_Pred[w * K + k - 8u].xyz + _Pred[w * K + k - 7u].xyz);
+}
+
+[numthreads(64, 1, 1)]
+void KSeparate(uint3 id : SV_DispatchThreadID)
+{
+    uint w = id.x >> 4;
+    uint k = id.x & 15u;
+    if (w >= _WormCount || k >= NP) return;
+    WormData wd = _Worms[w];
+    if (_Masses[wd.mass].origin.w < 0.5) return;
+
+    // a worm on its way up the body (mode 1) goes through the others, and the others through it
+    bool skinMass = _Masses[wd.mass].skin.x > 0.5;
+    bool inTransit = skinMass && (uint)(_SkinState[w].x + 0.5) == 1u;
+    uint myId = w * 16u + k;
+    float3 pa = PredPoint(w, k);
+    int3 c = (int3)floor(pa * CELL_INV);
+    float3 sum = float3(0, 0, 0);
+    float count = 0.0;
+    [loop] for (int dz = -1; dz <= 1; dz++)
+    [loop] for (int dy = -1; dy <= 1; dy++)
+    [loop] for (int dx = -1; dx <= 1; dx++)
+    {
+        uint cell = HashCell(c + int3(dx, dy, dz), wd.mass);
+        [loop] for (uint s = 0; s < SLOTS; s++)
+        {
+            uint nb = _Grid[cell * SLOTS + s];
+            if (nb == EMPTY) break;
+            uint nw = nb >> 4;
+            if (nw == w || _Worms[nw].mass != wd.mass) continue;
+            if (skinMass && (inTransit || (uint)(_SkinState[nw].x + 0.5) == 1u)) continue;
+            float3 d = pa - PredPoint(nw, nb & 15u);
+            float l2 = dot(d, d);
+            if (l2 >= SEPD * SEPD) continue;
+            float l = sqrt(l2);
+            float3 dir = l > 1e-6 ? d / l : float3(0, myId > nb ? 1.0 : -1.0, 0);
+            sum += dir * ((SEPD - l) * 0.5 * SEP_K);
+            count += 1.0;
+        }
+    }
+    float s2 = dot(sum, sum);
+    if (s2 > MAX_SEP * MAX_SEP) sum = sum / sqrt(s2) * MAX_SEP;
+    _Delta[myId] = float4(sum, count);
+}
+
+[numthreads(64, 1, 1)]
+void KSolve(uint3 id : SV_DispatchThreadID)
+{
+    uint w = id.x;
+    if (w >= _WormCount) return;
+    WormData wd = _Worms[w];
+    uint mi = wd.mass;
+    MassParams m = _Masses[mi];
+    if (m.origin.w < 0.5) return;
+
+    float3 x[K];
+    float3 o[K];
+    float rs[K];
+    [unroll] for (int i = 0; i < K; i++)
+    {
+        x[i] = _Pred[w * K + i].xyz;
+        o[i] = _Pos[w * K + i].xyz + _Prev[w * K + i].xyz;     // the old position moved by the kinematic displacement of the step
+        rs[i] = _Pos[w * K + i].w;
+    }
+
+    // separation: the delta of a node, and of the midpoints of its two segments
+    [unroll] for (int a = 0; a < K; a++)
+    {
+        float3 dn = _Delta[w * 16u + (uint)a].xyz;
+        float ws = 1.0;
+        if (a > 0) { dn += _Delta[w * 16u + 8u + (uint)(a - 1)].xyz; ws += 1.0; }
+        if (a < K - 1) { dn += _Delta[w * 16u + 8u + (uint)a].xyz; ws += 1.0; }
+        x[a] += dn / ws;
+    }
+
+    // skin engulf: a worm on the body (transit, settled) is projected on the surface and not contained in the dome; a falling one is not contained either
+    uint sMode = 0u;
+    if (m.skin.x > 0.5) sMode = (uint)(_SkinState[w].x + 0.5);
+    bool onBody = sMode == 1u || sMode == 2u;
+    bool pend = sMode == 2u && Hash01(wd.seed, 19) < PEND_SHARE;
+    float off = SkinOff(wd.seed);
+    bool skipContain = sMode != 0u;
+    uint nodeA[K];
+    [unroll] for (int na = 0; na < K; na++) nodeA[na] = onBody ? _NodeAnchor[w * K + na] : 0u;
+    float attached[K];
+    [unroll] for (int z = 0; z < K; z++) attached[z] = 0.0;
+
+    [loop] for (int it = 0; it < ITERATIONS; it++)
+    {
+        // lengths, forward then backward
+        [unroll] for (int s = 0; s < K - 1; s++)
+        {
+            float3 d = x[s + 1] - x[s];
+            float l = sqrt(dot(d, d));
+            if (l > 1e-6) { float3 c = d * ((l - SEG) / l * 0.5); x[s] += c; x[s + 1] -= c; }
+        }
+        [unroll] for (int s2 = K - 2; s2 >= 0; s2--)
+        {
+            float3 d = x[s2 + 1] - x[s2];
+            float l = sqrt(dot(d, d));
+            if (l > 1e-6) { float3 c = d * ((l - SEG) / l * 0.5); x[s2] += c; x[s2 + 1] -= c; }
+        }
+        // curvature: the chord of three consecutive nodes may not fold below BEND_MIN
+        [unroll] for (int b = 1; b < K - 1; b++)
+        {
+            float3 d = x[b + 1] - x[b - 1];
+            float l = sqrt(dot(d, d));
+            if (l > 1e-6 && l < BEND_MIN)
+            {
+                float3 c = d / l * ((BEND_MIN - l) * BEND_K);
+                x[b - 1] -= c * 0.5;
+                x[b + 1] += c * 0.5;
+            }
+        }
+        [unroll] for (int n = 0; n < K; n++)
+        {
+            if (!skipContain) x[n] += ContainCorr(mi, m, x[n]) * CONTAIN_K;
+            float att = 0.0;
+            if (onBody) x[n] = SkinSurface(mi, nodeA[n], x[n], !pend || n == 0, off, att);
+            else if (m.skin.x > 0.5 && it == ITERATIONS - 1) x[n] = SkinPush(mi, m, x[n]);
+            attached[n] = max(ResolvePrims(mi, m, x[n]), att);
+            x[n] = SolidPush(mi, m, x[n]);
+            float g = Ground(mi, m, x[n].x, x[n].z) + RAD;
+            if (x[n].y < g) x[n].y = g;
+        }
+    }
+    // closing pass: lengths, then the surface, then the ground is the last word
+    [unroll] for (int s3 = 0; s3 < K - 1; s3++)
+    {
+        float3 d = x[s3 + 1] - x[s3];
+        float l = sqrt(dot(d, d));
+        if (l > 1e-6) { float3 c = d * ((l - SEG) / l * 0.5); x[s3] += c; x[s3 + 1] -= c; }
+    }
+    [unroll] for (int s4 = K - 2; s4 >= 0; s4--)
+    {
+        float3 d = x[s4 + 1] - x[s4];
+        float l = sqrt(dot(d, d));
+        if (l > 1e-6) { float3 c = d * ((l - SEG) / l * 0.5); x[s4] += c; x[s4 + 1] -= c; }
+    }
+    [unroll] for (int e = 0; e < K; e++)
+    {
+        if (onBody)
+        {
+            float att2 = 0.0;
+            x[e] = SkinSurface(mi, nodeA[e], x[e], !pend || e == 0, off, att2);
+        }
+        float g = Ground(mi, m, x[e].x, x[e].z) + RAD;
+        if (x[e].y < g) x[e].y = g;
+        float3 vel = x[e] - o[e];
+        float tg = saturate(1.0 - (x[e].y - g) / 0.004);
+        vel.x *= 1.0 - m.sleeve.w * tg;
+        vel.z *= 1.0 - m.sleeve.w * tg;
+        vel *= 1.0 + (BODY_DAMP - 1.0) * attached[e];
+        _Pos[w * K + e] = float4(x[e], rs[e]);
+        _Prev[w * K + e] = float4(x[e] - vel, rs[e]);
+    }
+}
+
+// Moves the whole local frame of the worms [_InitFirst, _InitFirst + _InitCount) by _Shift (the host re-centres a mass that walked far from its origin).
+[numthreads(64, 1, 1)]
+void KShift(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _InitCount) return;
+    uint w = _InitFirst + id.x;
+    [unroll] for (int i = 0; i < K; i++)
+    {
+        float4 a = _Pos[w * K + i];
+        float4 b = _Prev[w * K + i];
+        _Pos[w * K + i] = float4(a.xyz + _Shift, a.w);
+        _Prev[w * K + i] = float4(b.xyz + _Shift, b.w);
+    }
+}

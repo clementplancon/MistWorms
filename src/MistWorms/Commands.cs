@@ -26,6 +26,7 @@ namespace MistWorms
             CommandManager.Instance.AddConsoleCommand(new MassCommand());
             CommandManager.Instance.AddConsoleCommand(new MassEngulfCommand());
             CommandManager.Instance.AddConsoleCommand(new GpuWormsCommand());
+            CommandManager.Instance.AddConsoleCommand(new GpuMassCommand());
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_nest", "- place a worm nest in front of the player", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_wake", "- wake every dormant group of the current mine", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_calm", "- send every active group of the current mine back to dormancy", 7));
@@ -192,6 +193,34 @@ namespace MistWorms
                 if (n > 0 && player == null) { Print(context, "mw_gpuworms: no local player"); return; }
                 bool ok = Dev.GpuWorms.Spawn(n, player != null ? player.transform.position : UnityEngine.Vector3.zero, out string how);
                 Print(context, $"mw_gpuworms: {(ok ? how : "FAILED " + how)}; main thread {Dev.GpuWorms.AvgMs:0.000} ms/frame");
+            }
+        }
+
+        private sealed class GpuMassCommand : MWCommand
+        {
+            public override string Name => "mw_gpumass";
+            public override string Help => "[dev] <n> [still|walk|engulf|engulfplayer] [distance] - a phantom GPU mass of n game units (10 worms each, 0 clears) in front of the player: still, walking <distance> m (default 6), wrapping a mannequin capsule, or wrapping the player";
+            public override bool IsCheat => true;
+
+            public override List<string> CommandOptionList() => new List<string> { "0", "50", "200" };
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                if (args.Length == 0 || !int.TryParse(args[0], out int n) || n < 0)
+                {
+                    Print(context, "usage: mw_gpumass <n> [still|walk|engulf|engulfplayer] [distance]");
+                    return;
+                }
+                Dev.GpuMassDev.GhostMode mode = Dev.GpuMassDev.GhostMode.Still;
+                if (args.Length > 1 && !Enum.TryParse(args[1], true, out mode))
+                {
+                    Print(context, "mw_gpumass: unknown mode '" + args[1] + "' (still, walk, engulf, engulfplayer)");
+                    return;
+                }
+                float distance = 6f;
+                if (args.Length > 2) float.TryParse(args[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out distance);
+                bool ok = Dev.GpuMassDev.Spawn(n, mode, distance, out string how);
+                Print(context, $"mw_gpumass: {(ok ? how : "FAILED " + how)}; main thread {MistWorms.Render.Gpu.GpuWormHost.AvgMs:0.000} ms/frame");
             }
         }
 

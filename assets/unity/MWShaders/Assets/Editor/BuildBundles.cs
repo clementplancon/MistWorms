@@ -6,8 +6,9 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// Builds the AssetBundle "mistworms_shaders" (StandaloneWindows64): the WormGPU shader, its material, the MWTest compute shader and a
-/// ShaderVariantCollection with the instancing variants. Entry point for the batchmode: -executeMethod BuildBundles.Build
+/// Builds the AssetBundle "mistworms_shaders" (StandaloneWindows64): the WormRope shader (ropes simulated by WormSim.compute) and the WormGPU shader (spike), their materials,
+/// the WormSim and MWTest compute shaders and a ShaderVariantCollection (Worms.shadervariants) with the instancing, Deferred, forward and shadow caster variants of both shaders.
+/// Entry point for the batchmode: -executeMethod BuildBundles.Build
 /// Output: Build/mistworms_shaders (tools/build-shaders.ps1 copies it to assets/build). Exit code 1 on any failure.
 /// </summary>
 public static class BuildBundles
@@ -15,9 +16,13 @@ public static class BuildBundles
     private const string BundleName = "mistworms_shaders";
     private const string OutDir = "Build";
     private const string ShaderPath = "Assets/Shaders/WormGPU.shader";
+    private const string RopeShaderPath = "Assets/Shaders/WormRope.shader";
     private const string ComputePath = "Assets/Shaders/MWTest.compute";
+    private const string SimPath = "Assets/Shaders/WormSim.compute";
     private const string MaterialPath = "Assets/Materials/WormGPU.mat";
-    private const string VariantsPath = "Assets/Materials/WormGPU.shadervariants";
+    private const string RopeMaterialPath = "Assets/Materials/WormRope.mat";
+    private const string VariantsPath = "Assets/Materials/Worms.shadervariants";
+    private const string OldVariantsPath = "Assets/Materials/WormGPU.shadervariants";
 
     // The game runs in Linear (measured in game: QualitySettings.activeColorSpace = Linear, Deferred, HDR): UNITY_COLORSPACE_GAMMA is fixed at compile time,
     // and the albedo texture must be imported as sRGB, the gloss and the normal map as linear data.
@@ -42,38 +47,38 @@ public static class BuildBundles
         ImportTextures();
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
 
-        var shader = AssetDatabase.LoadAssetAtPath<Shader>(ShaderPath);
-        if (shader == null) throw new Exception("shader not found: " + ShaderPath);
-        if (ShaderUtil.ShaderHasError(shader))
-        {
-            foreach (ShaderMessage m in ShaderUtil.GetShaderMessages(shader))
-                Debug.LogError($"BuildBundles: shader {m.severity}: {m.message} ({m.file}:{m.line}) [{m.platform}]");
-            throw new Exception("WormGPU has compilation errors");
-        }
-        Debug.Log("BuildBundles: shader compiled, supported=" + shader.isSupported);
+        Shader shader = LoadShader(ShaderPath);
+        Shader rope = LoadShader(RopeShaderPath);
 
         var compute = AssetDatabase.LoadAssetAtPath<ComputeShader>(ComputePath);
         if (compute == null) throw new Exception("compute shader not found: " + ComputePath);
+        var sim = AssetDatabase.LoadAssetAtPath<ComputeShader>(SimPath);
+        if (sim == null) throw new Exception("compute shader not found: " + SimPath);
+        CheckCompute(sim, new[] { "KInit", "KClear", "KPredict", "KSeparate", "KSolve", "KShift" });
 
-        var mat = new Material(shader) { name = "WormGPU" };
-        mat.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/worm_albedo.png"));
-        mat.SetTexture("_GlossTex", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/worm_gloss.png"));
-        mat.SetTexture("_BumpMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/worm_normal.png"));
-        mat.enableInstancing = true;
+        Material mat = MakeMaterial(shader, "WormGPU");
+        Material ropeMat = MakeMaterial(rope, "WormRope");
         AssetDatabase.DeleteAsset(MaterialPath);
         AssetDatabase.CreateAsset(mat, MaterialPath);
+        AssetDatabase.DeleteAsset(RopeMaterialPath);
+        AssetDatabase.CreateAsset(ropeMat, RopeMaterialPath);
 
-        var svc = BuildVariants(shader);
+        var svc = new ShaderVariantCollection();
+        var listing = new List<string>();
+        BuildVariants(svc, shader, listing);
+        BuildVariants(svc, rope, listing);
+        AssetDatabase.DeleteAsset(OldVariantsPath);
         AssetDatabase.DeleteAsset(VariantsPath);
         AssetDatabase.CreateAsset(svc, VariantsPath);
         AssetDatabase.SaveAssets();
+        foreach (string l in listing) Debug.Log("BuildBundles: variant " + l);
 
         var build = new AssetBundleBuild
         {
             assetBundleName = BundleName,
             assetNames = new[]
             {
-                ShaderPath, ComputePath, MaterialPath, VariantsPath,
+                ShaderPath, RopeShaderPath, ComputePath, SimPath, MaterialPath, RopeMaterialPath, VariantsPath,
                 "Assets/Textures/worm_albedo.png", "Assets/Textures/worm_gloss.png", "Assets/Textures/worm_normal.png",
             },
         };
@@ -148,9 +153,41 @@ public static class BuildBundles
         imp.SaveAndReimport();
     }
 
-    private static ShaderVariantCollection BuildVariants(Shader shader)
+    private static Shader LoadShader(string path)
     {
-        var svc = new ShaderVariantCollection();
+        var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+        if (shader == null) throw new Exception("shader not found: " + path);
+        if (ShaderUtil.ShaderHasError(shader))
+        {
+            foreach (ShaderMessage m in ShaderUtil.GetShaderMessages(shader))
+                Debug.LogError($"BuildBundles: shader {m.severity}: {m.message} ({m.file}:{m.line}) [{m.platform}]");
+            throw new Exception(path + " has compilation errors");
+        }
+        Debug.Log($"BuildBundles: shader {shader.name} compiled, supported={shader.isSupported}");
+        return shader;
+    }
+
+    private static Material MakeMaterial(Shader shader, string name)
+    {
+        var mat = new Material(shader) { name = name };
+        mat.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/worm_albedo.png"));
+        mat.SetTexture("_GlossTex", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/worm_gloss.png"));
+        mat.SetTexture("_BumpMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/worm_normal.png"));
+        mat.enableInstancing = true;
+        return mat;
+    }
+
+    private static void CheckCompute(ComputeShader cs, string[] kernels)
+    {
+        foreach (string k in kernels)
+        {
+            if (!cs.HasKernel(k)) throw new Exception($"{cs.name}: kernel {k} missing (compile error?)");
+            Debug.Log($"BuildBundles: compute {cs.name} kernel {k} index {cs.FindKernel(k)}");
+        }
+    }
+
+    private static void BuildVariants(ShaderVariantCollection svc, Shader shader, List<string> listing)
+    {
         string[][] fogs = { new string[0], new[] { "FOG_LINEAR" }, new[] { "FOG_EXP" }, new[] { "FOG_EXP2" } };
         string[][] bases =
         {
@@ -163,40 +200,42 @@ public static class BuildBundles
         };
         string[][] adds = { new[] { "POINT" }, new[] { "SPOT" }, new[] { "POINT", "SHADOWS_CUBE" }, new[] { "SPOT", "SHADOWS_DEPTH" } };
         string[][] casters = { new string[0], new[] { "SHADOWS_DEPTH" }, new[] { "SHADOWS_CUBE" } };
-
-        int added = 0, rejected = 0;
         string[][] gbuffers =
         {
             new string[0], new[] { "UNITY_HDR_ON" }, new[] { "LIGHTPROBE_SH" }, new[] { "UNITY_HDR_ON", "LIGHTPROBE_SH" },
             new[] { "SHADOWS_SHADOWMASK", "UNITY_HDR_ON", "LIGHTPROBE_SH" },
         };
+
+        int added = 0, rejected = 0;
         foreach (bool inst in new[] { true, false })
         {
-            foreach (string[] g in gbuffers) Add(svc, shader, PassType.Deferred, g, new string[0], inst, ref added, ref rejected);
+            foreach (string[] g in gbuffers) Add(svc, shader, PassType.Deferred, g, new string[0], inst, listing, ref added, ref rejected);
             foreach (string[] fog in fogs)
             {
-                foreach (string[] b in bases) Add(svc, shader, PassType.ForwardBase, b, fog, inst, ref added, ref rejected);
-                foreach (string[] a in adds) Add(svc, shader, PassType.ForwardAdd, a, fog, inst, ref added, ref rejected);
+                foreach (string[] b in bases) Add(svc, shader, PassType.ForwardBase, b, fog, inst, listing, ref added, ref rejected);
+                foreach (string[] a in adds) Add(svc, shader, PassType.ForwardAdd, a, fog, inst, listing, ref added, ref rejected);
             }
-            foreach (string[] c in casters) Add(svc, shader, PassType.ShadowCaster, c, new string[0], inst, ref added, ref rejected);
+            foreach (string[] c in casters) Add(svc, shader, PassType.ShadowCaster, c, new string[0], inst, listing, ref added, ref rejected);
         }
-        Debug.Log($"BuildBundles: ShaderVariantCollection {added} variants ({rejected} rejected)");
-        if (added == 0) throw new Exception("empty ShaderVariantCollection");
-        return svc;
+        Debug.Log($"BuildBundles: ShaderVariantCollection {shader.name}: {added} variants added, {rejected} rejected or duplicated");
+        if (added == 0) throw new Exception("empty ShaderVariantCollection for " + shader.name);
     }
 
-    private static void Add(ShaderVariantCollection svc, Shader shader, PassType pass, string[] a, string[] b, bool instancing, ref int added, ref int rejected)
+    private static void Add(ShaderVariantCollection svc, Shader shader, PassType pass, string[] a, string[] b, bool instancing, List<string> listing, ref int added, ref int rejected)
     {
         var kw = new List<string>(a);
         kw.AddRange(b);
         if (instancing) kw.Add("INSTANCING_ON");
+        string line = $"{shader.name} {pass} [{string.Join(" ", kw)}]";
         try
         {
-            if (svc.Add(new ShaderVariantCollection.ShaderVariant(shader, pass, kw.ToArray()))) added++;
+            if (svc.Add(new ShaderVariantCollection.ShaderVariant(shader, pass, kw.ToArray()))) { added++; listing.Add(line); }
+            else { rejected++; listing.Add("(duplicate) " + line); }
         }
         catch (ArgumentException)
         {
             rejected++;
+            listing.Add("(rejected) " + line);
         }
     }
 }

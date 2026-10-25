@@ -254,6 +254,10 @@ namespace MistWorms.Dev
                     req.RequireMethod("POST");
                     GpuWormsRoute(req, reply);
                     return null;
+                case "/gpumass":
+                    req.RequireMethod("POST");
+                    GpuMassRoute(req, reply);
+                    return null;
                 case "/mass-visual":
                     req.RequireMethod("GET");
                     MassVisualRoute(req, reply);
@@ -530,6 +534,24 @@ namespace MistWorms.Dev
             reply.Body = body;
         }
 
+        /// <summary>
+        /// POST /gpumass {"n": units, "mode": "still|walk|engulf|engulfplayer", "distance": metres}: the phantom GPU mass (visual v2, pass B1) in front of the player; n = 0 clears it.
+        /// Returns the "gpuMass" state block.
+        /// </summary>
+        private static void GpuMassRoute(BridgeRequest req, BridgeReply reply)
+        {
+            RequirePlayer();
+            int n = MiniJson.GetInt(req.Body, "n", 0);
+            if (n < 0 || n > GpuMassDev.MaxUnits) throw new BridgeException(400, $"'n' must be 0..{GpuMassDev.MaxUnits}");
+            string modeName = MiniJson.GetString(req.Body, "mode", "still");
+            if (!Enum.TryParse(modeName, true, out GpuMassDev.GhostMode mode)) throw new BridgeException(400, "'mode' must be still, walk, engulf or engulfplayer");
+            float distance = MiniJson.GetFloat(req.Body, "distance", 6f);
+            if (!GpuMassDev.Spawn(n, mode, distance, out string how)) throw new BridgeException(409, how);
+            Dictionary<string, object> body = GpuMassDev.StateJson();
+            body["how"] = how;
+            reply.Body = body;
+        }
+
         /// <summary>GET /mass-visual[?id=user:id]: what the swarm renderer did for a mass (the closest to the player without id), plus the renderer totals.</summary>
         private static void MassVisualRoute(BridgeRequest req, BridgeReply reply)
         {
@@ -601,6 +623,7 @@ namespace MistWorms.Dev
                 { "colonies", colonies },
                 { "masses", MassDev.JsonList() },
                 { "gpuWorms", GpuWorms.StateJson() },
+                { "gpuMass", GpuMassDev.StateJson() },
                 { "frozen", Colony.WormColony.Frozen },
                 { "proxyLayer", Colony.ProxyLayer.LayerName },
                 { "bites", BitesJson() },
