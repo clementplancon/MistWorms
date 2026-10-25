@@ -329,6 +329,9 @@ namespace MistWorms.Mass
                 float cp = P.Tread * C.CatRate + S.LCatPh[j];
                 cx = cx + sg * span * sj * (C.CatBias * CosT(beta) + C.CatAmp * SinT(cp));
                 cz = cz * (1f - 0.4f * sg);
+                // The slow centre: without the drift and the caterpillar swing (they move a lobe at 0.5 m/s while the poured worms must hold still).
+                float sxs = baseR * CosT(beta) + sg * span * sj * C.CatBias * CosT(beta);
+                float szs = baseR * SinT(beta) * (1f - 0.4f * sg);
                 float stretch = 1f + sg * C.CatStretch * (0.5f + 0.5f * SinT(cp + 0.25f)) * (0.6f + 0.4f * CosT(beta));
                 float pulse = 1f + C.LobePulse * SinT(t / per[S.LRPer[j]] + S.LRPh[j]);
                 float rx = rl * S.LAspS[j] * pulse * stretch;
@@ -342,6 +345,8 @@ namespace MistWorms.Mass
                     float lx = (((float)j + 0.5f) / (float)C.LobeMax - 0.5f) * (P.RibbonL > 0f ? P.RibbonL : 2f * rp);
                     cx = Lerp(cx, lx, k);
                     cz = cz * (1f - k);
+                    sxs = Lerp(sxs, lx, k);
+                    szs = szs * (1f - k);
                     if (P.RibbonW > 0f)
                     {
                         float half = 0.5f * P.RibbonW;
@@ -361,6 +366,8 @@ namespace MistWorms.Mass
                     float tx = P.TargetDist * CosT(P.TargetTurns), tz = P.TargetDist * SinT(P.TargetTurns);
                     cx = Lerp(cx, tx, es);
                     cz = Lerp(cz, tz, es);
+                    sxs = Lerp(sxs, tx, es);
+                    szs = Lerp(szs, tz, es);
                     rx = Lerp(rx, C.BaseRadius, es);
                     rz = Lerp(rz, C.BaseRadius, es);
                     ry = Lerp(ry, C.BaseHeight, es);
@@ -372,6 +379,7 @@ namespace MistWorms.Mass
                 L.Lt = (float)Math.PI * (float)Math.Sqrt(0.5f * (ltx * ltx + lty * lty)) * (1f + C.TreadStretch * sg) / C.TreadSurfaceFrac * C.TreadLtScale;
                 L.Rl = rl;
                 L.Ax = ltx;
+                L.Sx = sxs; L.Sz = szs;
                 S.Lobes[j] = L;
             }
         }
@@ -479,6 +487,8 @@ namespace MistWorms.Mass
             float pitchT = 0f;
             float off = C.FluxLift;
             bool exitBlend = false;
+            // Anchoring to the slow centre of the lobe, in from mu = 0.5 to 0.84 (the start of the pour): gentle on the surface, complete when the worm lies still.
+            float wpour = mu > 0.5f ? sg * Smooth01((mu - 0.5f) / 0.34f) : 0f;
             bool hidden;
             float X, Z;
             float hideD = C.HideFrac * e.H;
@@ -543,6 +553,12 @@ namespace MistWorms.Mass
             bool lod0Phase = (mu >= C.EmergeEnd && mu < C.SurfaceEnd) || (exitBlend && sg > 0.5f && mu >= C.SurfaceEnd + 0.04f);
             V3 nh = ToHeapVec(L, n);
             pos = ToHeapPt(L, pos); f = ToHeapVec(L, f); u = ToHeapVec(L, u);
+            if (wpour > 0f)
+            {
+                // Anchored to the slow centre of the lobe, not to its drifting and swinging one: the poured worm holds still in the world.
+                pos.X += wpour * (L.Sx - L.Cx);
+                pos.Z += wpour * (L.Sz - L.Cz);
+            }
             int frame;
             if (anim == AnimIdle) frame = FloorI(t * 6f + S.AnimPhase[i] * (float)IdleFrames) % IdleFrames;
             else frame = FloorI(P.OdoFlux + (float)i * C.CrawlPhaseStep) % CrawlFrames;
@@ -769,7 +785,8 @@ namespace MistWorms.Mass
                 }
                 int div = role == RoleBody ? divBody : divFlux;
                 if (div > 1 && stamp[i] != HeapSlots.NotEvaluated && (frame + i) % div != 0 && frame - stamp[i] < div && frame >= stamp[i]
-                    && !(S.Thr[i] < engThr) && !(S.Thr2[i] < armThr)) continue;   // cached
+                    && !(S.Thr[i] < engThr) && !(S.Thr2[i] < armThr)
+                    && !(P.Sigma > 0.5f && role != RoleBody && outp[i].Anim == AnimIdle)) continue;   // cached (poured worms excepted: they hold still in the world)
                 stamp[i] = frame;
                 if (role == RoleBorder && !borderOk) role = RoleFlux;
                 int j = S.LobeOf[i];
@@ -840,6 +857,13 @@ namespace MistWorms.Mass
                             outp[i].Frame = FloorI(P.OdoFlux + (float)i * C.CrawlPhaseStep) % CrawlFrames;
                         }
                     }
+                }
+                if (P.StreamK > 0f && P.RibbonW > 0f)
+                {
+                    // In the stream no worm, whatever its role (border and arm included), lies beyond the half width of the ribbon.
+                    float zlim = (0.5f * P.RibbonW > 0.28f ? 0.5f * P.RibbonW - 0.08f : 0.2f) + (1f - P.StreamK) * (P.R + 2f);   // 8 cm in: the heading follows the corridor to a few degrees
+                    if (outp[i].Pos.Z > zlim) outp[i].Pos.Z = zlim;
+                    else if (outp[i].Pos.Z < -zlim) outp[i].Pos.Z = -zlim;
                 }
             }
             return count;

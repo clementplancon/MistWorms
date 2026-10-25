@@ -383,13 +383,13 @@ namespace MistWorms.Tests
                     bool pour = o.Role == MassLayout.RoleFlux && o.Visible && Math.Abs(o.Pos.Y - MassLayoutConst.FluxLift) < 1e-4f;
                     if (time > 1f && pour && streak[i] >= 3)
                     {
-                        float lx = o.Pos.X - s.Lobes[o.Lobe].Cx;                  // lobe frame (psi = 0 on the move; pour worms are flux, Lobe >= 0)
+                        float lx = o.Pos.X - s.Lobes[o.Lobe].Sx;                  // slow centre of the lobe (psi = 0 on the move; pour worms are flux, Lobe >= 0): the drift and the swing are not followed
                         float worldV = (lx - prevX[i]) * 60f + V;                 // the lobe moves at V along +X
                         if (Math.Abs(worldV) > worst) worst = Math.Abs(worldV);
                         measured++;
                         Assert.True(Math.Abs(worldV) < 0.05f, "slot " + i + " t=" + time + " x " + prevX[i] + " -> " + o.Pos.X + " world speed " + worldV);
                     }
-                    prevX[i] = o.Pos.X - (o.Lobe >= 0 ? s.Lobes[o.Lobe].Cx : 0f); streak[i] = pour ? streak[i] + 1 : 0;
+                    prevX[i] = o.Pos.X - (o.Lobe >= 0 ? s.Lobes[o.Lobe].Sx : 0f); streak[i] = pour ? streak[i] + 1 : 0;
                 }
             });
             Assert.True(measured > 100, "poured worms measured: " + measured);

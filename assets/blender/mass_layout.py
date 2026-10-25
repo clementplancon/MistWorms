@@ -386,7 +386,7 @@ def worm_scale(e, S, i, role):
 
 # ---------------------------------------------------------------------------------------------------- lobes
 class Lobe:
-    __slots__ = ("cx", "cz", "rx", "ry", "rz", "psi", "c", "s", "lt", "ax", "env")
+    __slots__ = ("cx", "cz", "rx", "ry", "rz", "psi", "c", "s", "lt", "ax", "sx", "sz", "env")
 
 
 def _angle_lerp(a, b, k):
@@ -426,6 +426,9 @@ def compute_lobes(P, S, rp):
         cp = P.tread * K.CatRate + S.lCatPh[j]
         cx = cx + sg * span * sj * (K.CatBias * cos_t(beta) + K.CatAmp * sin_t(cp))
         cz = cz * (_(1.0) - _(0.4) * sg)
+        # the slow centre: without the drift and the caterpillar swing (they move a lobe at 0.5 m/s while the poured worms must hold still)
+        sxs = base * cos_t(beta) + sg * span * sj * K.CatBias * cos_t(beta)
+        szs = base * sin_t(beta) * (_(1.0) - _(0.4) * sg)
         stretch = _(1.0) + sg * K.CatStretch * (_(0.5) + _(0.5) * sin_t(cp + _(0.25))) * (_(0.6) + _(0.4) * cos_t(beta))
         pulse = _(1.0) + K.LobePulse * sin_t(t / per[S.lRPer[j]] + S.lRPh[j])
         rx = rl * S.lAspS[j] * pulse * stretch
@@ -440,6 +443,8 @@ def compute_lobes(P, S, rp):
             lx = ((_(j) + _(0.5)) / _(K.LobeMax) - _(0.5)) * (P.ribbonL if P.ribbonL > _(0.0) else _(2.0) * rp)
             cx = lerp(cx, lx, k)
             cz = cz * (_(1.0) - k)
+            sxs = lerp(sxs, lx, k)
+            szs = szs * (_(1.0) - k)
             if P.ribbonW > _(0.0):
                 half = _(0.5) * P.ribbonW
                 rz = lerp(rz, rz if rz < half else half, k)
@@ -454,6 +459,8 @@ def compute_lobes(P, S, rp):
             tx, tz = P.targetDist * cos_t(P.targetTurns), P.targetDist * sin_t(P.targetTurns)
             cx = lerp(cx, tx, es)
             cz = lerp(cz, tz, es)
+            sxs = lerp(sxs, tx, es)
+            szs = lerp(szs, tz, es)
             rx = lerp(rx, K.BaseRadius, es)
             rz = lerp(rz, K.BaseRadius, es)
             ry = lerp(ry, K.BaseHeight, es)
@@ -461,6 +468,7 @@ def compute_lobes(P, S, rp):
         L.cx, L.cz, L.rx, L.ry, L.rz, L.psi = cx, cz, rx, ry, rz, psi
         L.c, L.s = cos_t(psi), sin_t(psi)
         L.ax = ltx                                                      # unpulsed forward radius: anchor of the poured worms
+        L.sx, L.sz = sxs, szs
         L.lt = _(math.pi) * np.sqrt(_(0.5) * (ltx * ltx + lty * lty)) * (_(1.0) + K.TreadStretch * sg) / K.TreadSurfaceFrac * K.TreadLtScale
         e = Env()
         e.aF, e.aB, e.aS, e.h, e.breath, e.rp, e.wscale = rx, rx, rz, ry, _(1.0), rl, _(1.0)
@@ -599,6 +607,8 @@ def eval_flux(P, S, G, L, j, i):
     u = n
     cp, sp = cos_t(pitch_t), sin_t(pitch_t)
     f, u = vadd(vmul(f, cp), vmul(u, sp)), vsub(vmul(u, cp), vmul(f, sp))
+    # anchoring to the slow centre of the lobe, in from mu = 0.5 to 0.84 (the start of the pour): gentle on the surface, complete when the worm lies still
+    wpour = sg * smooth01((mu - _(0.5)) / _(0.34)) if mu > _(0.5) else _(0.0)
     if exit_blend and sg > _(0.0):
         xe = ex * L.ax
         px = xe + K.PourAhead - (mu - K.SurfaceEnd) * L.lt           # lobe-local x: motionless in the world when the lobe moves at v
@@ -619,6 +629,9 @@ def eval_flux(P, S, G, L, j, i):
     lod0_phase = (K.EmergeEnd <= mu < K.SurfaceEnd) or (exit_blend and sg > _(0.5) and mu >= K.SurfaceEnd + _(0.04))
     nh = _to_heap(L, n)
     pos, f, u = _to_heap_pt(L, pos), _to_heap(L, f), _to_heap(L, u)
+    if wpour > _(0.0):
+        # anchored to the slow centre of the lobe, not to its drifting and swinging one: the poured worm holds still in the world
+        pos = (pos[0] + wpour * (L.sx - L.cx), pos[1], pos[2] + wpour * (L.sz - L.cz))
     if anim == ANIM_IDLE:
         frame = int(np.floor(t * _(6.0) + S.animPhase[i] * _(IDLE_FRAMES))) % IDLE_FRAMES
     else:
@@ -848,6 +861,13 @@ def evaluate(P, S):
                     o.lod0 = True
                     o.anim = ANIM_CRAWL
                     o.frame = int(np.floor(P.odoFlux + _(i) * K.CrawlPhaseStep)) % CRAWL_FRAMES
+        if P.streamK > _(0.0) and P.ribbonW > _(0.0):
+            # In the stream no worm, whatever its role (border and arm included), lies beyond the half width of the ribbon.
+            zlim = (_(0.5) * P.ribbonW - _(0.08) if _(0.5) * P.ribbonW > _(0.28) else _(0.2)) + (_(1.0) - P.streamK) * (P.r + _(2.0))   # 8 cm in: the heading follows the corridor to a few degrees
+            if o.pos[2] > zlim:
+                o.pos = (o.pos[0], o.pos[1], zlim)
+            elif o.pos[2] < -zlim:
+                o.pos = (o.pos[0], o.pos[1], -zlim)
         out.append(o)
     return out
 

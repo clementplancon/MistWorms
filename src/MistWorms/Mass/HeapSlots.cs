@@ -6,6 +6,8 @@ namespace MistWorms.Mass
     internal struct Lobe
     {
         public float Cx, Cz, Rx, Ry, Rz, Psi, C, S, Lt, Ax, Rl;
+        /// <summary>Centre of the lobe without the drift and the caterpillar swing: where the poured worms are anchored (they hold still in the world).</summary>
+        public float Sx, Sz;
     }
 
     /// <summary>

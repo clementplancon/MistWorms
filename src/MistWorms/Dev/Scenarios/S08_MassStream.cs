@@ -570,6 +570,13 @@ namespace MistWorms.Dev.Scenarios
             bool natural = false, forced = false, hitDone = false, hitRouted = false, hitOnce = false, outsideCapsule = false;
             string hitNote = "no stream chain seen";
             int domeAfter = 0;
+            // Pass E: while streaming, where the drawn worms lie across the corridor (world positions recorded by the layout worker).
+            WritheMassVisual look = mass.GetComponent<WritheMassVisual>();
+            if (look != null) look.ProbeEnabled = true;
+            Vector3 side = Vector3.Cross(Vector3.up, dir);
+            int lastProbeFrame = -1, fluxSeen = 0, fluxCentred = 0, probeFrames = 0;
+            float maxHeadingError = 0f, maxLateralWorld = 0f;
+            float maxLateral = 0f, maxLateralFlux = 0f, maxLateralBorder = 0f, sampledWidth = 0f;
             while (Time.time - t0 < seconds && mass != null)
             {
                 float elapsed = Time.time - t0;
@@ -590,6 +597,32 @@ namespace MistWorms.Dev.Scenarios
                     maxSpheres = Mathf.Max(maxSpheres, mass.HitSphereCount);
                     ribbon = mass.StreamWidth;
                     ribbonLength = mass.RibbonLength;
+                    MassJob probeJob = look != null ? look.Job : null;
+                    if (probeJob != null && probeJob.ReadyIdx >= 0 && elapsed - firstStream > 1.5f && look.StreamK >= 0.999f)
+                    {
+                        MassOutput po = probeJob.Out[probeJob.ReadyIdx];
+                        if (po.Valid && po.Probe != null && po.Frame != lastProbeFrame)
+                        {
+                            lastProbeFrame = po.Frame;
+                            probeFrames++;
+                            sampledWidth = mass.StreamWidth;
+                            for (int k = 0; k < po.ProbeCount; k++)
+                            {
+                                maxHeadingError = Mathf.Max(maxHeadingError, Mathf.Min(Vector3.Angle(po.Forward, dir), Vector3.Angle(po.Forward, -dir)));
+                                float latWorld = Mathf.Abs(Vector3.Dot(po.Probe[k].Pos - po.Root, side));       // against the corridor axis (informative: includes the heading error)
+                                maxLateralWorld = Mathf.Max(maxLateralWorld, latWorld);
+                                float lat = Mathf.Abs(Vector3.Dot(po.Probe[k].Pos - po.Root, po.Left));          // across the ribbon of the snapshot: the axis the layout clamps in
+                                maxLateral = Mathf.Max(maxLateral, lat);
+                                if (po.Probe[k].Role == MassLayout.RoleFlux)
+                                {
+                                    fluxSeen++;
+                                    if (lat < 0.25f * sampledWidth) fluxCentred++;
+                                    maxLateralFlux = Mathf.Max(maxLateralFlux, lat);
+                                }
+                                else if (po.Probe[k].Role == MassLayout.RoleBorder) maxLateralBorder = Mathf.Max(maxLateralBorder, lat);
+                            }
+                        }
+                    }
                     if (!hitDone && elapsed - firstStream > 1f && mass.HitSphereCount >= 2)
                     {
                         hitDone = true;
@@ -611,6 +644,15 @@ namespace MistWorms.Dev.Scenarios
             ctx.Log($"hunt path rate: {ai.PathTicks} ticks with a path, {ai.NoPathTicks} without (straight push), of {ai.MoveTicks} walking ticks; AI cost avg {ai.CostAvgMs:0.000} ms, max {ai.CostMaxMs:0.000} ms");
             ctx.Log($"colony path requests: {colony.PathRequests}, complete {colony.PathComplete}, partial {colony.PathPartial}, failed {colony.PathFailed}");
 
+            if (look != null) look.ProbeEnabled = false;
+            if (probeFrames > 0 && sampledWidth > 0f)
+            {
+                float centred = fluxSeen > 0 ? fluxCentred / (float)fluxSeen : 0f;
+                ctx.Log($"stream layout over {probeFrames} frames, ribbon {sampledWidth:0.00} m: flux within 0.25 w of the axis {centred * 100f:0} % of {fluxSeen}; largest lateral offset {maxLateral:0.00} m (flux {maxLateralFlux:0.00}, border {maxLateralBorder:0.00}), limit w/2 + 0.1 = {sampledWidth * 0.5f + 0.1f:0.00} m; largest heading error of the heap against the corridor {maxHeadingError:0.0} degrees, which puts the largest offset against the corridor axis at {maxLateralWorld:0.00} m");
+                ctx.Assert("stream_flux_centred", centred >= 0.9f, ">= 90 % of the flux worms within 0.25 x width of the axis", $"{centred * 100f:0} %");
+                ctx.Assert("stream_nothing_outside_the_ribbon", maxLateral <= sampledWidth * 0.5f + 0.1f, $"no drawn worm beyond w/2 + 0.1 = {sampledWidth * 0.5f + 0.1f:0.00} m", $"{maxLateral:0.00} m");
+            }
+            else ctx.Assert("stream_layout_sampled", false, "frames of the ribbon sampled", "none");
             ctx.Assert("target_sensed_by_the_ai", natural && !forced, "the mass acquires the player by itself (view or hearing)", forced ? "forced after 3 s" : natural.ToString());
             ctx.Assert("progress", maxProgress >= required, $">= {required:0.0} m in {seconds:0} s", $"{maxProgress:0.0} m{(timeToRequired >= 0f ? " in " + timeToRequired.ToString("0.0") + " s" : string.Empty)}");
             ctx.Assert("stream_observed", firstStream >= 0f && maxSpheres >= 2f, "Stream bit set with a chain of at least 2 hit spheres", firstStream >= 0f ? $"{maxSpheres} spheres, ribbon {ribbon:0.00} x {ribbonLength:0.0} m" : "never");
@@ -771,8 +813,24 @@ namespace MistWorms.Dev.Scenarios
                 float rise = stair.High.y - stair.Low.y;
                 float needed = Mathf.Min(StairMinRise, rise - 0.15f);
                 string how = null;
+                WritheMassVisual climbVisual = mass.GetComponent<WritheMassVisual>();
+                float prevRootY = float.NaN, worstRootStep = 0f, worstRootGap = 0f, worstRootGapY = 0f;
+                int rootSamples = 0, gapLogs = 0;
                 while (Time.time - t0 < seconds && mass != null)
                 {
+                    if (climbVisual != null && climbVisual.Active && Time.deltaTime < 1f / 30f)
+                    {
+                        if (!float.IsNaN(prevRootY) && !climbVisual.RootState.Snapped) { worstRootStep = Mathf.Max(worstRootStep, Mathf.Abs(climbVisual.Root.y - prevRootY)); rootSamples++; }
+                        Vector3 bodyPos = mass.transform.position;
+                        float gapXZ = Utils.DistanceXZ(climbVisual.Root, bodyPos);
+                        worstRootGap = Mathf.Max(worstRootGap, gapXZ);
+                        worstRootGapY = Mathf.Max(worstRootGapY, Mathf.Abs(climbVisual.Root.y - bodyPos.y));
+                        if ((gapXZ > 0.4f + 0.02f || Mathf.Abs(climbVisual.Root.y - bodyPos.y) > 0.8f) && gapLogs++ < 8)
+                            ctx.Log($"  root diagnosis t={Time.time - t0:0.00}: root {climbVisual.Root}, body {bodyPos}, horizontal gap {gapXZ:0.00} m, vertical gap {climbVisual.Root.y - bodyPos.y:0.00} m, " +
+                                    $"offset {climbVisual.RootState.Offset}, ground plane height at root {(climbVisual.Ground.Have ? climbVisual.Ground.HeightAt(climbVisual.Root.x, climbVisual.Root.z).ToString("0.00") : "none")} " +
+                                    $"(samples {climbVisual.Ground.Samples}, hits {climbVisual.Ground.Hits}), step assists {ai.StepAssists} ({ai.LastAssistNote ?? "-"})");
+                    }
+                    if (climbVisual != null) prevRootY = climbVisual.Root.y;
                     Vector3 p = mass.transform.position;
                     if (p.y > bestY) bestY = p.y;
                     // Success only counts after a second of real walking: AI ticks toward the target (with or without a path).
@@ -790,6 +848,12 @@ namespace MistWorms.Dev.Scenarios
                     yield return null;
                 }
                 bool ok = reached >= 0f;
+                ctx.Log($"stairs with {agent}: visual root: {rootSamples} frames sampled, largest vertical step {worstRootStep:0.000} m per frame, largest horizontal root-to-body gap {worstRootGap:0.00} m (vertical {worstRootGapY:0.00} m; a hop of the body is absorbed up to {MassRoot.MaxOffset:0.0} m at once, the rest in about 0.5 s)");
+                if (rootSamples > 10)
+                {
+                    ctx.Assert($"stairs_root_smooth_{agent}", worstRootStep <= 0.08f, "<= 0.08 m per frame (StepAssist hides in the smoothed root)", worstRootStep.ToString("0.000"));
+                    ctx.Assert($"stairs_root_near_body_{agent}", worstRootGap < 0.4f + 0.02f, "horizontal root to body gap < 0.4 m", worstRootGap.ToString("0.00"));
+                }
                 ctx.Log($"stairs with {agent}: {(ok ? how + " in " + reached.ToString("0.0") + " s" : "not reached")}, highest {bestY - stair.Low.y:0.00} m of {rise:0.00} m (needs {needed:0.00}), " +
                         (mass != null ? $"path ticks {ai.PathTicks}, no path {ai.NoPathTicks}, step assists {ai.StepAssists}, AI avg {ai.CostAvgMs:0.000} ms" : "mass lost"));
                 if (mass != null) ctx.Assert($"fall_rescues_stairs_{agent}", mass.FallRescues == 0, 0, mass.FallRescues);

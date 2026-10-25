@@ -61,6 +61,14 @@ namespace MistWorms.Mass
         public Matrix4x4 M;
     }
 
+    /// <summary>A drawn worm as the dev scenarios measure it (world position, role, animation); only filled while <see cref="MassJob.ProbeEnabled"/>.</summary>
+    internal struct MassProbe
+    {
+        public short Slot;
+        public byte Role, Anim;
+        public Vector3 Pos;
+    }
+
     /// <summary>Everything the worker produced for one snapshot: buckets of world matrices plus the figures the main thread displays.</summary>
     internal sealed class MassOutput
     {
@@ -76,6 +84,11 @@ namespace MistWorms.Mass
         public readonly MassCandidate[] Cand = new MassCandidate[CandidateMax];
         public int CandCount;
         public int Frame;            // frame counter of the snapshot
+        public float Time;           // game time of the snapshot
+        public Vector3 Root, Forward, Left;   // the frame of the snapshot (the positions of the output belong to it)
+        public float Sigma, Speed;      // speed ratio of the snapshot
+        public MassProbe[] Probe;    // drawn worms (dev), allocated when probing starts
+        public int ProbeCount;
         public float P;              // priority threshold used
         public int RosterV;          // places evaluated (V)
         public bool Valid;
@@ -93,7 +106,7 @@ namespace MistWorms.Mass
                 b.Count = 0; b.Used = false;
             }
             UsedCount = 0;
-            Added = D0 = D1 = D2 = NEval = NVis = Refreshed = SlotCount = CandCount = 0;
+            Added = D0 = D1 = D2 = NEval = NVis = Refreshed = SlotCount = CandCount = ProbeCount = 0;
             ClosestSqr = float.MaxValue;
             MaxY = float.MinValue;
             Valid = false;
@@ -127,6 +140,9 @@ namespace MistWorms.Mass
         public int DivBody = 1, DivFlux = 1;
         public float TreadDist;       // distance walked since the last snapshot (treadmill phase of the lobes)
         public float RootY;
+        public float GameTime;
+        /// <summary>Dev: record every drawn worm (position, role, animation) in the output, for the movement measures of the scenarios.</summary>
+        public bool ProbeEnabled;
 
         // ---- protocol
         public bool Busy;                         // main thread only
@@ -149,6 +165,12 @@ namespace MistWorms.Mass
             {
                 o.Reset();
                 o.Frame = FrameCounter;
+                o.Time = GameTime;
+                o.Root = new Vector3(Frame.m03, Frame.m13, Frame.m23);
+                o.Forward = new Vector3(Frame.m00, Frame.m10, Frame.m20);
+                o.Left = new Vector3(Frame.m02, Frame.m12, Frame.m22);
+                o.Sigma = P.Sigma;
+                if (ProbeEnabled && o.Probe == null) o.Probe = new MassProbe[Slots.Count];
                 o.P = PThreshold;
                 if (TreadDist > 0f) MassLayout.AdvanceLobeTread(Slots, TreadDist, 1f);
                 long t1 = Stopwatch.GetTimestamp();
@@ -247,6 +269,11 @@ namespace MistWorms.Mass
                 if (pz + rad > b.Max.z) b.Max.z = pz + rad;
 
                 if (py > MaxY) MaxY = py;
+                if (Job.ProbeEnabled && O.Probe != null && O.ProbeCount < O.Probe.Length)
+                {
+                    ref MassProbe pr = ref O.Probe[O.ProbeCount++];
+                    pr.Slot = (short)s.I; pr.Role = s.Role; pr.Anim = (byte)anim; pr.Pos = new Vector3(px, py, pz);
+                }
                 Added++;
                 if (s.Role == MassLayout.RoleBody) D0++; else if (s.Role == MassLayout.RoleFlux) D1++; else D2++;
 

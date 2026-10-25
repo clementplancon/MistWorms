@@ -121,7 +121,7 @@ namespace MistWorms.Dev
         }
 
         /// <summary>Distance to the nearest wall over 16 horizontal rays at knee height (<see cref="KneeLow"/> + 0.1), at most <paramref name="max"/>.</summary>
-        private static float FreeRadius(Vector3 f, float max)
+        internal static float FreeRadius(Vector3 f, float max)
         {
             Vector3 o = f + Vector3.up * (KneeLow + 0.1f);
             float best = max;

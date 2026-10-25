@@ -269,6 +269,8 @@ namespace MistWorms.Mass
             job.FrameCounter = Time.frameCount;
             job.TreadDist = v.TakeTreadDistance();
             job.RootY = v.Root.y;
+            job.GameTime = Time.time;
+            job.ProbeEnabled = v.ProbeEnabled;
 
             // Select: the threshold that draws about `cap` places, from the visible fraction of the previous frames (all places on the first one).
             int slots = MassLayout.VisibleCount(v.P.N, job.Slots.Count);

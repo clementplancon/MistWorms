@@ -19,8 +19,8 @@ namespace MistWorms.Dev.Scenarios
     internal abstract class VisualScenario : IDevScenario
     {
         private const float ClearRadius = 2.5f;
-        protected const float SequenceGap = 3.5f;      // sequences and clips of the masses: the camera 3 to 4 m from the edge of the swarm
-        protected const float SequenceHeight = 1.6f;
+        protected const float SequenceGap = 3f;        // sequences and clips of the masses: the camera 3 m from the edge of the swarm, 1.4 m up
+        protected const float SequenceHeight = 1.4f;
         private const float MaxSlopeDeg = 12f;
         private static readonly float[] Yaws = { 35f, -40f };
 
@@ -65,14 +65,35 @@ namespace MistWorms.Dev.Scenarios
         protected int ActualN { get; private set; }
 
         /// <summary>What a camera must not be inside of or look through: the solid layers and the terrain (open ground has rocks and slopes as well as the mine walls).</summary>
-        protected static int CameraMask() => SolidMask() | LayerMask.GetMask("terrain");
+        internal static int CameraMask() => SolidMask() | LayerMask.GetMask("terrain");
 
         /// <summary>
         /// A camera position at <paramref name="horizontal"/> metres from <paramref name="root"/> along <paramref name="dir"/> (or along one of the three
         /// other quarter turns) at <paramref name="height"/> (or 1 m, then 2.5 m higher), with nothing solid on it and a clear line to <paramref name="look"/>.
         /// Returns false (and the first candidate) when none is clear.
         /// </summary>
-        protected static bool ClearCamera(Vector3 root, Vector3 dir, float horizontal, float height, Vector3 look, out Vector3 pos)
+        /// <summary>
+        /// Camera of the clips of the masses: three quarters front (35 degrees to the left of the heading, a mirrored try when blocked, then any side),
+        /// <paramref name="gap"/> metres from the edge of the swarm, <paramref name="height"/> up, looking at the floor under its centre (a dive of about
+        /// 15 to 20 degrees). The clear view check of <see cref="ClearCamera"/> is kept. Returns false when no side is clear (the first candidate is returned).
+        /// </summary>
+        internal static bool ClipPose(WritheMassVisual v, float gap, float height, out Vector3 pos, out Vector3 look)
+        {
+            look = v.Root + Vector3.up * 0.1f;
+            float horizontal = Mathf.Max(0.3f, v.ShownRadius) + gap;
+            Vector3 left = (v.Forward * 0.82f + v.Left * 0.57f).normalized;
+            Vector3 right = (v.Forward * 0.82f - v.Left * 0.57f).normalized;
+            Vector3 aim = v.Root + Vector3.up * (0.35f * Mathf.Max(0.3f, v.ShownRadius));
+            int mask = CameraMask();
+            foreach (Vector3 d in new[] { left, right })
+            {
+                Vector3 c = v.Root + d * horizontal + Vector3.up * height;
+                if (!Physics.CheckSphere(c, 0.4f, mask, QueryTriggerInteraction.Ignore) && !Physics.Linecast(c, aim, mask, QueryTriggerInteraction.Ignore)) { pos = c; return true; }
+            }
+            return ClearCamera(v.Root, left, horizontal, height, aim, out pos);
+        }
+
+        internal static bool ClearCamera(Vector3 root, Vector3 dir, float horizontal, float height, Vector3 look, out Vector3 pos)
         {
             int mask = CameraMask();
             pos = root + dir.normalized * horizontal + Vector3.up * height;
@@ -90,7 +111,7 @@ namespace MistWorms.Dev.Scenarios
             return false;
         }
 
-        protected static int SolidMask() =>
+        internal static int SolidMask() =>
             LayerMask.GetMask("Default", "static_solid", "Default_small", "piece", "piece_nonsolid", "vehicle", "item");
 
         public IEnumerator Run(ScenarioContext ctx)
@@ -484,10 +505,14 @@ namespace MistWorms.Dev.Scenarios
             else if (CheckCaps) ctx.Log($"caps check skipped: n={mass.N} is too small to reach the caps (the mine view shrank it)");
 
             // ---- clip, framed on the swarm
-            AimNow(ctx, visual, Quaternion.AngleAxis(35f, Vector3.up) * side, r + SequenceGap, SequenceHeight);
+            bool clipClear = ClipPose(visual, SequenceGap, SequenceHeight, out Vector3 clipPos, out Vector3 clipLook);
+            if (!clipClear) ctx.Log("clip camera: no clear side, using the first");
+            DevCamera.Free(clipPos, clipLook);
+            if (ctx.ParamBool("light", true)) DevCamera.SetFillLight(true);
             yield return ctx.WaitFrames(10);
             double pf = visual.PerfFrames, pm = visual.PerfMain, pj = visual.PerfJobs, pe = visual.PerfEval, pd = visual.PerfDraw, pk = visual.PerfWorker, pr = visual.PerfRefreshed, pw = visual.PerfDrawn;
             yield return ctx.Clip("loop", ClipSeconds);
+            DevCamera.SetFillLight(false);
             double frames = visual.PerfFrames - pf;
             double jobs = visual.PerfJobs - pj;
             if (frames > 0 && jobs > 0)

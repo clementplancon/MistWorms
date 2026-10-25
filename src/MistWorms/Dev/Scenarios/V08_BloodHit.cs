@@ -176,12 +176,18 @@ namespace MistWorms.Dev.Scenarios
         /// </summary>
         private static IEnumerator Burst(ScenarioContext ctx, string what, WormColony colony, int slot, HitData hit, float maxSize, int maxCount, float maxReach)
         {
-            float t0 = Time.realtimeSinceStartup;
+            // The effect is queued by the hit and played by the next Update: wait for it, then measure from where and when it was really spawned
+            // (the recorded impact point and instant), not from the call of the hit.
+            int before = WormEffects.FxSpawned;
+            float asked = Time.realtimeSinceStartup;
             ColonyDev.HitWorm(colony, slot, hit);
-            yield return null;      // the effect is queued by the hit and played by the next Update
-            yield return null;
+            while (WormEffects.FxSpawned == before && Time.realtimeSinceStartup - asked < 2f) yield return null;
+            yield return null;      // a lethal hit spawns the death effect in the same Update as the hit effect: take the last one
             GameObject fx = WormEffects.LastFx;
-            Vector3 origin = fx != null ? fx.transform.position : Vector3.zero;
+            Vector3 origin = WormEffects.FxSpawned > before ? WormEffects.LastFxPosition : Vector3.zero;
+            float t0 = WormEffects.FxSpawned > before ? WormEffects.LastFxRealtime : asked;
+            ctx.Log($"{what}: effect spawned {(t0 - asked) * 1000f:0} ms after the hit at {origin}, impact point {hit.m_point}, {(origin - hit.m_point).magnitude:0.000} m apart");
+            ctx.Assert($"{what}_effect_at_impact_point", WormEffects.FxSpawned > before && (origin - hit.m_point).magnitude < 0.15f, "spawned within 0.15 m of the impact point", $"{(origin - hit.m_point).magnitude:0.000} m");
             float reach = 0f;
 
             for (int i = 0; i < ShotTimes.Length; i++)

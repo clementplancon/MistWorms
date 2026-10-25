@@ -171,7 +171,9 @@ namespace MistWorms.Dev.Scenarios
                     Aim(ctx, player, visual, side: true);
                     yield return ctx.WaitFrames(5);
                     ctx.Console("mw_mass_engulf 1");
+                    if (ctx.ParamBool("light", true)) DevCamera.SetFillLight(true);
                     yield return ctx.Clip($"n{n}", ClipSeconds);
+                    DevCamera.SetFillLight(false);
 
                     MassDev.Destroy(mass);
                     yield return ctx.Wait(0.5f);
@@ -221,9 +223,9 @@ namespace MistWorms.Dev.Scenarios
             if (side)
             {
                 Vector3 mid = (p + m) * 0.5f;
-                float d = 4f + visual.ShownRadius;
-                look = mid + Vector3.up * 0.9f;
-                pos = mid + perp * d + Vector3.up * 1.5f;
+                float d = 3f + 0.5f * visual.ShownRadius;
+                look = mid + Vector3.up * 0.7f;
+                pos = mid + perp * d + Vector3.up * 1.4f;
             }
             else
             {

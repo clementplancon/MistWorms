@@ -265,6 +265,9 @@ namespace MistWorms.Colony
             fx.SetActive(true);
 #if MW_DEV
             LastFx = fx;
+            LastFxPosition = position;
+            LastFxRealtime = Time.realtimeSinceStartup;
+            FxSpawned++;
 #endif
         }
 
@@ -689,6 +692,10 @@ namespace MistWorms.Colony
 
         /// <summary>The last visual effect instance played (V08 measures its particles).</summary>
         public static GameObject LastFx { get; private set; }
+        /// <summary>Where and when (real time) the last effect was spawned, and how many have been: the effect is deferred to the next Update, so the dev measures start from these.</summary>
+        public static Vector3 LastFxPosition { get; private set; }
+        public static float LastFxRealtime { get; private set; }
+        public static int FxSpawned { get; private set; }
 
         /// <summary>Builds the hit and death templates now (dev scenarios); true when both exist.</summary>
         public static bool EnsureTemplates(out GameObject hit, out GameObject death, out string hitSource, out string deathSource)

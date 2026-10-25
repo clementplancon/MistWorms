@@ -24,9 +24,36 @@ namespace MistWorms.Tests
             {
                 body.x += Speed * Dt;
                 root.Step(body, Dt, Speed, 0f, false);
-                worst = Math.Max(worst, Math.Abs(root.Root.x - body.x));
+                if (f >= 40) worst = Math.Max(worst, Math.Abs(root.Root.x - body.x));      // after the speed estimate has settled (0.3 s)
             }
-            Assert.True(worst < 1e-4f, "lag " + worst);
+            Assert.True(worst < 0.01f, "lag " + worst);
+        }
+
+        [Fact]
+        public void RootIsSmoothWhileTheBodyMovesInPhysicsSteps()
+        {
+            // The body moves every 0.02 s (50 Hz), the frames come every 1/60 s: raw, the displacement per frame alternates 0 and 2.4 x 0.04.
+            var root = new MassRoot();
+            Vector3 body = Vector3.zero;
+            root.Step(body, Dt, Speed, 0f, false);
+            float t = 0f, nextTick = 0.02f, prevX = 0f, lo = float.MaxValue, hi = float.MinValue, rawLo = float.MaxValue, rawHi = float.MinValue, prevBodyX = 0f;
+            float lag = 0f;
+            for (int f = 0; f < 240; f++)
+            {
+                t += Dt;
+                while (nextTick <= t) { nextTick += 0.02f; body.x = Speed * (nextTick - 0.02f); }
+                root.Step(body, Dt, Speed, 0f, false);
+                if (f > 60)
+                {
+                    float dx = root.Root.x - prevX, raw = body.x - prevBodyX;
+                    lo = Math.Min(lo, dx); hi = Math.Max(hi, dx);
+                    rawLo = Math.Min(rawLo, raw); rawHi = Math.Max(rawHi, raw);
+                    lag = Math.Max(lag, Math.Abs(root.Root.x - Speed * (t - 0.01f)));     // the held body is half a tick behind the ideal path
+                }
+                prevX = root.Root.x; prevBodyX = body.x;
+            }
+            Assert.True(hi - lo < 0.015f, $"root step spread {hi - lo:0.0000} m (raw body {rawHi - rawLo:0.0000} m)");
+            Assert.True(lag < 0.03f, "lag " + lag);
         }
 
         [Fact]
@@ -41,8 +68,8 @@ namespace MistWorms.Tests
             Vector3 before = root.Root;
             root.Step(body, Dt, Speed, 0f, false);
             float firstFrame = Math.Abs(root.Root.x - before.x);
-            Assert.True(firstFrame <= 0.05f + 1.5f * Speed * Dt + 0.6f * (1f - (float)Math.Pow(2.0, -Dt / MassRoot.OffsetHalfLife)) + 0.01f, "the root moved " + firstFrame + " in the frame of the hop");
-            Assert.True(Math.Abs(root.Root.x - body.x) > 0.4f);
+            Assert.True(firstFrame <= 0.05f + 1.5f * Speed * Dt + 0.6f * (1f - (float)Math.Pow(2.0, -Dt / MassRoot.OffsetHalfLife)) + (0.6f - MassRoot.MaxOffset) + 0.01f, "the root moved " + firstFrame + " in the frame of the hop");
+            Assert.True(Math.Abs(root.Root.x - body.x) > 0.39f && Math.Abs(root.Root.x - body.x) <= MassRoot.MaxOffset + 0.01f, "gap " + Math.Abs(root.Root.x - body.x));
 
             float worstStep = 0f;
             Vector3 prev = root.Root;

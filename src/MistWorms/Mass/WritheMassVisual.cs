@@ -103,6 +103,8 @@ namespace MistWorms.Mass
         internal int RefreshedSlots;     // places really recomputed this frame (the rest came from the cache)
         // Raw per-frame sums for a measurement window (a scenario takes two readings and divides the difference).
         internal double PerfFrames, PerfMain, PerfJobs, PerfEval, PerfDraw, PerfWorker, PerfRefreshed, PerfDrawn;
+        /// <summary>Dev: the worker records every drawn worm (see <see cref="MassProbe"/>).</summary>
+        internal bool ProbeEnabled;
         internal float WorkerMs;        // EMA of the worker time of one job of this mass
         internal float NextCostLog;
         internal float ClosestToCam = float.MaxValue;

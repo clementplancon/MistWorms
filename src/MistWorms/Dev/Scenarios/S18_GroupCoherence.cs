@@ -44,6 +44,9 @@ namespace MistWorms.Dev.Scenarios
         private const float BlockDistance = 0.5f;
         private const float ArrivedDistance = 2.5f;       // a worm this close to the player has arrived: waiting its turn is not being blocked
         private const float GroundTolerance = 0.15f;
+        private static string Describe(WormState state, byte sub) =>
+            state == WormState.Striking ? "Striking/" + (StrikePhase)sub : state.ToString();
+
         private const float CreatureClearRadius = 40f;    // vanilla creatures of the mine are removed this far around the player before b)
 
         private const float WidthProbe = 4f;
@@ -182,10 +185,16 @@ namespace MistWorms.Dev.Scenarios
             var occupied = new bool[sectors];
 
             long pairsTotal = 0, pairsGood = 0;
+            // Decision of the coordinator: two neighbours that are both in the strike proper (the 0.25 s lunge, not the windup nor the recovery) are
+            // converging on the same target by design; they are left out of the ratio and counted here.
+            long strikePairsExcluded = 0, strikePairsExcludedClose = 0;
             // Pairs that are too close in the steady part, by the states of the two worms (smaller state first) and by approach ring of each worm
             // (ring 0 = the inner ring, -1 = no rank): who overlaps whom.
             var closeByState = new int[8, 8];
             var closeByRing = new int[8];
+            // The pairs that stay too close once the strike pairs are left out, in detail: states and sub-phases of both worms, and how close.
+            var closeDetail = new System.Collections.Generic.Dictionary<string, int>();
+            var closeDetailDist = new System.Collections.Generic.Dictionary<string, float>();
             float worstSample = 1f;
             int blocked = 0, unreachableStuck = 0, groundViolations = 0, wallViolations = 0, boxViolations = 0;
             float lastCoverage = 0f, bestCoverage = 0f;
@@ -274,6 +283,16 @@ namespace MistWorms.Dev.Scenarios
                             float dx = ix - jx, dz = iz - jz;
                             float d = Mathf.Sqrt(dx * dx + dz * dz);
                             if (d >= NeighborDistance) continue;
+                            if (store.state[i] == (byte)WormState.Striking && store.state[j] == (byte)WormState.Striking
+                                && store.subPhase[i] == (byte)StrikePhase.Strike && store.subPhase[j] == (byte)StrikePhase.Strike)
+                            {
+                                if (elapsed >= SteadyAfter)
+                                {
+                                    strikePairsExcluded++;
+                                    if (d <= MinMiddleGap) strikePairsExcludedClose++;
+                                }
+                                continue;
+                            }
                             pairs++;
                             if (d > MinMiddleGap) good++;
                             else if (elapsed >= SteadyAfter)
@@ -281,6 +300,11 @@ namespace MistWorms.Dev.Scenarios
                                 int si = store.state[i], sj = store.state[j];
                                 closeByState[Mathf.Min(si, sj) & 7, Mathf.Max(si, sj) & 7]++;
                                 closeByRing[RingOf(store, i, colony)]++;
+                                string key = Describe((WormState)store.state[i], store.subPhase[i]) + " + " + Describe((WormState)store.state[j], store.subPhase[j]);
+                                if (string.CompareOrdinal(Describe((WormState)store.state[j], store.subPhase[j]), Describe((WormState)store.state[i], store.subPhase[i])) < 0)
+                                    key = Describe((WormState)store.state[j], store.subPhase[j]) + " + " + Describe((WormState)store.state[i], store.subPhase[i]);
+                                closeDetail.TryGetValue(key, out int cnt); closeDetail[key] = cnt + 1;
+                                closeDetailDist.TryGetValue(key, out float dsum); closeDetailDist[key] = dsum + d;
                                 closeByRing[RingOf(store, j, colony)]++;
                             }
                         }
@@ -374,6 +398,14 @@ namespace MistWorms.Dev.Scenarios
             for (int r = 0; r < 8; r++)
                 if (closeByRing[r] > 0) rings.Append($" {(r == 7 ? "no rank" : "ring " + r)}={closeByRing[r]}");
             ctx.Log($"{tag}: pairs too close ({pairsTotal - pairsGood}) by states:{(close.Length > 0 ? close.ToString() : " none")}; worm sides by approach ring:{(rings.Length > 0 ? rings.ToString() : " none")}");
+            if (closeDetail.Count > 0)
+            {
+                var detail = new System.Text.StringBuilder();
+                foreach (var kv in closeDetail) detail.Append($" [{kv.Key}] = {kv.Value} (mean middle gap {closeDetailDist[kv.Key] / kv.Value:0.00} m)");
+                ctx.Log($"{tag}: pairs still too close after the strike pairs were left out, by state and sub-phase:{detail}");
+            }
+            else ctx.Log($"{tag}: no pair is too close once the strike pairs are left out");
+            ctx.Log($"{tag}: pairs of two worms both in the strike proper left out of the ratio: {strikePairsExcluded} ({strikePairsExcludedClose} of them closer than {MinMiddleGap} m); windup and recovery pairs keep the full criterion");
             ctx.Log($"{tag}: pairs {pairsGood}/{pairsTotal} = {fraction * 100f:0.0} % (worst sample {worstSample * 100f:0.0} %), coverage final {lastCoverage:0} deg (best {bestCoverage:0}), " +
                     $"{lastNear} worms within {SectorRadius:0} m, strikes {colony.StrikesLanded} landed / {colony.StrikesMissed} missed, " +
                     $"sim avg {colony.AvgSimMs:0.000} ms / max {colony.MaxSimMs:0.000} ms");

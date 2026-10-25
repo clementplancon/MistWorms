@@ -13,6 +13,15 @@ namespace MistWorms.Mass
         public const float OffsetHalfLife = 0.12f;
         public const float Snap = 4f;
         public const float JumpSlack = 0.05f;
+        /// <summary>The root never trails the body by more than this horizontally: the part of a hop beyond it is absorbed at once, the rest is resorbed.</summary>
+        public const float MaxOffset = 0.4f;
+        /// <summary>
+        /// The body moves in steps of the physics tick (50 Hz) while the frames come at another rate: the position seen from the frames jitters by up
+        /// to a tick of walking (5 cm at full speed), which makes anything anchored to the world look like it trembles (the poured worms, 0.6 m/s).
+        /// The root therefore integrates the speed measured between two steps of the body and is pulled to the body with this half-life.
+        /// </summary>
+        public const float CorrectionHalfLife = 0.08f;
+        public const float VelocityHalfLife = 0.06f;
         public const float UpHalfLife = 0.12f;
         public const float DownHalfLife = 0.08f;
 
@@ -26,6 +35,7 @@ namespace MistWorms.Mass
 
         private Vector3 _prevBody;
         private bool _has;
+        private float _sx, _sz, _vx, _vz, _since;     // smoothed body position, its measured speed, time since the body last moved
 
         public void Reset() { _has = false; }
 
@@ -40,6 +50,7 @@ namespace MistWorms.Mass
                 Root = body;
                 Offset = Vector3.zero;
                 _prevBody = body;
+                _sx = body.x; _sz = body.z; _vx = _vz = 0f; _since = 0f;
                 Snapped = true;
                 return;
             }
@@ -50,6 +61,7 @@ namespace MistWorms.Mass
             {
                 Root = body;
                 Offset = Vector3.zero;
+                _sx = body.x; _sz = body.z; _vx = _vz = 0f; _since = 0f;
                 Snapped = true;
                 return;
             }
@@ -57,17 +69,41 @@ namespace MistWorms.Mass
             float dh = (float)Math.Sqrt(d.x * d.x + d.z * d.z);
             float slack = JumpSlack + 1.5f * moveSpeed * dt;
             float excess = dh - slack;
-            if (excess > 0f && dh > 1e-6f)
+            bool jump = excess > 0f && dh > 1e-6f;
+            if (!jump && dt > 0f)
+            {
+                // Speed of the body: the per-frame displacement averaged over a short window (a hop is not a speed).
+                float a = 1f - (float)Math.Pow(2.0, -dt / VelocityHalfLife);
+                _vx += (d.x / dt - _vx) * a;
+                _vz += (d.z / dt - _vz) * a;
+            }
+
+            if (jump)
             {
                 float k = excess / dh;
                 Offset.x -= d.x * k;
                 Offset.z -= d.z * k;
+                _sx += d.x; _sz += d.z;                 // the smoothed body follows a hop at once; the offset hides it
+            }
+            else
+            {
+                _sx += _vx * dt; _sz += _vz * dt;
+                float c = dt > 0f ? 1f - (float)Math.Pow(2.0, -dt / CorrectionHalfLife) : 0f;
+                _sx += (body.x - _sx) * c;
+                _sz += (body.z - _sz) * c;
             }
             float decay = dt > 0f ? (float)Math.Pow(2.0, -dt / OffsetHalfLife) : 1f;
             Offset.x *= decay;
             Offset.z *= decay;
-            Root.x = body.x + Offset.x;
-            Root.z = body.z + Offset.z;
+            float om = (float)Math.Sqrt(Offset.x * Offset.x + Offset.z * Offset.z);
+            if (om > MaxOffset)
+            {
+                float k = MaxOffset / om;
+                Offset.x *= k;
+                Offset.z *= k;
+            }
+            Root.x = _sx + Offset.x;
+            Root.z = _sz + Offset.z;
 
             float target = hasGround ? groundY : body.y;
             float hl = target > Root.y ? UpHalfLife : DownHalfLife;
