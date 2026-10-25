@@ -355,7 +355,7 @@ namespace MistWorms.Config
                 IncludeUnequippedInventory = Synced(S, nameof(IncludeUnequippedInventory), true,
                     "Bites also eat unequipped items with durability anywhere in the inventory, not only worn gear.");
                 ItemsPerTenWorms = Synced(S, nameof(ItemsPerTenWorms), 1,
-                    "Items bitten per tick for every 10 worms of the mass (k = clamp(ceil(n / 10) * value, 1, eligible items)).", I(1, 10));
+                    "Items bitten per tick for every 10 worms of the mass (k = clamp(ceil(value * n / 10), 1, eligible items)).", I(1, 10));
                 BlockReducesBites = Synced(S, nameof(BlockReducesBites), true,
                     "Bite ticks go through vanilla blocking (shield block power, stamina, perfect block).");
                 ArmorReducesBites = Synced(S, nameof(ArmorReducesBites), false,

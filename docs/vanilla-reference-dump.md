@@ -1,6 +1,6 @@
 # MistWorms vanilla dump
 
-Generated 2026-10-24 19:57:01 by `VanillaDump` (MistWorms 0.1.0). Valheim `1.0.20`, Unity `6000.0.75f1`. Raw output, to be curated into `docs/vanilla-reference.md`.
+Generated 2026-10-25 06:14:57 by `VanillaDump` (MistWorms 0.1.0). Valheim `1.0.20`, Unity `6000.0.75f1`. Raw output, to be curated into `docs/vanilla-reference.md`.
 
 ## 1. Reference creatures
 
@@ -1869,13 +1869,13 @@ fx_Abomination_arise, fx_Abomination_arise_end, fx_Abomination_attack1, fx_Abomi
 
 ## 4. Items
 
-ObjectDB: 1519 items, 481 recipes, 356 with durability.
+ObjectDB: 1525 items, 481 recipes, 358 with durability.
 
 ### Wisplight (Demister and tokens containing demister / wisp)
 
 | Prefab | m_name | Type | UseDurability | MaxDurability | DurabilityPerLevel | MaxQuality | Recipe |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Demister | $item_demister (Lumière de feu-follet) | Utility | False | 100 | 50 | 1 | piece_workbench ($piece_workbench) lvl 1: Silver x1 (+1/lvl), Wisp x1 (+1/lvl) |
+| Demister | $item_demister (Lumière de feu-follet) | Utility | True | 100 | 0 | 1 | piece_workbench ($piece_workbench) lvl 1: Silver x1 (+1/lvl), Wisp x1 (+1/lvl) |
 | Wisp | $item_wisp (Feu-follet) | Material | False | 100 | 50 | 1 | no recipe |
 
 ### Entrails and Bloodbag
@@ -2031,12 +2031,12 @@ Immediate test: `new Material(shader) { enableInstancing = true }`, read back, t
 | Custom/Piece | 7947 | 785 | True | Acorn, ArmorStand, ArmorStand_Female, ArmorStand_Male, Ashland_Steepstair |
 | Custom/StaticRock | 6980 | 418 | True | ArrowFrost, ArrowObsidian, ArrowPoison, Ashlands_rock1, Ashlands_rock2 |
 | Custom/Trilinearmap | 3709 | 34 | True | HeathRockPillar_frac, RockFingerBroken_frac, RockFinger_frac, RockThumb_frac, Rock_3_deepnorth_frac |
-| Standard | 3538 | 1181 | True | Amber, AmberPearl, AncientCoin, AncientGemstoneBlack, AncientGemstoneGreen |
-| Custom/Creature | 1580 | 761 | True | Abomination, Abomination_ragdoll, ArmorAshlandsMediumChest, ArmorAshlandsMediumlegs, ArmorBerserkerChest |
-| Legacy Shaders/Particles/Alpha Blended | 1324 | 1199 | True | Acorn, Amber, AmberPearl, AncientCoin, AncientGemstoneBlack |
-| Lux Lit Particles/ Bumped | 1294 | 803 | True | Abomination, ArrowPoison, Aspect_Bonemass, Aspect_Elder, Aspect_Yagluth |
-| Particles/Standard Unlit2 | 1104 | 573 | True | ArrowFrost, ArrowNeedle, Aspect_Eikthyr, Aspect_Fader, AtgeirBlackmetal |
-| Particles/Standard Surface2 | 634 | 434 | True | Abomination, Aspect_Bonemass, Aspect_Eikthyr, Aspect_Elder, Aspect_SeekerQueen |
+| Standard | 3544 | 1184 | True | Amber, AmberPearl, AncientCoin, AncientGemstoneBlack, AncientGemstoneGreen |
+| Custom/Creature | 1585 | 765 | True | Abomination, Abomination_ragdoll, ArmorAshlandsMediumChest, ArmorAshlandsMediumlegs, ArmorBerserkerChest |
+| Legacy Shaders/Particles/Alpha Blended | 1330 | 1205 | True | Acorn, Amber, AmberPearl, AncientCoin, AncientGemstoneBlack |
+| Lux Lit Particles/ Bumped | 1296 | 804 | True | Abomination, ArrowPoison, Aspect_Bonemass, Aspect_Elder, Aspect_Yagluth |
+| Particles/Standard Unlit2 | 1105 | 574 | True | ArrowFrost, ArrowNeedle, Aspect_Eikthyr, Aspect_Fader, AtgeirBlackmetal |
+| Particles/Standard Surface2 | 636 | 436 | True | Abomination, Aspect_Bonemass, Aspect_Eikthyr, Aspect_Elder, Aspect_SeekerQueen |
 | Custom/Vegetation | 623 | 188 | True | Acorn, AshlandsBranch1, AshlandsBranch2, AshlandsBranch3, AshlandsBush1 |
 | Custom/Gradient Mapped Particle (Unlit) | 444 | 235 | True | Aspect_Fader, AtgeirGold_FrostFire, AxeBerzerkrNature, AxeGold_FrostFire, BatteringRam |
 | Valheim/Snow Mesh | 361 | 298 | True | Piece_flametal_beam, Piece_flametal_pillar, Piece_grausten_floor_1x1, Piece_grausten_floor_2x2, Piece_grausten_floor_4x4 |
@@ -2935,6 +2935,111 @@ Each texture is blitted to a temporary ARGB32 RenderTexture (sRGB read/write mat
 | Blob _MainTex | slime_splash | 64x64 / sRGB | G | 187.248 | 0 | 255 |
 | Blob _MainTex | slime_splash | 64x64 / sRGB | B | 187.469 | 0 | 255 |
 | Blob _MainTex | slime_splash | 64x64 / sRGB | A | 61.64 | 0 | 251 |
+
+## 13. Status effects (ObjectDB.m_StatusEffects, Infested icon candidates)
+
+ObjectDB: 98 status effects, 94 with an icon. Candidates for the Infested icon: name containing `tick` (first with an icon), else `Poison`, else none. Choice made at runtime: icon of 'Poison' (fallback 'Poison'), sprite 'Poison'.
+
+| Name | m_name | Type | Icon (sprite) | m_ttl | Category | Hidden | Candidate |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| AdrenalineRush | $se_adrenalinerush 1 (Poussée d'adrénaline 1) | SE_Stats | Warm | 0 |  | False |  |
+| AdrenalineRush2 | $se_adrenalinerush 2 (Poussée d'adrénaline 2) | SE_Stats | Warm | 0 |  | False |  |
+| AdrenalineRush3 | $se_adrenalinerush 3 (Poussée d'adrénaline 3) | SE_Stats | Warm | 0 |  | False |  |
+| AdrenalineRush4 | $se_adrenalinerush 4 (Poussée d'adrénaline 4) | SE_Stats | Warm | 0 |  | False |  |
+| BeltStrength | $item_beltstrength (Megingjord) | SE_Stats | BeltStrength | 0 |  | False |  |
+| Burning | $se_burning_name (En train de brûler) | SE_Burning | Burning | 5 |  | False |  |
+| CampFire | $se_fire_name (Feu) | StatusEffect | firepit | 0 |  | False |  |
+| Cold | $se_cold_name (Froid) | SE_Stats | Cold | 0 |  | False |  |
+| CorpseRun | $se_corpserun_name (Course fantôme) | SE_Stats | CorpseRun | 50 |  | False |  |
+| Crowned | $se_crowned_name (Royauté) | SE_Crowned | CrownofValheim | 0 |  | False |  |
+| Demister | $item_demister (Lumière de feu-follet) | SE_Demister | demister | 0 |  | False |  |
+| Encumbered | $se_encumbered_name (Encombrement au max) | StatusEffect | Encumbered | 0 |  | False |  |
+| Freezing | $se_freezing_name (En train de geler) | SE_Stats | Cold_lvl2 | 0 |  | False |  |
+| Frost | $se_frost_name (Glace) | SE_Frost | Frost | 0 |  | False |  |
+| GP_Bonemass | $se_bonemass_name (Masse-d'Os) | SE_Stats | TrophyBonemass | 300 |  | False |  |
+| GP_Eikthyr | $se_eikthyr_name (Eikthyr) | SE_Stats | TrophyEikthyr | 300 |  | False |  |
+| GP_Fader | $se_fader_name (Pouvoir de Fader) | SE_Stats | TrophyFader | 300 |  | False |  |
+| GP_Moder | $se_moder_name (Moder) | SE_Stats | TrophyDragonQueen | 300 |  | False |  |
+| GP_Queen | $se_queen_name (La Reine) | SE_Stats | TrophySeekerQueen | 300 |  | False |  |
+| GP_TheElder | $se_theelder_name (L'Aîné) | SE_Stats | TrophyTheElder | 300 |  | False |  |
+| GP_Yagluth | $se_yagluth_name (Yagluth) | SE_Stats | TrophyGoblinKing | 300 |  | False |  |
+| GoblinShaman_shield | GD Heal | SE_Shield | - | 40 |  | False |  |
+| GrapplingHook | GrapplingHook | SE_Stats | WolfClaw | 0 |  | True |  |
+| Harpooned | $se_harpooned_name (Harpon) | SE_Harpooned | SpearChitin | 0 |  | False |  |
+| Immobilized | $se_immobilized (Immobilisation) | SE_Stats | immobilized | 5 |  | False |  |
+| ImmobilizedAshlands | $se_immobilized (Immobilisation) | SE_Stats | immobilized | 10 |  | False |  |
+| ImmobilizedLong | $se_immobilized (Immobilisation) | SE_Stats | immobilized | 60 |  | False |  |
+| Lightning | $se_lightning_name (Foudre) | StatusEffect | Lightning | 3 |  | False |  |
+| MW_SE_Infested | $mw_se_infested_name (Infesté) | SE_Stats | Poison | 1.5 |  | False |  |
+| Poison | $se_poison_name (Poison) | SE_Poison | Poison | 0 |  | False | fallback |
+| Potion_BugRepellent | $item_mead_bugrepellent (Concoction anti-morstique) | SE_Stats | potion_bugrepellent | 600 |  | False |  |
+| Potion_LightFoot | $item_mead_lightfoot (Hydromel du pied léger) | SE_Stats | potion_lightfoot | 600 |  | False |  |
+| Potion_TrollPheromones | $item_mead_trollpheromones (Potion d'amour trolle) | SE_Stats | potion_pheromones | 300 |  | False |  |
+| Potion_barleywine | $item_barleywine (Vin d'orge de résistance au feu) | SE_Stats | barleywine | 600 |  | False |  |
+| Potion_bzerker | $item_mead_bzerker (Hydromel des berserkir) | SE_Stats | potion_bzerker | 20 |  | False |  |
+| Potion_eitr_lingering | $item_mead_eitr_lingering (Hydromel d'Eitr latent) | SE_Stats | potion_eitr_lingering | 300 | eitrpotion | False |  |
+| Potion_eitr_minor | $item_mead_eitr_minor (Hydromel d'Eitr mineur) | SE_Stats | potion_eitr_minor | 120 | eitrpotion | False |  |
+| Potion_frostresist | $item_mead_frostres (Hydromel de résistance au gel) | SE_Stats | potion_frostresist | 600 |  | False |  |
+| Potion_hasty | $item_mead_hasty (Tonique de ratatosk) | SE_Stats | potion_hasty | 600 |  | False |  |
+| Potion_health_lingering | $item_mead_hp_lingering (Hydromel de vie latente) | SE_Stats | potion_health_lingering | 300 | healthpotion | False |  |
+| Potion_health_major | $item_mead_hp_major (Hydromel extrêmement revigorant) | SE_Stats | potion_health_major | 120 | healthpotion | False |  |
+| Potion_health_medium | $item_mead_hp_medium (Hydromel très revigorant) | SE_Stats | potion_health_medium | 120 | healthpotion | False |  |
+| Potion_health_minor | $item_mead_hp_minor (Hydromel revigorant) | SE_Stats | potion_health_minor | 120 | healthpotion | False |  |
+| Potion_poisonresist | $item_mead_poisonres (Hydromel de résistance au poison) | SE_Stats | potion_poisonresist | 600 |  | False |  |
+| Potion_stamina_lingering | $item_mead_stamina_lingering (Hydromel d'endurance latente) | SE_Stats | potion_stamina_lingering | 300 | staminapotion | False |  |
+| Potion_stamina_medium | $item_mead_stamina_medium (Hydromel de bonne endurance) | SE_Stats | potion_stamina_medium | 120 | staminapotion | False |  |
+| Potion_stamina_minor | $item_mead_stamina_minor (Hydromel d'endurance) | SE_Stats | potion_stamina_minor | 120 | staminapotion | False |  |
+| Potion_strength | $item_mead_strength (Hydromel de force des trolls) | SE_Stats | potion_strength | 300 |  | False |  |
+| Potion_swimmer | $item_mead_swimmer (Élixir de Vananidir) | SE_Stats | potion_swimmer | 300 |  | False |  |
+| Potion_tamer | $item_mead_tamer (Infusion des murmures sauvages) | SE_Stats | potion_tamer | 600 |  | False |  |
+| Potion_tasty | $item_mead_tasty (Hydromel savoureux) | SE_Stats | potion_tasty | 10 |  | False |  |
+| Puke | $se_puke_name (Malade) | SE_Puke | pukeberries | 15 |  | False |  |
+| Rested | $se_rested_name (En forme) | SE_Rested | rested | 1 |  | False |  |
+| Resting | $se_resting_name (Repos) | SE_Cozy | resting | 0 |  | False |  |
+| SE_Dvergr_buff | $dvergr_buff (Pouvoir dvergr) | SE_Stats | health_icon_walknut | 20 |  | False |  |
+| SE_Dvergr_heal | Dvergr Heal | SE_Stats | - | 4 |  | False |  |
+| SE_Greydwarf_shaman_frozen_heal | GD Heal | SE_Stats | - | 4 |  | False |  |
+| SE_Greydwarf_shaman_heal | GD Heal | SE_Stats | - | 4 |  | False |  |
+| SetEffect_AshlandsMediumArmor | $se_ashlandsmediumarmorseteffect_name (Endurance d'Ask) | SE_Stats | HelmetAshlandsMedium | 0 |  | False |  |
+| SetEffect_BerserkerArmor | $se_berserkereffect_name (Berserker) | SE_Stats | HelmetBerserker | 0 |  | False |  |
+| SetEffect_BerserkerUndeadArmor | $se_berserker_undead_effect_name (Colère de l'ours maudit) | SE_Stats | HelmetBerserkerUndead | 0 |  | False |  |
+| SetEffect_DeepNorthMediumArmor | $se_deepnorthmediumarmorseteffect_name (Avant-garde) | SE_Stats | HelmetDNMedium | 0 |  | False |  |
+| SetEffect_FenringArmor | $se_fenringseteffect_name (Bénédiction de Fenris) | SE_Stats | HelmetFenris | 0 |  | False |  |
+| SetEffect_FishingHat | $item_helmet_fishinghat (Chapeau de pêcheur) | SE_Stats | HelmetFishingHat | 0 |  | False |  |
+| SetEffect_HarvesterArmor | $se_harvesterseteffect_name (Moissonneur) | SE_Stats | HelmetStrawHat | 0 |  | False |  |
+| SetEffect_LoxArmor | $se_loxseteffect_name (Don du lox) | SE_Stats | HelmetLox | 0 |  | False |  |
+| SetEffect_MageArmor | $se_mageseteffect_name (Imprégnation d'Eitr) | SE_Stats | staminaupgrade | 0 |  | False |  |
+| SetEffect_RootArmor | $se_rootseteffect_name (Armure de racine) | SE_Stats | HelmetRoot | 0 |  | False |  |
+| SetEffect_TrollArmor | $se_trollseteffect_name (Discret) | SE_Stats | HelmetTrollLeather | 0 |  | False |  |
+| SetEffect_WolfArmor | $se_frostres_name (Résistance au gel) | SE_Stats | ArmorWolfChest | 0 |  | False |  |
+| Shelter | $se_shelter_name (Abri) | StatusEffect | Shelter | 0 |  | False |  |
+| Slimed | $se_slimed_name (Engluement) | SE_Stats | Slimed | 1 |  | False |  |
+| SlowFall | $se_slowfall_name (Chute de plumes) | SE_Stats | SlowFall | 0 |  | False |  |
+| Smoked | $se_smoked_name (Fumé) | SE_Smoke | Smoked | 0 |  | False |  |
+| SoftDeath | $se_softdeath_name (Pas de perte de compétence) | StatusEffect | SoftDeath | 600 |  | False |  |
+| Spirit | $se_spirit_name (Esprit) | SE_Burning | Sun | 3 |  | False |  |
+| Staff_FrostOrbs | $se_frostorbs (Sphère de vengeance) | SE_React | stafffrostorbs | 120 |  | False |  |
+| Staff_shield | $se_shield (Barrière magique) | SE_Shield | Staff_Shield | 60 |  | False |  |
+| Tared | $se_tared_name (Goudronné) | SE_Stats | Tared | 10 |  | False |  |
+| TrinketBlackDamageHealth | $se_trinketblackdamagedealth (Peau de fer) | SE_Stats | TrinketBlackDamageHealth | 60 |  | False |  |
+| TrinketBlackStamina | $se_trinketblackdtamina (Voile d'ombre) | SE_Stats | TrinketBlackStamina | 120 |  | False |  |
+| TrinketBloodGoldHealth | $se_trinketbloodgoldhealth (Perce-cou) | SE_Stats | TrinketDNGold | 30 |  | False |  |
+| TrinketBloodGoldStamina | $se_trinketbloodgoldstamina (Couronne de sorcière) | SE_Stats | TrinketDNNornThread | 30 |  | False |  |
+| TrinketBronzeHealth | $se_trinketbronzehealth (Cœur de la forêt) | SE_Stats | TrinketBronzeHealth | 60 |  | False |  |
+| TrinketBronzeStamina | $se_trinketbronzestamina (Pendentif en bronze) | SE_Stats | TrinketBronzeStamina | 60 |  | False |  |
+| TrinketCarapaceEitr | $se_trinketcarapaceeitr (Boucles d'oreilles palpitantes) | SE_Stats | TrinketCarapaceEitr | 60 |  | False |  |
+| TrinketChitinSwim | $se_trinketchitinswim (Aileron du destin) | SE_Stats | TrinketChitinSwim | 120 |  | False |  |
+| TrinketFlametalEitr | $se_trinketflametaleitr (Jörmundling) | SE_Stats | TrinketFlametalEitr | 60 |  | False |  |
+| TrinketFlametalStaminaHealth | $se_trinketflametalstaminahealth (Cœur ardent) | SE_Stats | TrinketFlametalStaminaHealth | 1 |  | False |  |
+| TrinketIronHealth | $se_trinketironhealth (Broche en fer) | SE_Stats | TrinketIronHealth | 30 |  | False |  |
+| TrinketIronStamina | $se_trinketironstamina (Bracelet de cheville) | SE_Stats | TrinketIronStamina | 30 |  | False |  |
+| TrinketScaleStaminaDamage | $se_trinketscalestaminadamage (Fers retentissants) | SE_Stats | TrinketScaleStaminaDamage | 60 |  | False |  |
+| TrinketSilverDamage | $se_trinketsilverdamage (Vision du loup) | SE_Stats | TrinketSilverDamage | 30 |  | False |  |
+| TrinketSilverResist | $se_trinketsilverresist (Cœur de cristal) | SE_Stats | TrinketSilverResist | 50 |  | False |  |
+| Warm | $se_warm_name (Chaud) | SE_Stats | Warm | 0 |  | False |  |
+| Wet | $se_wet_name (Humide) | SE_Wet | Wet | 120 |  | False |  |
+| WindRun | $se_windrun_name (Course du vent) | SE_Stats | capeasksvin | 0 |  | False |  |
+| Wishbone | $se_wishbone_name (Bréchet) | SE_Finder | wishbone | 0 |  | False |  |
 
 
 ## 6b. Deferred render check

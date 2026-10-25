@@ -13,6 +13,11 @@ namespace MistWorms
         public const string MassNameToken = "$mw_mass";
         public const string MassCountToken = "$mw_mass_count";   // "{0} ({1})": name, number of worms
 
+        // Status effect applied to an engulfed player (spec §6.2).
+        public const string StatusInfested = "MW_SE_Infested";
+        public const string StatusInfestedNameToken = "$mw_se_infested_name";
+        public const string StatusInfestedDescToken = "$mw_se_infested_desc";
+
         // ZDO keys of the colony (spec §11.3/§11.4). Phase 3 only persists the kind and the box; the snapshot comes in phase 7.
         public const string ZdoKind = "mw_kind";               // int: WormColony.ColonyKind
         public const string ZdoBoxCenter = "mw_box_c";         // Vector3, world space (spec §8.4)
@@ -32,6 +37,9 @@ namespace MistWorms
         // RPC names (spec §11.3). Part of the wire protocol: never rename after release.
         public const string RpcWormHit = "MW_WormHit";         // ZNetView RPC to the colony owner: int slot, int generation, ZPackage HitData
         public const string RpcWormBite = "MW_WormBite";       // routed RPC to the owner of the bitten player: ZDOID, durability, health damage, point, dir
+        public const string RpcMassBite = "MW_MassBite";       // routed RPC to the owner of the engulfed player: ZDOID target, ZDOID mass, durability P, health damage, int worms, Vector3 dir
+        public const string RpcMassParry = "MW_MassParry";     // routed RPC to the owner of a mass: ZDOID mass (its tick was parried perfectly)
+        public const string RpcInfest = "MW_Infest";           // routed RPC to the owner of the engulfed player: ZDOID target, bool on
         public const string RpcMassAdd = "MW_MassAdd";         // ZNetView RPC to the mass owner: int k worms to add
         public const string RpcMassDissolve = "MW_Dissolve";   // ZNetView RPC to the colony owner: ZDOID mass, int n, Vector3 position, ZPackage pool
     }

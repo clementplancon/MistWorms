@@ -24,7 +24,7 @@ namespace MistWorms.Mass
         private static readonly WritheMassVisual[] s_audible = new WritheMassVisual[MaxAudible];
         private static readonly float[] s_audibleDist = new float[MaxAudible];
         private static float s_nextScan;
-        private static WormEffects.Limiter s_layerLimit, s_eventLimit;
+        private static WormEffects.Limiter s_layerLimit, s_eventLimit, s_biteLimit;
 
         /// <summary>Volume factor of a mass of <paramref name="n"/> worms: grows with ln(n), 0.3 to 1.2.</summary>
         public static float VolumeFor(int n) => Mathf.Clamp(0.25f * (1f + Mathf.Log(Math.Max(1, n))), 0.3f, 1.2f);
@@ -86,6 +86,9 @@ namespace MistWorms.Mass
         }
 
         public static void PlayBirth(Vector3 where, float now) { if (Enabled) WormEffects.PlayForm(ref s_eventLimit, where, now); }
+
+        /// <summary>The sound of a bite tick on the engulfed player (plan 5, A19): the vanilla tick bite sound, under the usual per-second cap. Played by the owner of the player. The wet sound of the spec is omitted.</summary>
+        public static void PlayBiteTick(Vector3 where, float now) { if (Enabled) WormEffects.PlayStrike(ref s_biteLimit, where, now); }
 
         public static void PlayEngulfStart(Vector3 where, float now) { if (Enabled) WormEffects.PlayAlert(ref s_eventLimit, where, now); }
     }

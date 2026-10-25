@@ -61,6 +61,8 @@ namespace MistWorms.Mass
 
         private float _tread, _boil, _odoFlux, _odoBorder;
         private float _pseudoRamp;
+        private const float TargetFollowTime = 0.15f;     // lag of the engulfing lobe behind its target (seconds)
+        private Transform _smoothedTf;
         private float _engulf;
         private float _forcedEngulf = -1f;
         private Transform _targetTf;
@@ -465,8 +467,15 @@ namespace MistWorms.Mass
                 // Dev: a forced engulf with no hunted creature uses the local player, so the render can be judged without the AI.
                 if (_targetTf == null && _forcedEngulf > 0f && Player.m_localPlayer != null) _targetTf = Player.m_localPlayer.transform;
             }
+            bool had = _hasTarget;
             _hasTarget = _targetTf != null;
-            if (_hasTarget) _targetPos = _targetTf.position;
+            if (_hasTarget)
+            {
+                // The engulfing lobe follows the target with a smoothing of 0.15 s (spec §4.9, plan 5, A1); a new target is taken as it is.
+                Vector3 raw = _targetTf.position;
+                _targetPos = had && _targetTf == _smoothedTf ? Vector3.Lerp(_targetPos, raw, 1f - Mathf.Exp(-Time.deltaTime / TargetFollowTime)) : raw;
+                _smoothedTf = _targetTf;
+            }
         }
 
         /// <summary>Completes the per-frame inputs with the camera (direction toward it in the heap frame, for the inner place culling).</summary>

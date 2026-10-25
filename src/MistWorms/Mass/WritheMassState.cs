@@ -44,6 +44,7 @@ namespace MistWorms.Mass
         private Character _character;
         private ZNetView _nview;
         private Rigidbody _body;
+        private WritheMassAI _ai;
         private CapsuleCollider _capsule;
         private readonly GameObject[] _hitGos = new GameObject[MassStream.MaxChainSpheres];
         private readonly SphereCollider[] _hits = new SphereCollider[MassStream.MaxChainSpheres];
@@ -62,6 +63,7 @@ namespace MistWorms.Mass
         public bool FreezeAI { get; set; }
 
         public Character Character => _character;
+        public WritheMassAI Ai => _ai;
         public bool Valid => _nview != null && _nview.IsValid();
         public bool IsOwner => Valid && _nview.IsOwner();
         public bool Dissolving => _dissolving;
@@ -192,6 +194,7 @@ namespace MistWorms.Mass
         {
             _character = GetComponent<Character>();
             _nview = GetComponent<ZNetView>();
+            _ai = GetComponent<WritheMassAI>();
             _body = GetComponent<Rigidbody>();
             _capsule = GetComponent<CapsuleCollider>();
 
@@ -229,6 +232,8 @@ namespace MistWorms.Mass
 
         private void OnDestroy()
         {
+            if (_ignoredColliders.Count > 0) RestoreCollisions();
+            if (_ai != null) _ai.ReleaseOnDestroy();
 #if MW_DEV
             // The journal of the disappearance of a mass (a mass that vanishes in a scenario is otherwise a mystery): why, the last creature that hit it, its last state.
             Plugin.Log.LogInfo($"[Mass] {_idText} (n={_lastN}) removed: {DestroyReason ?? "unknown (the scene, a zone unload or a destroy that did not say why)"}; last hit by {LastAttacker ?? "nobody"}; health {_lastHealth:0.#}; state {_lastState}");
@@ -256,6 +261,7 @@ namespace MistWorms.Mass
                 Reconcile();
             }
             MergeTick(Time.time);
+            EngulfCollisionTick(Time.time);
         }
 
         // ------------------------------------------------------------------ fall safety net (owner)

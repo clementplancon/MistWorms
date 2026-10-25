@@ -2,6 +2,7 @@ using System;
 using HarmonyLib;
 using MistWorms.Bites;
 using MistWorms.Config;
+using MistWorms.Mass;
 using UnityEngine;
 
 namespace MistWorms.Patches
@@ -13,6 +14,8 @@ namespace MistWorms.Patches
     /// </summary>
     internal static class DamagePatches
     {
+        private const float HealthShareEpsilon = 1e-3f;
+
         private static bool BiteTarget(Character c) => WormBiteContext.Active && c != null && c == WormBiteContext.Target;
 
         /// <summary>The routed RPC of the bites must exist on every peer, even one with no colony loaded: register it with the session.</summary>
@@ -21,7 +24,11 @@ namespace MistWorms.Patches
         {
             private static void Postfix()
             {
-                try { WormBite.Register(); }
+                try
+                {
+                    WormBite.Register();
+                    Mass.MassEngulf.Register();
+                }
                 catch (Exception e) { Plugin.LogException("DamagePatches.GameStart", e); }
             }
         }
@@ -66,6 +73,45 @@ namespace MistWorms.Patches
         }
 
         /// <summary>
+        /// Perfect parry (plan 5, A11; spec 4.8, 6.4): the vanilla block of a bite is perfect when the shield has a timed block bonus and the block was raised
+        /// less than 0.25 s ago (Humanoid.BlockAttack: m_blockTimer != -1 and m_blockTimer below 0.25). The test is a local of the vanilla method, so it is made
+        /// in the prefix, and the postfix keeps it if the block went through. Vanilla does not cancel the hit; the mod does, for the tick of a mass.
+        /// Inert outside a mass bite context.
+        /// </summary>
+        [HarmonyPatch(typeof(Humanoid), "BlockAttack")]
+        private static class BlockAttackPatch
+        {
+            private const float PerfectWindow = 0.25f;   // Humanoid.BlockAttack
+
+            private static void Prefix(Humanoid __instance, out bool __state)
+            {
+                __state = false;
+                try
+                {
+                    if (!WormBiteContext.Active || __instance != WormBiteContext.Target || WormBiteContext.Mass == ZDOID.None) return;
+                    ItemDrop.ItemData blocker = __instance.GetCurrentBlocker();
+                    __state = blocker != null && blocker.m_shared.m_timedBlockBonus > 1f && __instance.m_blockTimer != -1f && __instance.m_blockTimer < PerfectWindow;
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogException("DamagePatches.BlockAttack.Prefix", e);
+                }
+            }
+
+            private static void Postfix(Humanoid __instance, bool __result, bool __state)
+            {
+                try
+                {
+                    if (__state && __result && WormBiteContext.Active && __instance == WormBiteContext.Target) WormBiteContext.MarkPerfectParry();
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogException("DamagePatches.BlockAttack.Postfix", e);
+                }
+            }
+        }
+
+        /// <summary>
         /// The bite on the player: god and ghost modes take nothing; otherwise the damage that survived blocking becomes durability loss
         /// and the health stays untouched while an item can still be eaten; with nothing left to eat vanilla applies the health damage.
         /// </summary>
@@ -79,6 +125,13 @@ namespace MistWorms.Patches
                     if (!BiteTarget(__instance) || !(__instance is Player player) || hit == null) return true;
                     if (player.IsDead() || player.IsTeleporting()) return true; // vanilla ignores these anyway
 
+                    if (WormBiteContext.PerfectParry)
+                    {
+                        // The tick is cancelled: no wear, no health, no text; the mass delays its next tick.
+                        MassEngulf.SendParry(WormBiteContext.Mass);
+                        return false;
+                    }
+
                     if (player.InGodMode() || player.InGhostMode()) return false; // spec §6.4
 
                     float total = hit.GetTotalDamage();
@@ -88,21 +141,25 @@ namespace MistWorms.Patches
                     float p = WormBiteContext.P * (MWConfig.Engulf.BlockReducesBites.Value ? ratio : 1f);
                     if (p <= 1e-4f) return true; // blocked down to nothing: vanilla drops it as well
 
-                    BiteResult result = BiteInventory.Apply(player, p, 1);
-                    if (result.HadEligible)
-                    {
+                    BiteResult result = BiteInventory.Apply(player, p, WormBiteContext.WormCount);
 #if MW_DEV
+                    if (result.Eaten > 0f)
+                    {
                         WormBiteContext.Bites++;
                         WormBiteContext.DurabilityEaten += result.Eaten;
-#endif
-                        if (result.Eaten > 0f) WormBite.ShowEquipmentText(hit.m_point, result.Eaten);
-                        return false; // health untouched
                     }
+#endif
+                    if (result.Eaten > 0f) WormBite.ShowEquipmentText(hit.m_point, result.Eaten);
+
+                    // What no item could absorb goes to health in the same tick, prorated (plan 5, A7): nothing left to eat = all of it.
+                    float healthShare = Mathf.Clamp01(result.Remaining / p);
+                    if (healthShare <= HealthShareEpsilon) return false; // health untouched
+                    hit.ApplyModifier(healthShare);
 #if MW_DEV
                     WormBiteContext.HealthBites++;
-                    WormBiteContext.HealthDamage += total;
+                    WormBiteContext.HealthDamage += hit.GetTotalDamage();
 #endif
-                    return true; // nothing left to devour: the vanilla path applies the health damage
+                    return true; // the vanilla path applies the (reduced) health damage, and shows the red number
                 }
                 catch (Exception e)
                 {

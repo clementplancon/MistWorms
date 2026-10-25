@@ -13,7 +13,7 @@ Ce document est la spécification complète destinée à Claude Code (Opus) : il
 | Jeu cible | Valheim 1.0, branche publique (patch 1.0.17 du 6 oct. 2026 au moment de la rédaction) ; aucun autre mod sur le serveur |
 | Stack | BepInExPack\_Valheim + Jötunn (≥ 2.30) + HarmonyX ; C# ciblant .NET Framework 4.7.2 ; Unity Editor non requis |
 | Assets | Vrais modèles créés par Claude Code avec Blender en mode headless (scripts bpy versionnés), chargés à l'exécution au format glTF |
-| Ver seul | ≈ 10 PV (PV d'une tique ÷ 10 **\[À VÉRIFIER\]**), une morsure = 1 point de durabilité, un coup d'arme bronze ou mieux le tue |
+| Ver seul | ≈ 10 PV (PV d'une tique ÷ 5, décision 17), une morsure = 1 point de durabilité, un coup d'arme bronze ou mieux le tue |
 | Résistances | Feu : très faible ; tranchant : faible ; perçant : résistant ; poison et spirituel : immunisé. Un coup sur l'amas tue plusieurs vers (dégâts ÷ PV d'un ver) : les armes de zone sont la réponse |
 | Feu | Les repousse (torche tenue, feu de camp), comme les grisâtres |
 | Niveaux | Jamais d'étoiles |
@@ -24,7 +24,7 @@ Ce document est la spécification complète destinée à Claude Code (Opus) : il
 | Morsures | 1 morsure par ver toutes les 0,5 s ; l'attaque cobra d'un ver seul suit la même règle (équipement d'abord) |
 | Cibles | Tout : joueurs, apprivoisés, créatures, dvergar, structures — mais l'activation ne se fait qu'à la détection d'un joueur |
 | Blocage / armure | Un bouclier levé réduit les morsures et perd sa durabilité comme en vanilla ; l'armure ne réduit rien |
-| Équipement dévoré | Tout l'inventaire, pièce au hasard, Wisplight en dernier ; exploit « réparation gratuite » assumé |
+| Équipement dévoré | Tout l'inventaire, équipé ou non (seules les pièces équipées si `Engulf.IncludeUnequippedInventory` = false), pièce au hasard, Wisplight en dernier ; exploit « réparation gratuite » assumé |
 | Drops | Pool au niveau de l'amas ; recette de base + matériaux d'amélioration selon la qualité ; objets sans recette = rien ; arrondi vers le bas ; drops natifs : appâts de pêche pondérés par rareté, entrailles, sac de sang ; pas de trophée ; assets vanilla réutilisés |
 | Nids et spawn | Un petit nid par salle de mine + quelques vers isolés ; le nid pond ; max 50 vivants par nid, 200 par amas, 400 par mine ; mine propre une fois les nids détruits ; jamais hors mine |
 | Performance | Priorité absolue : pas de 400 Characters, vers « virtuels » simulés en tableaux, rendu instancié, budgets chiffrés (§11) |
@@ -253,21 +253,23 @@ L'amas se scinde et se reforme visuellement, sans jamais se scinder en entités.
 
 - Aucun étourdissement : `m_staggerWhenBlocked = false`, patch qui annule `Character.Stagger` et `AddStaggerDamage` pour `MW_WritheMass`.
 - Recul : le facteur `clamp(10 / n, Mass.KnockbackMinFactor, 1)` s'applique à `HitData.m_pushForce` avant le recul vanilla (le point exact du patch sera choisi au dump) — un amas de 10 recule comme une tique, un amas de 200 bouge à peine.
-- Parade : le blocage et la parade vanilla fonctionnent contre les morsures (§6.4) ; une parade parfaite (vanilla) ne stagger pas l'amas et, par règle du mod, annule ce tick de morsure et retarde le suivant de 0,5 s. C'est une logique du mod, indépendante du fait que le vanilla n'annule pas le coup (décision 1.3). Phase 5 (S03b).
+- Parade : le blocage et la parade vanilla fonctionnent contre les morsures (§6.4) ; une parade parfaite (vanilla) ne stagger pas l'amas et, par règle du mod, **annule** ce tick de morsure (sans perte de durabilité, de PV ni d'effet) ; le tick suivant, retardé de 0,5 s, arrive 1,0 s après le tick annulé (0,5 s normal plus 0,5 s de retard). C'est une logique du mod, indépendante du fait que le vanilla n'annule pas le coup (décision 1.3). Phase 5 (S03b).
 
 ### 4.9 Engloutissement (résumé, détails §6)
 
 Phase 5 (en phase 4B l'amas s'arrête au contact sans engloutir, §4.10). Rendu : l'engloutissement **visuel** est porté par les vers du tas, sans effet d'écran (§6.6, §12.1) ; un paramètre `engulf` de 0 à 1 le pilote, la logique de jeu arrivant en phase 5.
 
-À moins de `r(n) + Mass.EngulfRange` (0,6 m) de sa cible, l'amas s'y colle et la recouvre : il suit la position de la cible avec un retard de 0,15 s, les collisions physiques entre l'amas et la cible sont ignorées (`Physics.IgnoreCollision`), la cible reçoit l'effet **Infesté**, et le cycle de morsures commence. Il se détache si la cible s'éloigne de plus de `r(n) + Mass.DetachDistance` (1,5 m) pendant `Mass.DetachDelay` (0,75 s), si un feu le fait fuir, si la cible meurt ou si `n` tombe sous le seuil de dissolution.
+En Hunt, quand la cible est à moins de `r(n) + Mass.EngulfRange` (0,6 m) (distance horizontale du centre de l'amas à la cible), l'amas passe en état Engulf (écrit dans `mw_state`, §4.10) et la recouvre. Il **marche vers la cible** à `Mass.MoveSpeed` (2,4 m/s), arrêt à 0 m, sans téléport ; le retard de 0,15 s ne concerne que la gaine visuelle (le lobe d'englobement suit la cible avec un lissage de 0,15 s). `Physics.IgnoreCollision` est posé entre la capsule de l'amas et ses sphères de coup d'une part, et tous les colliders de la cible d'autre part, puis retiré au détachement. La cible reçoit l'effet **Infesté** (§6.2) et le cycle de morsures commence. Un joueur ralenti qui sprinte (≈ 3,5 m/s) creuse l'écart.
+
+Détachement, l'une des conditions suffit : distance supérieure à `r(n) + Mass.DetachDistance` (1,5 m) pendant `Mass.DetachDelay` (0,75 s) ; feu (§9.1) ; cible morte, fantôme, téléportée ou déconnectée ; dissolution (perte faisant tomber `n` sous le seuil) ; `mw_kill`. Après le détachement : Infesté retiré, `IgnoreCollision` retiré, état Hunt ; si la cible est invalide, nouvelle cible au tick suivant (§9.2, §9.3). Phase 5 : cibles joueurs seulement (créatures et structures en phase 6).
 
 ### 4.10 États de l'amas
 
 | État | Rôle | Phase |
 | --- | --- | --- |
 | Idle | errance, retour vers le nid (§4.6) | 4B |
-| Hunt | se dirige vers sa cible (§5.3) ; au contact (à `r(n) + Mass.EngulfRange`) il s'arrête sans engloutir | 4B |
-| Engulf | collé à la cible, tick de morsure (§4.9, §6) | 5 |
+| Hunt | se dirige vers sa cible (§5.3) ; à `r(n) + Mass.EngulfRange` de sa cible joueur il passe en Engulf (phase 5 ; en 4B il s'arrêtait au contact sans engloutir) | 4B, 5 |
+| Engulf | marche vers la cible (arrêt à 0 m), tick de morsure, `mw_state` Engulf (§4.9, §6) ; détachement → Hunt, ou fuite devant le feu pendant `Fire.FearDuration` puis Hunt (§9.1) | 5 |
 | Dormant | immobile, ne cible rien et n'est pas ciblé (§5.1) ; stub en 4B | 7 |
 
 Stream (§4.7) est une forme, pas un état : il se combine à n'importe quel état de déplacement et se synchronise par un bit séparé (§11.3).
@@ -311,32 +313,34 @@ Les morsures d'un amas ou d'un ver ne touchent jamais les points de vie d'un jou
 
 ### 6.1 Le tick de morsure
 
-Toutes les `Worm.BiteInterval` (0,5 s), l'amas englouti autour d'une cible produit **un seul coup agrégé** (une `HitData`) : `P = n × Worm.DurabilityPerBite` points pour un joueur, `n × Worm.CreatureDamagePerBite` dégâts perçants pour une créature, `n × Worm.StructureDamagePerBite` contondants pour une structure. Agréger par tick (plutôt que 40 micro-coups) garde le réseau et le blocage vanilla sains. Le coup est émis par le propriétaire de l'amas avec `m_attacker = ZDOID de l'amas` ; il voyage via le RPC `Damage` vanilla jusqu'au client propriétaire de la cible, où les règles ci-dessous s'appliquent.
+Toutes les `Worm.BiteInterval` (0,5 s), l'amas englouti autour d'une cible produit **un seul coup agrégé** (une `HitData`) : `P = n × Worm.DurabilityPerBite` points pour un joueur, `n × Worm.CreatureDamagePerBite` dégâts perçants pour une créature, `n × Worm.StructureDamagePerBite` contondants pour une structure. Agréger par tick (plutôt que 40 micro-coups) garde le réseau et le blocage vanilla sains. Le coup est émis par le propriétaire de l'amas avec `m_attacker = ZDOID de l'amas` (un vrai `Character`, ce qui permet la riposte et le blocage vanilla ; le cobra du ver seul reste « sans attaquant », décision 20). Contenu de la `HitData` pour un joueur : perçant `n × Worm.HealthDamagePerBite`, `m_blockable` = `m_dodgeable` = true. `P = n × Worm.DurabilityPerBite`, multiplié par le multiplicateur de monde si `Engulf.ScaleWithWorldModifiers`, voyage dans un champ de contexte : une RPC `MW_MassBite(ZDOID mass, float P, float hp, Vector3 point)` vers le propriétaire de la cible ouvre le `WormBiteContext` puis appelle `target.Damage(hit)` localement, exactement comme le cobra ; `DamagePatches` est ainsi réutilisé sans changer sa condition. Les règles ci-dessous s'appliquent chez le propriétaire de la cible.
 
 ### 6.2 Effet « Infesté » sur la cible
 
-- Appliqué à l'engloutissement, retiré au détachement (`SEMan` vanilla, `StatusEffect` custom `MW_SE_Infested`, icône vanilla réutilisée **\[À VÉRIFIER : sprite d'un effet existant, ex. celui de la morsure de tique\]**).
-- Effets : vitesse de déplacement × `Engulf.SlowFactor` (0,5) y compris sprint ; attaques, blocage, parade, roulade, consommables et interactions autorisés ; aucun dégât périodique propre.
-- La roulade ne libère pas (l'amas suit) mais ses frames d'invincibilité vanilla annulent le tick de morsure qui tombe pendant la roulade ; la roulade parfaite de Call to Arms est traitée par le jeu comme d'habitude.
-- Se libérer : sprinter hors de portée (le joueur ralenti sprinte à ≈ 3,5 m/s, l'amas suit à 2,4 m/s : on s'en sort, lentement), brandir du feu (§9.1), ou réduire l'amas sous le seuil de dissolution.
+- Appliqué à l'engloutissement, retiré au détachement (`SEMan` vanilla, `StatusEffect` custom `MW_SE_Infested` enregistré dans l'`ObjectDB` par Jötunn `CustomStatusEffect`, icône vanilla réutilisée **\[À VÉRIFIER : sprite d'un effet existant, à choisir au dump de la passe 5-1 : de préférence l'effet d'accroche de la tique, sinon `Poison`\]**). Il est appliqué et retiré **chez le propriétaire de la cible**, par RPC `MW_Infest(bool)` depuis le propriétaire de l'amas ; il est maintenu tant que l'état Engulf est actif (rafraîchissement toutes les 0,5 s pour couvrir une perte de RPC, durée de 1,5 s qui expire seule si l'amas disparaît).
+- Effets : `m_speedModifier` = `Engulf.SlowFactor − 1` (ou l'équivalent vanilla trouvé au décompilé), soit une vitesse de déplacement × 0,5 y compris sprint ; attaques, blocage, parade, roulade, consommables et interactions autorisés ; aucun dégât périodique propre.
+- La roulade ne libère pas (l'amas suit) mais ses frames d'invincibilité vanilla annulent le tick de morsure qui tombe pendant la roulade : ce tick est **perdu**, pas reporté ; la roulade parfaite de Call to Arms est traitée par le jeu comme d'habitude.
+- Se libérer : sprinter hors de portée (le joueur ralenti sprinte à ≈ 3,5 m/s, l'amas marche à 2,4 m/s : on s'en sort, lentement ; détachement au-delà de `r + DetachDistance` pendant `DetachDelay`, §4.9), brandir du feu (§9.1), ou réduire l'amas sous le seuil de dissolution.
 
 ### 6.3 Ordre de destruction de l'inventaire (joueur)
 
-1. **Éligibles** : tous les objets de l'inventaire du joueur (équipés ou non, toutes les cases, y compris les emplacements rapides) tels que `m_shared.m_useDurability` et `m_durability > 0`, **sauf** le Wisplight (`Demister` **\[À VÉRIFIER\]**). Les objets sans durabilité (matériaux, flèches, nourriture, trophées, Megingjord…) ne sont jamais touchés.
+1. **Éligibles** : par défaut (`Engulf.IncludeUnequippedInventory` = true), tous les objets de l'inventaire du joueur, équipés ou non (toutes les cases, emplacements rapides compris) ; si la clé est à false, seules les pièces **équipées**. Dans les deux cas : tels que `m_shared.m_useDurability` et `m_durability > 0`, **sauf** le Wisplight (`Demister`, décisions 8 et 9) tant qu'il reste un autre éligible. Les objets sans durabilité (matériaux, flèches, nourriture, trophées, Megingjord…) ne sont jamais touchés.
 2. **Nombre de pièces mordues par tick** : `k = clamp(ceil(n / 10 × Engulf.ItemsPerTenWorms), 1, nombre d'éligibles)` — un gros amas ronge plusieurs pièces à la fois.
 3. `k` objets tirés au hasard sans remise parmi les éligibles ; chacun perd `P / k` points, plafonné à sa durabilité restante ; l'excédent est reporté sur un autre éligible tiré au hasard, jusqu'à épuisement de `P` ou des éligibles.
-4. **Wisplight en dernier** (`Engulf.WisplightLast = true`) : il ne devient éligible que lorsqu'aucun autre éligible ne subsiste. Sa destruction ramène la brume : c'est le coup de grâce voulu. \[À VÉRIFIER : le Wisplight a-t-il une durabilité ?\] S'il n'en a pas (m\_useDurability = false), le mod lui en donne une au démarrage en modifiant ses données partagées dans l'ObjectDB (m\_useDurability = true, m\_maxDurability = Engulf.WisplightVirtualDurability, défaut 100, m\_durabilityPerLevel = 0) : il ne s'use alors que sous les morsures, se casse à 0 comme une pièce d'armure et se répare gratuitement à l'établi, comme le reste.
-5. **Phase PV** : s'il ne reste aucun éligible (Wisplight inclus), le reste de `P` est appliqué aux PV via le chemin vanilla, avec `n × Worm.HealthDamagePerBite` dégâts perçants par tick (l'armure est nulle à ce stade, toutes les pièces étant cassées ; un bouclier levé mais cassé ne bloque plus non plus).
+4. **Wisplight en dernier** (`Engulf.WisplightLast = true`) : il ne devient éligible que lorsqu'aucun autre éligible ne subsiste. Sa destruction ramène la brume : c'est le coup de grâce voulu. Le Wisplight n'a pas de durabilité en vanilla : au démarrage (`ObjectDB` prêt), le prefab `Engulf.WisplightPrefab` (`Demister`) reçoit une durabilité virtuelle (`m_useDurability` = true, `m_maxDurability` = `Engulf.WisplightVirtualDurability`, défaut 100, `m_durabilityPerLevel` = 0), conditionnée à la clé de config ; les instances déjà dans des inventaires qui étaient à 0 sans durabilité reçoivent `m_durability` = max (première fois seulement). Il ne s'use alors que sous les morsures, se casse à 0 comme une pièce d'armure (comportement vanilla) et se répare gratuitement à l'établi, comme le reste.
+5. **Phase PV** : le reste de `P` va aux PV **dans le même tick** quand les éligibles sont épuisés en cours de tick, au prorata `reste / P × dégâts PV` (`n × Worm.HealthDamagePerBite` dégâts perçants par tick, via le chemin vanilla ; ce reste remplace la décision 54 (3) « reste de P perdu », décision 131). S'il ne reste aucun éligible (Wisplight inclus) au début du tick, tout le tick va aux PV (l'armure est nulle à ce stade si toutes les pièces sont cassées ; un bouclier levé mais cassé ne bloque plus non plus). Le coup de cobra d'un ver seul garde ses 2 dégâts perçants (`Worm.CobraCreatureDamage`) quand il ne reste aucun éligible.
 6. Un objet à 0 suit le comportement vanilla : cassé, déséquipé automatiquement, réparable gratuitement à l'établi (exploit assumé, §0) ; un objet vanilla `m_destroyBroken` disparaît comme en vanilla.
 
 ### 6.4 Blocage et armure
 
-- **Blocage** : le coup agrégé passe par `Humanoid.BlockAttack` vanilla sur le client de la cible : bouclier levé et amas dans l'angle de blocage → réduction selon la puissance de blocage, perte de durabilité du bouclier et consommation d'endurance comme pour n'importe quel coup ; blocage parfait (Call to Arms) : le vanilla n'annule pas le coup (il multiplie seulement la puissance de blocage, décision 1.3), mais la règle du mod (§4.8) annule ce tick de morsure et retarde le suivant de 0,5 s (phase 5). La valeur retenue pour `P` est la valeur **après blocage**.
-- **Armure** : jamais appliquée aux morsures. Patch : préfixe sur `HitData.ApplyArmor` qui saute l'appel quand `m_attacker` est un amas ou un ver.
-- **Esquive** : frames d'invincibilité de la roulade respectées (vanilla).
+- **Blocage** : le coup agrégé passe par `Humanoid.BlockAttack` vanilla sur le client de la cible : bouclier levé et amas dans l'angle de blocage → réduction selon la puissance de blocage, perte de durabilité du bouclier et consommation d'endurance comme pour n'importe quel coup. Si `Engulf.BlockReducesBites`, la valeur retenue pour `P` est `P × (dégâts après blocage / dégâts avant)`. **Parade parfaite** (blocage dans la fenêtre de parade vanilla, Call to Arms) : le vanilla n'annule pas le coup (il multiplie seulement la puissance de blocage, décision 1.3), mais la règle du mod (§4.8) **annule** ce tick (ni durabilité, ni PV, ni effet) et le tick suivant arrive 1,0 s après le tick annulé ; l'amas n'est pas étourdi. Détection : un postfix de `Humanoid.BlockAttack` remonte « parade parfaite » au contexte de morsure (minuteur de parade vanilla, champ à identifier au décompilé).
+- **Armure** : par défaut (`Engulf.ArmorReducesBites` = false), jamais appliquée aux morsures (préfixe sur `HitData.ApplyArmor` qui saute l'appel quand `m_attacker` est un amas ou un ver, et préfixe sur `Player.DamageArmorDurability`, décision 54). Si la clé est à true, l'armure vanilla réduit `P` comme des dégâts (ratio après/avant).
+- **Esquive** : frames d'invincibilité de la roulade respectées (vanilla) ; le tick qui tombe pendant la roulade est perdu (§6.2).
 - **Mode dieu / fantôme** (devcommands) : aucun coup appliqué (vanilla) ; le harnais désactive le mode dieu pendant les scénarios de morsure.
 
 ### 6.5 Créatures et structures
+
+Phase 6 : en phase 5, l'amas ne cible que des joueurs (le ciblage « tout » arrive avec la phase 6).
 
 - Créature engloutie (apprivoisée ou sauvage) : coup agrégé perçant, armure et résistances vanilla de la créature appliquées, riposte vanilla (la créature attaque l'amas). Pas d'effet Infesté sur les créatures (mais ralentissement : `m_speed` de la créature × 0,5 via un `StatusEffect` sans icône si la créature a un `SEMan`).
 - Structure : coup agrégé contondant sur `WearNTear` ; une porte fermée est une cible valide (l'amas la mange plutôt que de la contourner) ; les pièces à durabilité infinie ou protégées par une pierre de garde suivent la règle vanilla (pas de dégâts).
@@ -344,7 +348,8 @@ Toutes les `Worm.BiteInterval` (0,5 s), l'amas englouti autour d'une cible produ
 
 ### 6.6 Texte et retour visuel
 
-- Chaque tick sur un joueur affiche un texte flottant vanilla (`DamageText`) orange au lieu du rouge des dégâts : « Équipement −12 » (valeur `P` effective), ou le nombre rouge habituel en phase PV.
+- Chaque tick sur un joueur affiche (si `Engulf.ShowDurabilityText`) un texte flottant vanilla (`DamageText`, `TextType.Bonus`, orange, décision 52) au lieu du rouge des dégâts : « Équipement −12 » (valeur `P` effective), puis le nombre rouge vanilla en phase PV.
+- Son : à chaque tick, le son de morsure de tique (nom vérifié au dump) avec le plafond existant ; le « son humide » est choisi au dump (`sfx_blob_*` ou `sfx_leech_*`), sinon omis.
 - Quand une pièce casse, le message vanilla « X est cassé » suffit ; aucun message custom.
 - Rendu de l'engloutissement (piloté par `engulf`, 0 à 1, et la cible ; logique en phase 5) : un lobe de l'amas se centre sur la cible et monte en colonne autour d'elle (rayon ≈ 0,5 m, hauteur jusqu'à 1,8 m) ; ses vers grimpent sur le corps de la cible et la recouvrent (§12.1). Aucun effet d'écran.
 - Pour ne pas aveugler la caméra, les vers à moins de 0,5 m de la caméra ne sont pas rendus quand la caméra est à moins de `r + 0,7 m` du centre (phase 4B). Le dither (matériau translucide) n'est fait que si un shader vanilla le permet (à vérifier, sinon abandonné).
@@ -451,8 +456,8 @@ Le feu est la contre-mesure voulue : il fait fuir les vers et les brûle deux fo
 
 ### 9.1 Feu
 
-- **Peur** (`Fire.AfraidOfFire = true`) : un ver ou un amas actif fuit toute source de feu à moins de `Fire.FearRadius` (4 m) : zone d'effet `EffectArea` de type feu (feu de camp, brasero, torches murales allumées) ou arme/objet de feu tenu par un `Humanoid` (torche, exactement selon la logique vanilla des grisâtres, `BaseAI.m_afraidOfFire` / `AvoidFire` réutilisée pour l'amas, reproduite pour les vers virtuels) **\[À VÉRIFIER : méthode et critère exacts dans `BaseAI` 1.0\]**.
-- Un amas englouti qui subit la peur se détache et recule hors du rayon ; un amas qui reçoit des dégâts de feu fuit pendant `Fire.FearDuration` (3 s, phase 5) même sans source persistante ; un ver, lui, fuit `Worm.FleeDuration` (4 s, §3.3).
+- **Peur** (`Fire.AfraidOfFire = true`) : un ver ou un amas actif fuit toute source de feu. Source de l'amas : une `EffectArea` de type feu (feu de camp, brasero, torches murales allumées) à moins de `Fire.FearRadius` (4 m) du **bord** de l'amas (distance du centre au point le plus proche du collider de l'`EffectArea`, moins `r(n)`), **ou** un `Humanoid`, joueur compris, qui **tient une torche allumée** (objet équipé de type `Torch`, ou l'arme vanilla des torches, identifiée au décompilé) à moins de `Fire.FearRadius` du bord de l'amas. C'est un critère du mod, la vanilla n'ayant pas de critère « torche tenue » (décision 1.1 ligne 38). Vérification toutes les 0,25 s (pas par frame), par la liste statique des `EffectArea` et des joueurs ou `Humanoid` à moins de 15 m. Les vers libres reçoivent le même critère « torche tenue » dans `WormSense.RefreshFire`.
+- Un amas englouti qui subit la peur se détache puis fuit pendant `Fire.FearDuration` (3 s) à l'opposé de la source, à `Mass.MoveSpeed`, puis repasse en Hunt ; un amas qui reçoit des dégâts de feu fuit aussi pendant `Fire.FearDuration` même sans source persistante ; un ver, lui, fuit `Worm.FleeDuration` (4 s, §3.3).
 - Fuir n'empêche pas de brûler : la zone de feu continue d'infliger ses dégâts vanilla, multipliés par la faiblesse (× 2).
 - Le Wisplight n'est pas une source de feu. Les lampes dvergr des mines non plus.
 
@@ -464,7 +469,7 @@ Le feu est la contre-mesure voulue : il fait fuir les vers et les brûle deux fo
 | Lumière | Aucun effet (ni le Wisplight ni une torche n'attirent) |
 | Apprivoisés | Cibles valides ; un loup englouti prend des dégâts PV perçants, et riposte (vanilla) |
 | Autres joueurs | Un joueur peut frapper l'amas collé à un coéquipier ; les dégâts de zone du joueur suivent la règle JcJ vanilla |
-| Mort du joueur | Mort vanilla ; la pierre tombale n'est jamais ciblée ; l'amas choisit une nouvelle cible |
+| Mort du joueur | Mort vanilla ; la pierre tombale n'est jamais ciblée ; l'amas se détache (§4.9) et choisit une nouvelle cible au tick suivant |
 | Déconnexion / changement de propriétaire | La colonie et les amas changent de propriétaire selon les règles ZDO vanilla ; l'état est repris du dernier instantané (§11) |
 | Modificateurs de monde | Les coups agrégés passent par `HitData` vanilla : les curseurs de difficulté de combat s'appliquent aux PV ; `Engulf.ScaleWithWorldModifiers` (défaut `true`) les applique aussi aux points de durabilité |
 | Sommeil, repos, abri | Aucune interaction spécifique |
@@ -476,7 +481,7 @@ Le feu est la contre-mesure voulue : il fait fuir les vers et les brûle deux fo
 ### 9.3 Garde-fous
 
 - Un ver ou un amas ne quitte jamais la boîte du donjon (§8.4).
-- Un amas dont la cible devient invalide (téléportée, déconnectée, morte) relâche sa cible dans la seconde.
+- Un amas dont la cible devient invalide (téléportée, déconnectée, morte) se détache au tick suivant (§4.9 : Infesté retiré, état Hunt) et choisit une nouvelle cible.
 - Toute erreur dans la simulation d'une colonie est journalisée et désactive cette colonie (vers figés, aucun drop) plutôt que de faire planter le client ; le harnais traite tout `Exception` du mod comme un échec de scénario.
 
 ## 10. Architecture technique
@@ -493,7 +498,7 @@ Le pair propriétaire simule la colonie et ses amas ; chaque morsure voyage comm
 | --- | --- | --- | --- |
 | Colonie | `MW_WormColony` (un par mine, à la racine du donjon, ZDO persistant) | `ZNetView`, `WormColony` | Tableaux SoA des vers virtuels ; simulation côté propriétaire ; registre des nids ; état de réveil par groupe ; plafonds ; instantanés et RPC ; fournit les instances à rendre |
 | Ver virtuel | aucun GameObject | entrée `i` des tableaux `pos[]`, `heading[]`, `state[]`, `timer[]`, `hp[]`, `nestIndex[]`, `target[]`, `poolIndex[]` | Toute la logique de §3 ; capacité fixe 400 + marge Debug (réservée au démarrage, aucune allocation en jeu) |
-| Proxy de ver | GameObject poolé (pool de 420), sans `ZNetView` | `SphereCollider` trigger r = 0,18 m sur une couche touchée par les attaques **\[À VÉRIFIER : `character` est touché par `Attack`, `Aoe` et les projectiles vanilla, et un trigger n'entrave pas le joueur\]**, `WormProxy : IDestructible` | Reçoit `Damage(HitData)` → route vers la colonie (local si propriétaire, sinon RPC) ; attaché aux vers rendus à moins de 40 m d'un joueur, suit leur position ; les sphères de coup de l'amas (dôme et coulée, §4.5, §4.7) suivent le même principe de routage |
+| Proxy de ver | GameObject poolé (pool de 420), sans `ZNetView` | `SphereCollider` non trigger r = 0,18 m sur la couche `hitbox` (décisions 47, 49), `WormProxy : IDestructible` | Reçoit `Damage(HitData)` → route vers la colonie (local si propriétaire, sinon RPC) ; attaché aux vers rendus à moins de 40 m d'un joueur, suit leur position ; les sphères de coup de l'amas (dôme et coulée, §4.5, §4.7) suivent le même principe de routage |
 | Amas | `MW_WritheMass` cloné d'un rampant vanilla **\[À VÉRIFIER : `SeekerBrood`\]** via Jötunn `PrefabManager.CreateClonedPrefab` + `AddPrefab` dans `OnVanillaPrefabsAvailable`, sans `CreatureManager` (décision 101) | `ZNetView`, `ZSyncTransform`, `Character`, `Humanoid` (composant `Character` hérité du clone, armes vidées), `WritheMassAI : BaseAI`, `WritheMassState`, `WritheMassVisual`, `Rigidbody`, `CapsuleCollider` (r ≤ 0,6), `Animator` + `ZSyncAnimation` vanilla conservés mais renderers désactivés (évite les `NullReferenceException` de `Character`) | Créature vanilla à part entière : visée par les IA, barre de PV, mort, messages ; logique de §4–§6 ; zone de coup = sphères sur la couche `hitbox` routées vers l'amas (§4.5) |
 | Nid | `MW_WormNest` cloné d'un destructible vanilla **\[À VÉRIFIER : sac d'œufs de fouineur ou autre `Destructible` simple\]** | `ZNetView` (persistant), `Destructible`, `WormNest`, visuel custom | Ponte, couvée, compteur par nid, alerte, libération à la destruction |
 | Effet Infesté | `MW_SE_Infested` (Jötunn `CustomStatusEffect`) | `StatusEffect` avec `ModifySpeed` | §6.2 |
@@ -515,7 +520,11 @@ Le pair propriétaire simule la colonie et ses amas ; chaque morsure voyage comm
 | Cible | Type | Rôle |
 | --- | --- | --- |
 | `DungeonGenerator.Generate` et `DungeonGenerator.Load` | postfix | Ensemencement des mines (§8.3), une fois, drapeau `mw_seeded` |
-| `HitData.ApplyArmor` | prefix (skip) | L'armure n'atténue jamais une morsure (§6.4) |
+| `HitData.ApplyArmor` | prefix (skip) | L'armure n'atténue jamais une morsure, sauf si `Engulf.ArmorReducesBites` (§6.4) |
+| `Player.DamageArmorDurability` | prefix (skip) | Pas d'usure d'armure sur une morsure tant que `Engulf.ArmorReducesBites` est faux (décision 54) |
+| `Humanoid.BlockAttack` | postfix | Remonte « parade parfaite » au contexte de morsure : tick annulé, suivant à 1,0 s (§4.8, §6.4) |
+| RPC `MW_MassBite(ZDOID mass, float P, float hp, Vector3 point)` | du propriétaire de l'amas vers celui de la cible | Ouvre le `WormBiteContext` puis `target.Damage(hit)` en local, comme le cobra (§6.1) |
+| RPC `MW_Infest(bool)` | du propriétaire de l'amas vers celui de la cible | Applique ou retire `MW_SE_Infested` (§6.2) |
 | `Character.ApplyDamage` | prefix | Si l'attaquant est un amas ou un ver et la cible un joueur avec des objets éligibles : convertir les dégâts restants en points de durabilité, afficher le texte « Équipement −P », notifier l'amas, et ne pas appliquer aux PV |
 | `Character.Stagger`, `Character.AddStaggerDamage` | prefix (skip) pour `MW_WritheMass` | Jamais d'étourdissement (§4.8) |
 | `HitData.m_pushForce` (point exact choisi au dump) | prefix | Recul de l'amas × `clamp(10/n, KnockbackMinFactor, 1)` (§4.8) |
@@ -559,7 +568,7 @@ Budget sur le pair propriétaire, mine entière à 400 vers actifs : **≤ 1,0 m
 
 ### 11.2 IA de l'amas
 
-`WritheMassAI : BaseAI`, `UpdateAI` surchargé : (1) si dormant → immobile ; (2) peur du feu via la logique vanilla ; (3) cible selon §5.3 (réutilise `FindEnemy`, `FindClosestStaticPriority`-équivalents et `CanSeeTarget`) ; (4) si cible à portée d'engloutissement → état Engulf (phase 5 ; en phase 4B l'amas s'arrête au contact, état Hunt, sans engloutir, §4.10), sinon `MoveTo(cible)` via pathfinding ; (5) en Engulf, position = cible + retard, tick de morsure (§6.1), conditions de détachement (§4.9) ; (6) hors cible, errance / retour au nid (§4.6) ; (7) sondage de largeur pour la coulée (§4.7). Jamais `DoAttack`, jamais d'`Attack` vanilla, jamais d'animation vanilla.
+`WritheMassAI : BaseAI`, `UpdateAI` surchargé : (1) si dormant → immobile ; (2) peur du feu selon le critère du mod (§9.1) ; (3) cible selon §5.3 (réutilise `FindEnemy`, `FindClosestStaticPriority`-équivalents et `CanSeeTarget`) ; (4) si cible à portée d'engloutissement → état Engulf (§4.9, §4.10), sinon `MoveTo(cible)` via pathfinding ; (5) en Engulf, marche vers la cible à `Mass.MoveSpeed` (arrêt à 0 m, sans téléport ; le retard de 0,15 s ne concerne que la gaine visuelle), tick de morsure (§6.1), conditions de détachement (§4.9) ; (6) hors cible, errance / retour au nid (§4.6) ; (7) sondage de largeur pour la coulée (§4.7). Jamais `DoAttack`, jamais d'`Attack` vanilla, jamais d'animation vanilla.
 
 ### 11.3 Réseau
 
@@ -718,7 +727,7 @@ Chaque nombre de ce document est une clé du fichier `BepInEx/config/dev.pointvi
 | Engulf | `SlowFactor` / `WisplightLast` / `IncludeUnequippedInventory` / `ItemsPerTenWorms` | 0.5 / true / true / 1 | 0.1–1 / bool / bool / 1–10 | §6.2, §6.3 |
 | Engulf | `BlockReducesBites` / `ArmorReducesBites` / `ScaleWithWorldModifiers` / `ShowDurabilityText` | true / false / true / true | bool | §6.4, §9.2 |
 | Engulf | `WisplightVirtualDurability` | 100 | 1–10000 | §6.3 |
-| Engulf | `WisplightPrefab` | `Demister` **\[À VÉRIFIER\]** | string | §6.3 |
+| Engulf | `WisplightPrefab` | `Demister` | string | §6.3 (tranché, décisions 8 et 9) |
 | Targets | `AttackPlayers` / `AttackTamed` / `AttackCreatures` / `AttackStructures` | true ×4 | bool | §5.3 |
 | Targets | `PlayerWeight` / `TamedWeight` / `CreatureWeight` / `StructureWeight` | 0.6 / 0.8 / 1.0 / 1.5 | 0.1–5 | §5.3 |
 | Targets | `ExcludedPrefabs` | `SW_DivineWhale` | liste de prefabs séparés par des virgules | §5.3, §10.4 |
@@ -793,10 +802,10 @@ Tout est exécuté sur le thread principal via une file ; les requêtes sont sé
 | S02 | 40 vers spawnés, joueur visible (le spawn garantit la ligne de vue ver → joueur) | un seul amas de 40 en ≤ 10 s ; `hp = 40 × Worm.Health` ; nom « Amas grouillant (40) » |
 | S03 | Coup injecté de 55 contondant sur un amas de 40 | n = 35, partial = 5 ; 22 perçant → n = 34 (11 effectifs, partial 6) ; 30 feu → ×2 = 60 → n = 28, partial 6 |
 | S02b | 240 vers spawnés, joueur visible (variante de S02) | fusion jusqu'à 200, jamais au-delà : un amas de 200 et un de 40 |
-| S03b | Parade sans stagger (variante de S03, phase 5 : elle demande le blocage des morsures) | parade parfaite : tick de morsure annulé, suivant retardé de 0,5 s, aucun stagger |
-| S04 | Engloutissement, set rembourré complet q1 + Wisplight + 10 objets divers, mode dieu off | effet Infesté actif ; PV inchangés tant qu'un éligible subsiste ; perte de durabilité totale ≈ 80/s ± 25 % ; Wisplight intact tant qu'il reste autre chose ; puis Wisplight ; puis PV baissent |
+| S03b | Parade sans stagger (variante de S03, phase 5 : elle demande le blocage des morsures) | une parade parfaite contre un tick d'amas en Engulf : tick annulé (durabilité et PV inchangés), écart jusqu'au tick suivant de 1,0 s ± 0,1, aucun stagger de l'amas ; plus un blocage simple de comparaison : perte réduite |
+| S04 | Engloutissement, set rembourré complet q1 + Wisplight + 10 objets divers, mode dieu off | (amas de 40, terrain ouvert puis mine) effet Infesté actif ; vitesse × 0,5 mesurée sur 2 s de marche forcée ; PV inchangés tant qu'un éligible subsiste ; perte de durabilité totale ≈ 80/s ± 25 % ; Wisplight intact tant qu'il reste autre chose ; puis Wisplight ; puis PV baissent ; texte « Équipement −P » affiché ; roulade : tick annulé et pas de libération ; blocage simple : perte réduite ; détachement par sprint (téléport de dev du joueur à `r + 2,5 m`, puis 1 s) ; Infesté retiré ensuite ; clip de l'engloutissement |
 | S05 | Pool : inventaire = cuirasse rembourrée seule ; stop à 50 % puis amas tué par coups injectés | fer droppé = floor(10 × d / 1000) et fil de lin = floor(20 × d / 1000), où d = durabilité réellement perdue par la cuirasse (lue avant les coups) ; même résultat que l'amas meure d'un seul coup ou ver par ver ; aucun reste positif après le dernier ver |
-| S06 | Torche en main | aucun engloutissement pendant 10 s, amas à ≥ 4 m ; épée équipée → engloutissement en ≤ 5 s |
+| S06 | Torche en main | torche tenue : aucun engloutissement pendant 10 s, amas à ≥ 4 m **du bord** ; épée équipée → engloutissement en ≤ 5 s ; un feu de camp posé à 3 m d'un amas en Engulf le détache et le fait fuir 3 s ; un ver libre près d'un joueur qui tient une torche fuit |
 | S07 | Amas de 8 ; 4 tués | amas dissous, 4 vers libres en fuite ; regroupement en ≤ 15 s si 3+ proches ; hauteur de bond vérifiée sur le sommet analytique |
 | S08 | Coulée : amas de 200 dans un couloir de mine de 2 m (site plat à ±0,5 m, recherche jusqu'à environ 300 m) | progression ≥ 10 m en ≤ 20 s ; mode Stream observé ; proxies frappables pendant la coulée |
 | S09 | Nid, `SpawnInterval` forcé à 2 s | +3 vers en 6 s ; arrêt à `MaxAlivePerNest` ; aucune ponte pendant 3 s après un coup |
@@ -854,7 +863,7 @@ La livraison est un seul bloc, mais le travail suit dix phases (0 à 9) dans cet
         - **4B-3 — Rendu « tas de vers »** : Blender (`coil`, LOD1, preview ; plus de noyau), code (lobes, rôles, remplissage en volume, mouvement analytique, culling, LOD, rendu de l'englobement piloté par `engulf`, transitions de base), vers proches de la caméra masqués caméra dedans (§6.6), P4_MassPerf, V02 à V04, V10, V11.
         - **4B-4 — Côté colonie** : Gathering, formation, absorption, fusion, dissolution (après une perte seulement) avec les transitions de §12.4 ; S02, S02b, S07, V09.
         - **4B-5 — Sons de l'amas**, sang sur un coup sans perte, non-régression complète.
-6. **Phase 5 — Engloutissement et équipement**. Effet Infesté, tick agrégé, patches `ApplyArmor` / `ApplyDamage`, sélection des pièces, Wisplight, phase PV, blocage, texte flottant, peur du feu (durée de fuite de l'amas = `Fire.FearDuration`), état Engulf de l'amas (§4.10), règle de parade du mod (§4.8, §6.4). Fini quand : S04, S06 et S03b passent.
+6. **Phase 5 — Engloutissement et équipement**. Effet Infesté, tick agrégé, patches `ApplyArmor` / `ApplyDamage`, sélection des pièces, Wisplight, phase PV, blocage, texte flottant, peur du feu (durée de fuite de l'amas = `Fire.FearDuration`), état Engulf de l'amas (§4.10), règle de parade du mod (§4.8, §6.4). Passes : 5-1 (état Engulf, tick, Infesté, choix des pièces, S04), 5-2 (feu et parade, S06, S03b), 5-3 (non-régression complète et documentation, captures et clips). Fini quand : S04, S06 et S03b passent.
 7. **Phase 6 — Pool et drops**. Pool, `RPC_Consumed`, parts entières par reste fractionnaire `carry` (§7.3), reliquat, capture des drops de créatures (patch `CharacterDrop.GenerateDropList`) et de structures, ciblage « tout », factions. Fini quand : S05, S12, S13 passent et la matrice `IsEnemy` est conforme.
 8. **Phase 7 — Nids, spawn, dormance, persistance**. Nid, ponte, plafonds, ensemencement des mines, alerte et retour au calme, instantanés, sauvegarde. Fini quand : S09, S10, S14, S15, S16 passent.
 9. **Phase 8 — Performance et multijoueur**. Profilage, cadences LOD, deltas réseau, dead reckoning, serveur local, tests non-propriétaire, effets de coup et de mort des vers chez les pairs distants (§12.4), coût des amas en tant que créatures (≈ 650 octets par frame pour 2 amas : `Character`, IA, physique ; P4, G(a)). Fini quand : S11 et S17 passent avec les budgets de §11.
@@ -929,8 +938,8 @@ Le mod est livrable quand chaque case est cochée avec, pour les règles de jeu,
 - [ ] Aucun stagger ; recul décroissant ; parade sans stagger, qui annule le tick de morsure (S03b)
 - [ ] L'amas est un tas de vrais vers, sans noyau, qui change de forme de manière organique, avance comme une colonie (tapis roulant, pseudopodes), peut englober un joueur et ne lague pas à 200 vers (V10, V11, P4_MassPerf)
 - [ ] Les transitions de l'amas (formation, absorption, fusion, dissolution, mort d'un ver de surface) sont visibles et sans saut de rayon (V09)
-- [ ] Engloutissement : Infesté, vitesse ÷ 2, attaques et roulade possibles, roulade sans libération, fuite par sprint, feu ou dissolution (S04, S06)
-- [ ] Morsures : 1 point de durabilité par ver toutes les 0,5 s ; tout l'inventaire au hasard ; Wisplight en dernier ; PV seulement après ; blocage réduit, armure non (S04)
+- [ ] Engloutissement : Infesté, vitesse ÷ 2, attaques et roulade possibles, roulade sans libération (tick perdu), fuite par sprint, feu (torche tenue comprise) ou dissolution (S04, S06)
+- [ ] Morsures : 1 point de durabilité par ver toutes les 0,5 s ; tout l'inventaire au hasard, équipé ou non (seules les pièces équipées si `IncludeUnequippedInventory` = false) ; Wisplight en dernier ; PV seulement après (le reste d'un tick va aux PV) ; blocage réduit, armure non ; parade parfaite : tick annulé, suivant à 1,0 s (S03b, S04)
 - [ ] Pool : parts entières par ver tué, reliquat au dernier, arrondi vers le bas, recette de base + améliorations, rien pour les objets sans recette (S05)
 - [ ] Tout est cible une fois éveillé (joueurs, apprivoisés, créatures, dvergar, structures) ; rien ne s'éveille sans joueur ; ce qui est dévoré va dans le pool (S12, S13, S14)
 - [ ] Drops natifs : appâts pondérés par rareté, entrailles, sac de sang ; aucun trophée ; aucun asset nouveau pour les items (S01)

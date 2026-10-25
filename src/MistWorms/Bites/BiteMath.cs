@@ -36,54 +36,64 @@ namespace MistWorms.Bites
     {
         private const float Epsilon = 1e-4f;
 
-        /// <summary>k = clamp(ceil(n / 10) * itemsPerTen, 1, eligible), spec §6.3 point 2.</summary>
+        /// <summary>k = clamp(ceil(itemsPerTen x n / 10), 1, eligible), spec §6.3 point 2 (plan 5, A6).</summary>
         public static int PiecesPerBite(int wormCount, int itemsPerTen, int eligible)
         {
-            int k = ((Math.Max(1, wormCount) + 9) / 10) * Math.Max(1, itemsPerTen);
-            return Math.Max(1, Math.Min(k, eligible));
+            long k = ((long)Math.Max(1, wormCount) * Math.Max(1, itemsPerTen) + 9L) / 10L;
+            return (int)Math.Max(1L, Math.Min(k, Math.Max(1, eligible)));
         }
 
         /// <summary>
         /// Distributes <paramref name="p"/> durability points over random eligible items. <paramref name="losses"/> is cleared and filled
-        /// (one entry per item that lost something). The Wisplight is eligible only when it is the only item left, when
-        /// <paramref name="wisplightLast"/> is set.
+        /// (one entry per item that lost something). The Wisplight (when <paramref name="wisplightLast"/> is set) only takes what the other
+        /// items could not absorb, in the same tick; what nothing could absorb is <see cref="BiteResult.Remaining"/> and goes to health
+        /// (plan 5, A7).
         /// </summary>
         public static BiteResult Select(IList<BiteItem> items, float p, int wormCount, int itemsPerTen, bool wisplightLast, Random rng, List<BiteLoss> losses)
         {
             losses.Clear();
             var result = new BiteResult { Remaining = Math.Max(0f, p) };
 
-            // Eligible set: every item with durability left; the Wisplight only if nothing else remains.
-            var eligible = new List<int>(items.Count);
-            int wisplights = 0;
+            var normal = new List<int>(items.Count);
+            var wisp = new List<int>(2);
             for (int i = 0; i < items.Count; i++)
             {
                 if (items[i].Durability <= 0f) continue;
-                if (wisplightLast && items[i].IsWisplight) { wisplights++; continue; }
-                eligible.Add(i);
+                if (wisplightLast && items[i].IsWisplight) wisp.Add(i);
+                else normal.Add(i);
             }
-            if (eligible.Count == 0 && wisplights > 0)
-            {
-                for (int i = 0; i < items.Count; i++)
-                    if (items[i].Durability > 0f && items[i].IsWisplight) eligible.Add(i);
-            }
-            if (eligible.Count == 0 || result.Remaining <= 0f)
-            {
-                result.HadEligible = eligible.Count > 0;
-                return result;
-            }
-            result.HadEligible = true;
+            result.HadEligible = normal.Count > 0 || wisp.Count > 0;
+            if (!result.HadEligible || result.Remaining <= 0f) return result;
 
-            int count = eligible.Count;
+            var taken = new float[items.Count];
+            float remaining = result.Remaining;
+            if (normal.Count > 0) remaining = Eat(items, normal, taken, remaining, wormCount, itemsPerTen, rng);
+            if (remaining > Epsilon && wisp.Count > 0) remaining = Eat(items, wisp, taken, remaining, wormCount, itemsPerTen, rng);
+
+            float eaten = 0f;
+            for (int i = 0; i < taken.Length; i++)
+            {
+                if (taken[i] <= 0f) continue;
+                losses.Add(new BiteLoss { Id = items[i].Id, Amount = taken[i] });
+                eaten += taken[i];
+            }
+            result.Eaten = eaten;
+            result.Remaining = Math.Max(0f, remaining);
+            return result;
+        }
+
+        /// <summary>One distribution over <paramref name="pool"/> (indices into items): k items drawn, then the excess; returns what is left of <paramref name="p"/>.</summary>
+        private static float Eat(IList<BiteItem> items, List<int> pool, float[] taken, float p, int wormCount, int itemsPerTen, Random rng)
+        {
+            int count = pool.Count;
             var left = new float[count];
-            var taken = new float[count];
-            for (int e = 0; e < count; e++) left[e] = items[eligible[e]].Durability;
+            for (int e = 0; e < count; e++) left[e] = items[pool[e]].Durability - taken[pool[e]];
 
             // k items drawn without replacement (partial Fisher-Yates), each asked for P / k and capped by what it has left.
             int k = PiecesPerBite(wormCount, itemsPerTen, count);
             var order = new int[count];
             for (int e = 0; e < count; e++) order[e] = e;
-            float remaining = result.Remaining;
+            float remaining = p;
             float share = remaining / k;
             for (int c = 0; c < k; c++)
             {
@@ -94,7 +104,7 @@ namespace MistWorms.Bites
 
                 float take = Math.Min(share, left[pick]);
                 left[pick] -= take;
-                taken[pick] += take;
+                taken[pool[pick]] += take;
                 remaining -= take;
             }
 
@@ -115,20 +125,10 @@ namespace MistWorms.Bites
                 }
                 float take = Math.Min(remaining, left[target]);
                 left[target] -= take;
-                taken[target] += take;
+                taken[pool[target]] += take;
                 remaining -= take;
             }
-
-            float eaten = 0f;
-            for (int e = 0; e < count; e++)
-            {
-                if (taken[e] <= 0f) continue;
-                losses.Add(new BiteLoss { Id = items[eligible[e]].Id, Amount = taken[e] });
-                eaten += taken[e];
-            }
-            result.Eaten = eaten;
-            result.Remaining = Math.Max(0f, remaining);
-            return result;
+            return remaining;
         }
     }
 }

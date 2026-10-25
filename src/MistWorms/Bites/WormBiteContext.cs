@@ -16,15 +16,28 @@ namespace MistWorms.Bites
         /// <summary>Health damage the bite carries before blocking and resistances; the block ratio is measured against it.</summary>
         public static float HpDamageOriginal { get; private set; }
 
+        /// <summary>Worms behind the bite (1 for a cobra strike, n for the aggregated tick of a mass): drives the number of pieces bitten.</summary>
+        public static int WormCount { get; private set; } = 1;
+
+        /// <summary>The mass that sent the tick (ZDOID.None for a cobra strike).</summary>
+        public static ZDOID Mass { get; private set; }
+
+        /// <summary>The bite was parried perfectly (a postfix of the vanilla block, plan 5, A11): the tick is cancelled and the next one delayed.</summary>
+        public static bool PerfectParry { get; private set; }
+
+        public static void MarkPerfectParry() => PerfectParry = true;
+
 #if MW_DEV
         // Debug counters read by the scenarios (P3_Cobra).
         public static int Bites;
         public static float DurabilityEaten;
         public static float HealthDamage;
         public static int HealthBites;
+        public static int Texts;
 
         public static void ResetCounters()
         {
+            Texts = 0;
             Bites = 0;
             DurabilityEaten = 0f;
             HealthDamage = 0f;
@@ -32,12 +45,15 @@ namespace MistWorms.Bites
         }
 #endif
 
-        public static void Begin(Character target, float p, float hpDamageOriginal)
+        public static void Begin(Character target, float p, float hpDamageOriginal, int wormCount = 1, ZDOID mass = default)
         {
             Active = true;
             Target = target;
             P = p;
             HpDamageOriginal = hpDamageOriginal;
+            WormCount = System.Math.Max(1, wormCount);
+            Mass = mass;
+            PerfectParry = false;
         }
 
         public static void End()
@@ -46,6 +62,9 @@ namespace MistWorms.Bites
             Target = null;
             P = 0f;
             HpDamageOriginal = 0f;
+            WormCount = 1;
+            Mass = ZDOID.None;
+            PerfectParry = false;
         }
     }
 }

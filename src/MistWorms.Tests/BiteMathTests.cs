@@ -25,6 +25,9 @@ namespace MistWorms.Tests
         [InlineData(40, 1, 3, 3)]      // clamped to the eligible items
         [InlineData(10, 2, 10, 2)]     // ItemsPerTenWorms = 2
         [InlineData(0, 1, 5, 1)]       // never below one piece
+        [InlineData(5, 2, 10, 1)]      // ceil(2 x 5 / 10) = 1 (plan 5, A6)
+        [InlineData(11, 2, 10, 3)]     // ceil(22 / 10) = 3
+        [InlineData(40, 2, 10, 8)]
         public void PiecesPerBiteFollowsTheSpecFormula(int worms, int itemsPerTen, int eligible, int expected)
         {
             Assert.Equal(expected, BiteMath.PiecesPerBite(worms, itemsPerTen, eligible));
@@ -107,6 +110,28 @@ namespace MistWorms.Tests
                 seen = free.Any(l => l.Id == 1);
             }
             Assert.True(seen);
+        }
+
+        [Fact]
+        public void WisplightTakesWhatTheOtherItemsCannotAbsorbInTheSameTick()
+        {
+            var items = new[] { Item(0, 3f), Item(1, 100f, wisplight: true) };
+            BiteResult r = Run(items, 10f, 1, 4, out List<BiteLoss> losses);
+            Assert.Equal(10f, r.Eaten, 3);
+            Assert.Equal(0f, r.Remaining, 3);
+            Assert.Equal(3f, losses.Single(l => l.Id == 0).Amount, 3);
+            Assert.Equal(7f, losses.Single(l => l.Id == 1).Amount, 3);
+        }
+
+        [Fact]
+        public void RemainderGoesToHealthOnceWisplightIsSpentToo()
+        {
+            // 40 worms x 1 point: the rest of P (what nothing could eat) is what the health phase prorates on.
+            var items = new[] { Item(0, 10f), Item(1, 5f, wisplight: true) };
+            BiteResult r = Run(items, 40f, 40, 2, out List<BiteLoss> losses);
+            Assert.True(r.HadEligible);
+            Assert.Equal(15f, r.Eaten, 3);
+            Assert.Equal(25f, r.Remaining, 3);
         }
 
         [Fact]

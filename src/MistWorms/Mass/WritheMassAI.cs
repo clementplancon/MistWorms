@@ -9,10 +9,13 @@ namespace MistWorms.Mass
 {
     /// <summary>
     /// AI of a writhing mass (spec §4.6, §4.7, §5.3, §11.2, plan 4B-2). A <see cref="BaseAI"/>, not a MonsterAI: the MonsterAI chase needs a weapon and
-    /// starts vanilla attacks; this one only picks a player, walks to it with the vanilla pathfinding and stops at contact (no engulfing before phase 5).
+    /// starts vanilla attacks; this one only picks a player, walks to it with the vanilla pathfinding and engulfs it at contact (phase 5).
     /// The prefab needs some BaseAI because <c>EnemyHud</c> calls <c>GetBaseAI()</c> without a null test.
     /// <list type="bullet">
     /// <item>Hunt: toward the target, stopping at r(n) + Mass.EngulfRange. Idle: wanders within 6 m of the last point of interest at half speed.</item>
+    /// <item>Engulf (phase 5): within r(n) + Mass.EngulfRange of the target the mass walks onto it (2.4 m/s, no teleport), applies the Infested effect, and
+    /// every Worm.BiteInterval sends one aggregated bite tick (<see cref="MassEngulf"/>); it lets go when the target is invalid or stays beyond
+    /// r + Mass.DetachDistance for Mass.DetachDelay, or when the mass dies or dissolves.</item>
     /// <item>Dormant: a stub, the mass stands still (phase 7).</item>
     /// <item>Stream: every 0.25 s the free width ahead decides between the dome and the ribbon form (<see cref="MassStream"/>).</item>
     /// </list>
@@ -52,6 +55,17 @@ namespace MistWorms.Mass
 
         private WritheMassState _state;
         private Player _target;
+
+        // Engulfing (owner only, plan 5, A1 to A5, A13, A15).
+        private bool _engulfing;
+        private Player _engulfed;                 // the player the Infested effect was sent for
+        private BiteTicker _ticker;
+        private DetachTracker _detach;
+        private float _nextInfest;
+        private Vector3 _biteDir;
+        private bool _inTick, _tickParried;
+        private float _nextFireCheck, _fleeUntil;
+        private Vector3 _fleeFrom;
         private float _targetSeen;
         private float _nextTarget;
         private float _nextProbe;
@@ -141,8 +155,9 @@ namespace MistWorms.Mass
         {
             float now = Time.time;
             byte mode = MassStateCodes.Mode(_state.StateCode);
-            if (_state.FreezeAI || _state.Dissolving || mode == MassStateCodes.Dormant)
+            if (_state.FreezeAI || _state.Dissolving || mode == MassStateCodes.Dormant || m_character.IsDead())
             {
+                if (_engulfing) EndEngulf(DetachReason.Dissolution, now);
                 StopMoving();
                 return;
             }
@@ -159,7 +174,17 @@ namespace MistWorms.Mass
             }
 
             // Going to join a bigger mass of the colony comes before the hunt while it lasts (at most MergeSeekMaxSeconds).
+            CheckFire(now);
+            if (now < _fleeUntil)
+            {
+                if (_engulfing) EndEngulf(DetachReason.Fire, now);
+                Flee(dt);
+                return;
+            }
+
             bool seeking = _state.TryGetSeekGoal(out Vector3 seekGoal);
+            if (!_engulfing && !seeking && !DevGoal.HasValue && _target != null) TryBeginEngulf(now);
+            if (_engulfing && StepEngulf(dt, now)) return;
             if (seeking) Hunt(dt, seekGoal);
             else if (_target != null || DevGoal.HasValue) Hunt(dt);
             else Idle(dt);
@@ -169,6 +194,13 @@ namespace MistWorms.Mass
 
         private void ChooseTarget(float now)
         {
+            // An engulfing mass keeps its target: StepEngulf decides when to let go, then a new choice is made.
+            if (_engulfing && _target != null)
+            {
+                _targetSeen = now;
+                return;
+            }
+
             if (!MWConfig.Targets.AttackPlayers.Value && DevForcedTarget == null)
             {
                 SetTarget(null);
@@ -273,6 +305,12 @@ namespace MistWorms.Mass
             Vector3 goal = seek ?? DevGoal ?? _target.transform.position;
             float stop = seek.HasValue || DevGoal.HasValue ? DevGoalStop : MassMath.Radius(Mathf.Max(1, _state.N)) + MWConfig.Mass.EngulfRange.Value;
 
+            WalkTo(dt, goal, stop);
+        }
+
+        /// <summary>Walks toward <paramref name="goal"/> with the vanilla path, or straight at it without a path; stops at <paramref name="stop"/> (horizontal).</summary>
+        private void WalkTo(float dt, Vector3 goal, float stop)
+        {
             bool done = MoveTo(dt, goal, stop, false);
             if (!done)
             {
@@ -297,6 +335,179 @@ namespace MistWorms.Mass
             // is still trying to climb, so a stall here is a stall to assist.
             bool climbing = goal.y - transform.position.y > 0.35f && flat < stop + 1.5f;
             StepAssist(climbing);
+        }
+
+        // ------------------------------------------------------------------ engulfing (plan 5, A1 to A5, A13, A15)
+
+        /// <summary>True while this mass engulfs a player (owner side).</summary>
+        public bool Engulfing => _engulfing;
+
+        /// <summary>Time of the next bite tick (dev checks), and the horizontal direction mass to target that decides the block angle.</summary>
+        public float NextTickTime => _ticker.Next;
+        public Vector3 BiteDir => _biteDir;
+
+        /// <summary>Dev counters: engulfings begun, and why the last one ended.</summary>
+        public int EngulfCount { get; private set; }
+        public DetachReason LastDetach { get; private set; }
+
+        private void TryBeginEngulf(float now)
+        {
+            Player t = _target;
+            if (t == null || !Targetable(t) || _state.Merging || MassStateCodes.IsTransferring(_state.StateCode)) return;
+            if (!MWConfig.Targets.AttackPlayers.Value && DevForcedTarget == null) return;
+            Vector3 pos = transform.position;
+            Vector3 tp = t.transform.position;
+            float flat = Utils.DistanceXZ(tp, pos);
+            if (Mathf.Abs(tp.y - pos.y) > EngulfMath.MaxHeightGap) return;
+            float r = MassMath.Radius(Mathf.Max(1, _state.N));
+            if (!EngulfMath.InEngulfRange(flat, r, MWConfig.Mass.EngulfRange.Value)) return;
+
+            _engulfing = true;
+            _engulfed = t;
+            EngulfCount++;
+            _ticker.Start(now, MWConfig.Worm.BiteInterval.Value);
+            _detach.Reset();
+            Vector3 d = tp - pos;
+            d.y = 0f;
+            _biteDir = d.sqrMagnitude > 1e-4f ? d.normalized : transform.forward;
+            _nextInfest = now;                                  // the effect goes out at once
+            _state.SetMode(MassStateCodes.Engulf);
+            Plugin.Log.LogDebug($"[Engulf] {_state.ZdoId} (n={_state.N}) engulfs {t.GetPlayerName()} at {flat:0.00} m (r {r:0.00})");
+        }
+
+        /// <summary>One AI tick of an engulfing. Returns false when the mass let go (the normal hunt or wandering then runs this tick).</summary>
+        private bool StepEngulf(float dt, float now)
+        {
+            Player t = _target;
+            bool valid = t != null && Targetable(t);
+            Vector3 pos = transform.position;
+            float flat = valid ? Utils.DistanceXZ(t.transform.position, pos) : 0f;
+            float r = MassMath.Radius(Mathf.Max(1, _state.N));
+            bool tooFar = valid && _detach.Update(now, flat, EngulfMath.DetachLimit(r, MWConfig.Mass.DetachDistance.Value), MWConfig.Mass.DetachDelay.Value);
+            DetachReason reason = EngulfMath.Decide(valid, _state.Dissolving || m_character.IsDead(), now < _fleeUntil, tooFar);
+            if (reason != DetachReason.None)
+            {
+                EndEngulf(reason, now);
+                return false;
+            }
+
+            _state.SetMode(MassStateCodes.Engulf);
+            SetSpeedFactor(1f);
+            WalkTo(dt, t.transform.position, MassEngulf.WalkStop);
+
+            if (flat > 0.4f)
+            {
+                Vector3 d = t.transform.position - pos;
+                d.y = 0f;
+                _biteDir = d.normalized;
+            }
+
+            if (_ticker.Due(now))
+            {
+                // A perfect parry reports back while the bite is sent (solo: synchronously) or later (another peer owns the player).
+                _inTick = true;
+                _tickParried = false;
+                MassEngulf.SendBite(_state, t, _biteDir);
+                _inTick = false;
+                _ticker.Advance(now, MWConfig.Worm.BiteInterval.Value, _tickParried, EngulfMath.ParryDelay);
+            }
+            if (now >= _nextInfest)
+            {
+                _nextInfest = now + MassEngulf.InfestRefresh;
+                MassEngulf.SendInfest(t, true);
+            }
+            return true;
+        }
+
+        private void EndEngulf(DetachReason reason, float now)
+        {
+            _engulfing = false;
+            LastDetach = reason;
+            _ticker.Stop();
+            _detach.Reset();
+            Player p = _engulfed;
+            _engulfed = null;
+            if (p != null) MassEngulf.SendInfest(p, false);
+            if (reason == DetachReason.TargetInvalid) _nextTarget = 0f;   // a new target is chosen at once (spec §9.3)
+            if (!_state.Dissolving && !m_character.IsDead()) _state.SetMode(MassStateCodes.Hunt);
+            Plugin.Log.LogDebug($"[Engulf] {_state.ZdoId} lets go: {reason}");
+        }
+
+        /// <summary>The target's owner reports that the tick just sent was parried perfectly: the next one comes ParryDelay later (plan 5, A11).</summary>
+        internal void Parried()
+        {
+            ParriedTicks++;
+            if (_inTick) _tickParried = true;
+            else if (_engulfing) _ticker.Postpone(EngulfMath.ParryDelay);
+        }
+
+        /// <summary>Dev counter: ticks of this mass that were parried.</summary>
+        public int ParriedTicks { get; private set; }
+
+        // ------------------------------------------------------------------ fear of fire (spec 9.1, plan 5, A16)
+
+        private const float FireCheckPeriod = 0.25f;
+        private const float FireMargin = 0.6f;       // what the mass walks between two checks: it turns before the fear line
+
+        /// <summary>True while the mass flees a fire (dev checks).</summary>
+        public bool Fleeing => Time.time < _fleeUntil;
+
+        /// <summary>Times a fire made this mass flee (dev checks).</summary>
+        public int FireFlights { get; private set; }
+
+        /// <summary>
+        /// Every 0.25 s: a fire area or a lit torch held by a humanoid within Fire.FearRadius of the EDGE of the mass (centre distance minus r(n)), or
+        /// the mass burning, starts a flight that lasts Fire.FearDuration after the last time it was frightened.
+        /// </summary>
+        private void CheckFire(float now)
+        {
+            if (now < _nextFireCheck) return;
+            _nextFireCheck = now + FireCheckPeriod;
+            if (!MWConfig.Fire.AfraidOfFire.Value) return;
+
+            Vector3 pos = transform.position;
+            float r = MassMath.Radius(Mathf.Max(1, _state.N));
+            Vector3 from;
+            bool afraid = FireSources.Nearest(pos + Vector3.up * EyeHeight, r, MWConfig.Fire.FearRadius.Value, FireMargin, out from, out _);
+            if (!afraid && m_character.GetSEMan().HaveStatusEffect(SEMan.s_statusEffectBurning))
+            {
+                // Burning: no known source, run from the target (or backwards).
+                afraid = true;
+                from = _target != null ? _target.transform.position : pos - transform.forward;
+            }
+            if (!afraid) return;
+            if (now >= _fleeUntil) FireFlights++;
+            _fleeFrom = from;
+            _fleeUntil = now + MWConfig.Fire.FearDuration.Value;
+        }
+
+        private const float FleeReach = 8f;
+
+        /// <summary>Runs away from the fire at Mass.MoveSpeed.</summary>
+        private void Flee(float dt)
+        {
+            _state.SetMode(MassStateCodes.Hunt);
+            SetSpeedFactor(1f);
+            Vector3 pos = transform.position;
+            Vector3 away = FireMath.AwayFrom(_fleeFrom, pos, -transform.forward);
+            MoveAndAvoid(dt, pos + away * FleeReach, 0.5f, false);
+        }
+
+        /// <summary>Called by the state when the mass is destroyed (BaseAI.OnDestroy is private, so it cannot be overridden): the Infested effect is released at once.</summary>
+        internal void ReleaseOnDestroy()
+        {
+            if (!_engulfing) return;
+            _engulfing = false;
+            try
+            {
+                Player p = _engulfed;
+                _engulfed = null;
+                if (p != null && ZRoutedRpc.instance != null) MassEngulf.SendInfest(p, false);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogException("WritheMassAI.ReleaseOnDestroy", e);
+            }
         }
 
         /// <summary>See the constants above. <paramref name="wantsToMove"/> is false when the mass is where it wanted to be (no stall to detect).</summary>

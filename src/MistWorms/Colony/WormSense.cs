@@ -15,6 +15,7 @@ namespace MistWorms.Colony
         private const float ForgetTime = 5f;             // target unseen for this long is dropped
         private const float FireInterval = 0.5f;         // spec §9.1 reading of EffectArea.GetAllAreas
         private const int MaxFireColliders = 16;
+        private const int MaxTorchHolders = 8;
 
         private const int PathSlots = 32;                // pool of 32 paths of 24 points (plan A3)
         private const int PathPoints = 24;
@@ -27,6 +28,8 @@ namespace MistWorms.Colony
         private readonly Collider[] _fire = new Collider[MaxFireColliders];
         private int _fireCount;
         private float _nextFireTime;
+        private readonly Humanoid[] _torchHolders = new Humanoid[MaxTorchHolders];   // humanoids with a lit torch near the box (plan 5, A16)
+        private int _torchCount;
 
         private Vector3[] _pathPoints;
         private int[] _pathLength;
@@ -138,17 +141,25 @@ namespace MistWorms.Colony
         // ------------------------------------------------------------------ fire (spec §9.1, decisions 16)
 
         /// <summary>
-        /// Reads the fire areas once per 0.5 s and keeps the active ones whose collider is near the box. The "torch held by a
-        /// humanoid" criterion stays open until phase 5; a torch only counts if its prefab carries a fire EffectArea.
+        /// Reads the fire areas once per 0.5 s and keeps the active ones whose collider is near the box, and the humanoids (players included) that hold
+        /// a lit torch near it (the mod's own criterion, <see cref="FireSources.HoldsTorch"/>; their position is read when a worm is tested).
         /// </summary>
         private void RefreshFire(float now)
         {
             if (now < _nextFireTime) return;
             _nextFireTime = now + FireInterval;
             _fireCount = 0;
+            _torchCount = 0;
             if (!MWConfig.Fire.AfraidOfFire.Value) return;
 
             float radius = MWConfig.Fire.FearRadius.Value;
+            Bounds torchBox = _boxBounds;
+            torchBox.Expand(radius * 2f);
+            List<Character> everyone = Character.GetAllCharacters();
+            for (int k = 0; k < everyone.Count && _torchCount < MaxTorchHolders; k++)
+            {
+                if (everyone[k] is Humanoid h && FireSources.HoldsTorch(h) && torchBox.Contains(h.transform.position)) _torchHolders[_torchCount++] = h;
+            }
             List<EffectArea> areas = EffectArea.GetAllAreas();
             for (int k = 0; k < areas.Count && _fireCount < MaxFireColliders; k++)
             {
@@ -170,11 +181,22 @@ namespace MistWorms.Colony
         /// </summary>
         private bool FireCheck(int i, bool alreadyFleeing)
         {
-            if (_fireCount == 0) return false;
+            if (_fireCount == 0 && _torchCount == 0) return false;
             WormStore s = Store;
             Vector3 p = s.pos[i];
             float radius = MWConfig.Fire.FearRadius.Value;
             float r2 = radius * radius;
+
+            for (int k = 0; k < _torchCount; k++)
+            {
+                Humanoid h = _torchHolders[k];
+                if (h == null || !FireSources.HoldsTorch(h)) continue;
+                Vector3 hp = h.transform.position;
+                if ((hp - p).sqrMagnitude > r2) continue;
+                s.fleeFrom[i] = hp;
+                if (!alreadyFleeing) ClearTarget(i);
+                return true;
+            }
 
             for (int k = 0; k < _fireCount; k++)
             {

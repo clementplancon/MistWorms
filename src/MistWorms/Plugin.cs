@@ -46,6 +46,8 @@ namespace MistWorms
 
             PrefabManager.OnVanillaPrefabsAvailable += OnVanillaPrefabsAvailable;
             ItemManager.OnItemsRegistered += Drops.BaitWeightsInit.OnItemsRegistered;
+            Bites.InfestedEffect.Register();
+            ItemManager.OnItemsRegistered += OnItemsRegistered;
 
 #if MW_DEV
             Dev.DevBootstrap.Init(this);
@@ -57,6 +59,13 @@ namespace MistWorms
         {
             // The only safe moment to build the effect templates (DestroyImmediate) and to play what the hits and deaths asked for.
             if (!Application.isBatchMode) Colony.WormEffects.Pump();
+        }
+
+        /// <summary>The ObjectDB is ready (every time it is rebuilt): the Wisplight gets its virtual durability and the Infested effect its icon (plan 5-1).</summary>
+        private void OnItemsRegistered()
+        {
+            Bites.Wisplight.Apply();
+            Bites.InfestedEffect.ChooseIcon();
         }
 
         private void OnVanillaPrefabsAvailable()

@@ -22,6 +22,7 @@ namespace MistWorms.Bites
             s_items.Clear();
             s_source.Clear();
 
+            Wisplight.FixInventory(player.GetInventory());
             bool includeAll = MWConfig.Engulf.IncludeUnequippedInventory.Value;
             string wisplight = MWConfig.Engulf.WisplightPrefab.Value;
             foreach (ItemDrop.ItemData item in player.GetInventory().GetAllItems())

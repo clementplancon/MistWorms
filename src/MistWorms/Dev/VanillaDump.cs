@@ -98,6 +98,7 @@ namespace MistWorms.Dev
             Section(sb, "10. Particle systems of priority and hit / hurt / blood effects", s => DumpParticles(s, prefabs));
             Section(sb, "11. Effects referenced by the dumped creatures", s => DumpReferencedEffects(s, prefabs));
             Section(sb, "12. Albedo and gloss texture statistics", s => DumpTextureStats(s, prefabs));
+            Section(sb, "13. Status effects (ObjectDB.m_StatusEffects, Infested icon candidates)", DumpStatusEffects);
 
             try
             {
@@ -1364,6 +1365,22 @@ namespace MistWorms.Dev
             for (int i = 0; i < 4; i++)
                 rows.Add(new object[] { source, t.name, $"{w}x{h} / {(srgb ? "sRGB" : "linear")}", names[i], px.Length > 0 ? sum[i] / px.Length : 0.0, min[i], max[i] });
             return rows;
+        }
+
+        // ------------------------------------------------------------------ 13. status effects
+
+        private static void DumpStatusEffects(StringBuilder sb)
+        {
+            List<StatusEffect> effects = ObjectDB.instance.m_StatusEffects.Where(e => e != null).ToList();
+            sb.AppendLine($"ObjectDB: {effects.Count} status effects, {effects.Count(e => e.m_icon != null)} with an icon. " +
+                          $"Candidates for the Infested icon: `{VanillaNames.InfestedIconPreferred}`, else `{VanillaNames.InfestedIconFallback}`, else none. " +
+                          $"Choice made at runtime: {Bites.InfestedEffect.IconNote}.").AppendLine();
+            Table(sb, new[] { "Name", "m_name", "Type", "Icon (sprite)", "m_ttl", "Category", "Hidden", "Candidate" },
+                effects.OrderBy(e => e.name, StringComparer.Ordinal).Select(e => new object[]
+                {
+                    e.name, Token(e.m_name), e.GetType().Name, e.m_icon != null ? e.m_icon.name : "-", e.m_ttl, e.m_category, e.m_hidden,
+                    e.name == VanillaNames.InfestedIconPreferred ? "preferred" : (e.name == VanillaNames.InfestedIconFallback ? "fallback" : string.Empty),
+                }));
         }
 
         // ------------------------------------------------------------------ helpers

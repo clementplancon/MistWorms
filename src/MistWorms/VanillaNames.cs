@@ -46,6 +46,7 @@ namespace MistWorms
         // ---- Items and pieces used by the dev scenarios (spec §15.5) ----
         public const string SwordBronze = "SwordBronze";               // confirmed (dump section 4, bronze weapons)
         public const string MaceBronze = "MaceBronze";                 // confirmed (dump section 4, bronze weapons; decisions.md 1.1 line 3)
+        public const string FirePit = "fire_pit";                      // unverified: the camp fire, dev scenario S06 (fuel at spawn: Fireplace.m_startFuel)
         public const string Torch = "Torch";                           // unverified (spec §20.1)
         public const string ArmorPaddedCuirass = "ArmorPaddedCuirass"; // confirmed (dump section 4, padded armor)
         public const string ArmorPaddedGreaves = "ArmorPaddedGreaves"; // confirmed (dump section 4)
@@ -138,7 +139,9 @@ namespace MistWorms
         public const string LayerInstanceRenderer = "InstanceRenderer";  // confirmed: vanilla InstanceRenderer draws on it
 
         // ---- Status effect icon source (spec §6.2) ----
-        public const string InfestedIconSource = "Tared";         // unverified placeholder (spec §6.2): any vanilla SE sprite
+        // Icon of the Infested effect, chosen at runtime (InfestedEffect.ChooseIcon): the status effect named Slimed, else Poison, else no icon (each needs an icon). The choice is logged; the dump lists every candidate.
+        public const string InfestedIconPreferred = "Slimed";   // chosen from dump section 13: the vanilla slime slow, a green goo icon
+        public const string InfestedIconFallback = "Poison";
 
         // ---- Confirmed effects (dump section 1, Tick/SeekerBrood effect tables, and section 3) ----
         public const string FxTickDeath = "fx_tick_death";                 // confirmed (dump L279): Tick m_deathEffects

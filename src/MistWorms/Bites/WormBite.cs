@@ -58,7 +58,7 @@ namespace MistWorms.Bites
             target.Damage(hit);
         }
 
-        private static HitData NewHit(float pierce, Vector3 point, Vector3 dir)
+        internal static HitData NewHit(float pierce, Vector3 point, Vector3 dir, float pushForce = PushForce)
         {
             var hit = new HitData();
             hit.m_damage.m_pierce = pierce;
@@ -67,7 +67,7 @@ namespace MistWorms.Bites
             hit.m_blockable = true;   // vanilla leaves both false: a bite must opt in (decisions.md 1.3)
             hit.m_dodgeable = true;
             hit.m_hitType = HitData.HitType.EnemyHit;
-            hit.m_pushForce = PushForce;
+            hit.m_pushForce = pushForce;
             return hit;
         }
 
@@ -96,7 +96,7 @@ namespace MistWorms.Bites
             }
         }
 
-        private static Player FindOwnedPlayer(ZDOID id)
+        internal static Player FindOwnedPlayer(ZDOID id)
         {
             var players = Player.GetAllPlayers();
             for (int i = 0; i < players.Count; i++)
@@ -111,6 +111,9 @@ namespace MistWorms.Bites
         public static void ShowEquipmentText(Vector3 point, float eaten)
         {
             if (!MWConfig.Engulf.ShowDurabilityText.Value || DamageText.instance == null) return;
+#if MW_DEV
+            WormBiteContext.Texts++;
+#endif
             string amount = eaten.ToString("0.#", CultureInfo.InvariantCulture);
             DamageText.instance.ShowText(DamageText.TextType.Bonus, point, MWLocalization.Format("$mw_text_eq", amount), true);
         }
