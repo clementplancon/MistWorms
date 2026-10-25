@@ -355,17 +355,32 @@ namespace MistWorms.Dev.Scenarios
         /// <summary>Average horizontal speed over <see cref="SpeedSeconds"/> of forced running along <paramref name="dir"/> (after a 0.7 s ramp).</summary>
         private static IEnumerator MeasureSpeed(ScenarioContext ctx, Player player, Vector3 dir, System.Action<float> result)
         {
+            // Full stamina before and during the run, the player must really be running (IsRunning) and the window starts after the acceleration (0.7 s).
+            // The speed is the horizontal distance over the stabilised window; the slope is logged (a climb or descent changes the horizontal speed).
+            player.m_stamina = player.GetMaxStamina();
             player.SetLookDir(dir);
             DevInput.Set(new Vector3(0f, 0f, 1f), true, false);
             float ramp = Time.time + 0.7f;
             while (Time.time < ramp) { player.m_stamina = player.GetMaxStamina(); yield return null; }
             Vector3 p0 = player.transform.position;
             float t0 = Time.time, end = t0 + SpeedSeconds;
-            while (Time.time < end) { player.m_stamina = player.GetMaxStamina(); yield return null; }
+            int frames = 0, running = 0;
+            float minStamina = float.MaxValue;
+            while (Time.time < end)
+            {
+                player.m_stamina = player.GetMaxStamina();
+                frames++;
+                if (player.IsRunning()) running++;
+                minStamina = Mathf.Min(minStamina, player.GetStamina());
+                yield return null;
+            }
             Vector3 d = player.transform.position - p0;
+            float rise = d.y;
             d.y = 0f;
             DevInput.Release();
-            result(d.magnitude / Mathf.Max(0.01f, Time.time - t0));
+            float speed = d.magnitude / Mathf.Max(0.01f, Time.time - t0);
+            ctx.Log($"speed window: {speed:0.00} m/s over {Time.time - t0:0.00} s, running {running}/{frames} frames, lowest stamina {minStamina:0.#}/{player.GetMaxStamina():0.#}, rise {rise:0.00} m, infested {Bites.InfestedEffect.IsActive(player)}");
+            result(speed);
         }
 
         private static Vector3 Flat(Vector3 v, Vector3 fallback)

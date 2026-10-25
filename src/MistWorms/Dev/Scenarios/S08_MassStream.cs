@@ -594,6 +594,14 @@ namespace MistWorms.Dev.Scenarios
             if (look != null) look.ProbeEnabled = true;
             Vector3 side = Vector3.Cross(Vector3.up, dir);
             int lastProbeFrame = -1, fluxSeen = 0, fluxCentred = 0, probeFrames = 0;
+            // Samples are taken at full speed only (steady state). Once the required progress is reached the mass is sent back and forth along the corridor
+            // (DevGoal, no engulfing) so that the ribbon is sampled for the rest of the run: about twice the samples of a single pass. The per-second share of
+            // centred flux worms is logged (min, median, max).
+            var secSeen = new List<int>(32);
+            var secCentred = new List<int>(32);
+            int bucket = -1, bucketSeen = 0, bucketCentred = 0;
+            bool bouncing = false, toFar = false;
+            Vector3 goalFar = playerSpot - dir * (stop + 0.5f), goalNear = start;
             float maxHeadingError = 0f, maxLateralWorld = 0f;
             float maxLateral = 0f, maxLateralFlux = 0f, maxLateralBorder = 0f, sampledWidth = 0f;
             while (Time.time - t0 < seconds && mass != null)
@@ -607,6 +615,18 @@ namespace MistWorms.Dev.Scenarios
                     ctx.Log($"no target after {ForceTargetAfter} s: the player is forced as the target for the rest of the run");
                 }
 
+                if (timeToRequired >= 0f && !bouncing)
+                {
+                    bouncing = true;
+                    toFar = false;
+                    ai.DevGoal = goalNear;
+                }
+                else if (bouncing && Utils.DistanceXZ(mass.transform.position, toFar ? goalFar : goalNear) < 1.5f)
+                {
+                    toFar = !toFar;
+                    ai.DevGoal = toFar ? goalFar : goalNear;
+                }
+
                 progress = Vector3.Dot(mass.transform.position - origin, dir);
                 if (progress > maxProgress) maxProgress = progress;
                 if (timeToRequired < 0f && progress >= required) timeToRequired = elapsed;
@@ -617,13 +637,19 @@ namespace MistWorms.Dev.Scenarios
                     ribbon = mass.StreamWidth;
                     ribbonLength = mass.RibbonLength;
                     MassJob probeJob = look != null ? look.Job : null;
-                    if (probeJob != null && probeJob.ReadyIdx >= 0 && elapsed - firstStream > 1.5f && look.StreamK >= 0.999f)
+                    if (probeJob != null && probeJob.ReadyIdx >= 0 && elapsed - firstStream > 1.5f && look.StreamK >= 0.999f && look.Speed >= 0.9f * MWConfig.Mass.MoveSpeed.Value)
                     {
                         MassOutput po = probeJob.Out[probeJob.ReadyIdx];
                         if (po.Valid && po.Probe != null && po.Frame != lastProbeFrame)
                         {
                             lastProbeFrame = po.Frame;
                             probeFrames++;
+                            if ((int)elapsed != bucket)
+                            {
+                                if (bucket >= 0 && bucketSeen > 0) { secSeen.Add(bucketSeen); secCentred.Add(bucketCentred); }
+                                bucket = (int)elapsed;
+                                bucketSeen = bucketCentred = 0;
+                            }
                             sampledWidth = mass.StreamWidth;
                             for (int k = 0; k < po.ProbeCount; k++)
                             {
@@ -635,7 +661,8 @@ namespace MistWorms.Dev.Scenarios
                                 if (po.Probe[k].Role == MassLayout.RoleFlux)
                                 {
                                     fluxSeen++;
-                                    if (lat < 0.25f * sampledWidth) fluxCentred++;
+                                    bucketSeen++;
+                                    if (lat < 0.25f * sampledWidth) { fluxCentred++; bucketCentred++; }
                                     maxLateralFlux = Mathf.Max(maxLateralFlux, lat);
                                 }
                                 else if (po.Probe[k].Role == MassLayout.RoleBorder) maxLateralBorder = Mathf.Max(maxLateralBorder, lat);
@@ -667,6 +694,12 @@ namespace MistWorms.Dev.Scenarios
             if (probeFrames > 0 && sampledWidth > 0f)
             {
                 float centred = fluxSeen > 0 ? fluxCentred / (float)fluxSeen : 0f;
+                if (bucketSeen > 0) { secSeen.Add(bucketSeen); secCentred.Add(bucketCentred); }
+                var shares = new List<float>(secSeen.Count);
+                for (int q = 0; q < secSeen.Count; q++) shares.Add(secCentred[q] / (float)secSeen[q]);
+                shares.Sort();
+                if (shares.Count > 0)
+                    ctx.Log($"stream centred flux share per second over {shares.Count} s of steady state ({fluxSeen} flux samples): min {shares[0] * 100f:0} %, median {shares[shares.Count / 2] * 100f:0} %, max {shares[shares.Count - 1] * 100f:0} %");
                 ctx.Log($"stream layout over {probeFrames} frames, ribbon {sampledWidth:0.00} m: flux within 0.25 w of the axis {centred * 100f:0} % of {fluxSeen}; largest lateral offset {maxLateral:0.00} m (flux {maxLateralFlux:0.00}, border {maxLateralBorder:0.00}), limit w/2 + 0.1 = {sampledWidth * 0.5f + 0.1f:0.00} m; largest heading error of the heap against the corridor {maxHeadingError:0.0} degrees, which puts the largest offset against the corridor axis at {maxLateralWorld:0.00} m");
                 ctx.Assert("stream_flux_centred", centred >= 0.9f, ">= 90 % of the flux worms within 0.25 x width of the axis", $"{centred * 100f:0} %");
                 ctx.Assert("stream_nothing_outside_the_ribbon", maxLateral <= sampledWidth * 0.5f + 0.1f, $"no drawn worm beyond w/2 + 0.1 = {sampledWidth * 0.5f + 0.1f:0.00} m", $"{maxLateral:0.00} m");

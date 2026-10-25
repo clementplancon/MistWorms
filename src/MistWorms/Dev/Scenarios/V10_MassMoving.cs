@@ -32,7 +32,7 @@ namespace MistWorms.Dev.Scenarios
         private const float OpenMaxRun = 30f;
         private const float RunStep = 0.5f;
         private const float SteadyFraction = 0.9f;       // walking at this part of MoveSpeed counts as full speed
-        private const float MeasureSeconds = 2.5f;
+        private const float MeasureSeconds = 5f;           // twice the former window: steady-state samples only (see Snap.Steady)
         private const float ApproachAfterSeconds = 35f;
         private const float ClipSeconds = 5f;
         private const float FollowGap = 3f, FollowHeight = 1.4f;       // clips: 3 m from the edge, 1.4 m up, three quarters front
@@ -202,6 +202,10 @@ namespace MistWorms.Dev.Scenarios
             bool armSeen = false;
             float armRampNear = 0f;
             int pouredPairs = 0;
+            var secFront = new List<int>(16);
+            var secRear = new List<int>(16);
+            int bucketFront = 0, bucketRear = 0;
+            float bucketStart = -1f;
             const float ShortBaseline = 0.05f;        // a poured worm lies still for only a quarter of a second: its pairs are taken closer
             float tm = Time.time;
             // Back and forth until the treadmill and the poured worms are sampled, then straight to the player: the arm is measured on the approach.
@@ -242,6 +246,17 @@ namespace MistWorms.Dev.Scenarios
 
                         bool steady = v >= SteadyFraction * moveSpeed && visual.StreamK < 0.1f;
                         if (steady) { steadySnapshots++; steadySpeedSum += v; }
+                        if (steady)
+                        {
+                            if (bucketStart < 0f) bucketStart = o.Time;
+                            else if (o.Time - bucketStart >= 1f)
+                            {
+                                secFront.Add(bucketFront);
+                                secRear.Add(bucketRear);
+                                bucketFront = bucketRear = 0;
+                                bucketStart = o.Time;
+                            }
+                        }
                         if (near && visual.PseudoRamp > 0.5f && armSeenAt < 0f) armSeenAt = Time.time;
                         var snap = new Snap { Steady = steady, Time = o.Time, Pos = new Vector3[MassLayoutConst.SlotCount], Ok = new bool[MassLayoutConst.SlotCount], Anim = new byte[MassLayoutConst.SlotCount], Height = new float[MassLayoutConst.SlotCount] };
                         for (int k = 0; k < o.ProbeCount; k++)
@@ -259,7 +274,7 @@ namespace MistWorms.Dev.Scenarios
                             if (steady && pr.Role == MassLayout.RoleBorder && len > 0.1f)
                             {
                                 float c = Vector3.Dot(rel / len, fwd);
-                                if (c > 0.5f) front++; else if (c < -0.5f) rear++;
+                                if (c > 0.5f) { front++; bucketFront++; } else if (c < -0.5f) { rear++; bucketRear++; }
                             }
                             if (near && len > 0.1f && Vector3.Dot(rel / len, tDir) > 0.866f)
                             {
@@ -315,6 +330,12 @@ namespace MistWorms.Dev.Scenarios
                     $"pairs 0.2 s apart: matched {pairsSteady}, animation changed {pairsAnimMismatch}, too fast (went round its cycle) {pairsTooFast}; poured pairs {ShortBaseline} s apart {pouredPairs}");
             float vMean = steadySnapshots > 0 ? steadySpeedSum / steadySnapshots : (snapshots > 0 ? speedSum / snapshots : visual.Speed);      // cruising speed: the steady snapshots
             float sigmaMean = snapshots > 0 ? sigmaSum / snapshots : 0f;
+            if (secFront.Count > 0)
+            {
+                var f = new List<int>(secFront); f.Sort();
+                var rr = new List<int>(secRear); rr.Sort();
+                ctx.Log($"{tag}: border worms per second of steady state ({secFront.Count} s): front min {f[0]}, median {f[f.Count / 2]}, max {f[f.Count - 1]}; rear min {rr[0]}, median {rr[rr.Count / 2]}, max {rr[rr.Count - 1]}");
+            }
             float treadMedian = Median(tread), pourMedian = Median(poured);
             float ratio = vMean > 0.1f ? treadMedian / vMean : 0f;
             ctx.Log($"{tag}: over {snapshots} snapshots at {vMean:0.00} m/s (sigma {sigmaMean:0.00}): tread {tread.Count} samples median {treadMedian:0.00} m/s (ratio {ratio:0.00}), poured {poured.Count} samples median {pourMedian:0.00} m/s, border front {front} / rear {rear}, arm reach {(armSeen ? armExtension.ToString("0.00") + " m beyond the footprint" : "none seen")}, stream {visual.StreamK:0.00}");

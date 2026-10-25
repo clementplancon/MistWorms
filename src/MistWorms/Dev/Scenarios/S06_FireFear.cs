@@ -177,14 +177,40 @@ namespace MistWorms.Dev.Scenarios
             yield return ctx.WaitFrames(3);
         }
 
+        /// <summary>
+        /// A mass of 40 about <paramref name="distance"/> m from the player, for sure: along the wanted direction, then 25, 50, 90 degrees to either side, at 1, 0.8 and
+        /// 0.6 of the distance; a spot is kept when it has a floor within 2.5 m of the player's height. The first pass also wants a line of sight to the player,
+        /// the second takes any floor. The attempt that worked is logged.
+        /// </summary>
         private static WritheMassState Spawn(ScenarioContext ctx, Player player, Vector3 fwd, float distance)
         {
-            WritheMassState mass = MassDev.SpawnAt(player.transform.position + fwd * distance, WormCount, ZDOID.None, freezeAI: false);
-            if (!ctx.Assert("mass_created", mass != null && mass.Valid, "a valid mass", mass != null ? mass.ZdoId.ToString() : "none")) return null;
-            bool sight = !Physics.Linecast(mass.transform.position + Vector3.up * EyeHeight, player.GetCenterPoint(), WormPhysics.ViewBlockMask, QueryTriggerInteraction.Ignore);
-            ctx.Log($"mass spawned {distance:0.#} m away, line of sight {sight}");
-            mass.GetComponent<WritheMassAI>().DevForcedTarget = player;
-            return mass;
+            float[] scales = { 1f, 0.8f, 0.6f };
+            float[] angles = { 0f, 25f, -25f, 50f, -50f, 90f, -90f };
+            Vector3 origin = player.transform.position;
+            int tried = 0;
+            for (int pass = 0; pass < 2; pass++)
+                foreach (float k in scales)
+                    foreach (float a in angles)
+                    {
+                        tried++;
+                        Vector3 at = origin + Quaternion.AngleAxis(a, Vector3.up) * fwd * (distance * k);
+                        WritheMassState m = MassDev.SpawnAt(at, WormCount, ZDOID.None, freezeAI: false);
+                        if (m == null) continue;
+                        bool sight = !Physics.Linecast(m.transform.position + Vector3.up * EyeHeight, player.GetCenterPoint(), WormPhysics.ViewBlockMask, QueryTriggerInteraction.Ignore);
+                        bool level = Mathf.Abs(m.transform.position.y - origin.y) <= 2.5f;
+                        if (!level || (pass == 0 && !sight))
+                        {
+                            MassDev.Destroy(m);
+                            continue;
+                        }
+                        float d = Utils.DistanceXZ(m.transform.position, origin);
+                        ctx.Log($"mass spawned {d:0.#} m away at attempt {tried} (scale {k}, angle {a}), line of sight {sight}");
+                        ctx.Assert("mass_created", m.Valid, "a valid mass", m.ZdoId.ToString());
+                        m.GetComponent<WritheMassAI>().DevForcedTarget = player;
+                        return m;
+                    }
+            ctx.Assert("mass_created", false, "a mass with a floor near the player's height", $"none in {tried} attempts around {origin}");
+            return null;
         }
 
         /// <summary>Distance from the edge of the mass to the player, with the measure the AI uses (centre at eye height, 3D).</summary>
