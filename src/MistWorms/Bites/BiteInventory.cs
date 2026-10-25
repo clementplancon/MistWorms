@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MistWorms.Config;
+using MistWorms.Drops;
 
 namespace MistWorms.Bites
 {
@@ -12,6 +13,9 @@ namespace MistWorms.Bites
         private static readonly List<BiteLoss> s_losses = new List<BiteLoss>(8);
         private static readonly Random s_rng = new Random();
 
+        /// <summary>What the last <see cref="Apply"/> put into the pool, by resource (spec §7.2): d / Dmax(q) x cumulative vanilla cost x ratio, per item that lost durability.</summary>
+        public static readonly ConsumedList Consumed = new ConsumedList();
+
         /// <summary>
         /// Eats <paramref name="p"/> durability points from the player's items (<paramref name="wormCount"/> = 1 for a cobra strike) and
         /// applies the losses to the inventory. Eligible: m_useDurability and durability left, equipped only when
@@ -21,6 +25,7 @@ namespace MistWorms.Bites
         {
             s_items.Clear();
             s_source.Clear();
+            Consumed.Clear();
 
             Wisplight.FixInventory(player.GetInventory());
             bool includeAll = MWConfig.Engulf.IncludeUnequippedInventory.Value;
@@ -44,7 +49,10 @@ namespace MistWorms.Bites
             for (int i = 0; i < s_losses.Count; i++)
             {
                 ItemDrop.ItemData item = s_source[s_losses[i].Id];
-                item.m_durability = Math.Max(0f, item.m_durability - s_losses[i].Amount);
+                float before = item.m_durability;
+                item.m_durability = Math.Max(0f, before - s_losses[i].Amount);
+                // Real loss (plan 6, A16): the difference of m_durability, on the quality the item has now.
+                ItemCost.AddTo(Consumed, item, before - item.m_durability, item.GetMaxDurability(item.m_quality));
             }
             s_items.Clear();
             s_source.Clear();

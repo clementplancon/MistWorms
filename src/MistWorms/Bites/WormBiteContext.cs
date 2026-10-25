@@ -25,6 +25,18 @@ namespace MistWorms.Bites
         /// <summary>The bite was parried perfectly (a postfix of the vanilla block, plan 5, A11): the tick is cancelled and the next one delayed.</summary>
         public static bool PerfectParry { get; private set; }
 
+        /// <summary>The free worm behind a cobra strike (colony, slot, generation); Colony None for a mass tick. What the strike eats goes to this worm's pool (decision 141).</summary>
+        public static ZDOID WormColony { get; private set; }
+        public static int WormSlot { get; private set; }
+        public static int WormGeneration { get; private set; }
+
+        public static void SetWorm(ZDOID colony, int slot, int generation)
+        {
+            WormColony = colony;
+            WormSlot = slot;
+            WormGeneration = generation;
+        }
+
         public static void MarkPerfectParry() => PerfectParry = true;
 
 #if MW_DEV
@@ -54,6 +66,9 @@ namespace MistWorms.Bites
             WormCount = System.Math.Max(1, wormCount);
             Mass = mass;
             PerfectParry = false;
+            WormColony = ZDOID.None;
+            WormSlot = -1;
+            WormGeneration = 0;
         }
 
         public static void End()
@@ -65,6 +80,9 @@ namespace MistWorms.Bites
             WormCount = 1;
             Mass = ZDOID.None;
             PerfectParry = false;
+            WormColony = ZDOID.None;
+            WormSlot = -1;
+            WormGeneration = 0;
         }
     }
 }

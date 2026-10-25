@@ -59,6 +59,7 @@ namespace MistWorms
         {
             // The only safe moment to build the effect templates (DestroyImmediate) and to play what the hits and deaths asked for.
             if (!Application.isBatchMode) Colony.WormEffects.Pump();
+            Drops.WormDrops.PumpPending();   // the items of a dead pool that did not fit in one frame (spec 7.3)
         }
 
         /// <summary>The ObjectDB is ready (every time it is rebuilt): the Wisplight gets its virtual durability and the Infested effect its icon (plan 5-1).</summary>

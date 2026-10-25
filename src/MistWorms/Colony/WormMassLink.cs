@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MistWorms.Config;
+using MistWorms.Drops;
 using MistWorms.Mass;
 using MistWorms.Render;
 using UnityEngine;
@@ -359,12 +360,16 @@ namespace MistWorms.Colony
             }
 
             // The worms become the first of the heap: they leave the store and glide onto it (spec §12.4).
+            _formPool.Clear();
             for (int j = 0; j < k; j++)
             {
                 int wi = _gatherIdx[_cluster[j]];
                 _seedBuf[j] = s.pos[wi];
+                if (s.poolIndex[wi] >= 0) _formPool.Merge(s.Pools.Get(s.poolIndex[wi]));
                 RemoveWorm(wi);
             }
+            mass.GiveInitialPool(_formPool);
+            _formPool.Clear();
             WritheMassVisual visual = mass.GetComponent<WritheMassVisual>();
             if (visual != null) visual.SeedArrivals(_seedBuf, k);
 
@@ -464,7 +469,8 @@ namespace MistWorms.Colony
             s.nextGroundTime[i] = now + GroundInterval;
 
             if (t < 1f) return;
-            int accepted = mass.AddWorms(1);
+            MassPool donor = DonorPool(i);   // what the worm ate (and the reserve of the colony) goes into the mass with it
+            int accepted = mass.AddWorms(1, donor);
             if (accepted == 0)
             {
                 EndAbsorb(i, now);     // the mass filled up or started to merge in the meantime
@@ -499,7 +505,7 @@ namespace MistWorms.Colony
             if (!_initialized || !_nview.IsValid()) return;
             if (_nview.IsOwner())
             {
-                ReceiveDissolve(mass, n, position);
+                ReceiveDissolve(mass, n, position, pool);
                 return;
             }
             _nview.InvokeRPC(MWNames.RpcMassDissolve, mass, n, position, pool ?? new ZPackage());
@@ -510,7 +516,7 @@ namespace MistWorms.Colony
             try
             {
                 if (!_initialized || !_nview.IsValid() || !_nview.IsOwner()) return;
-                ReceiveDissolve(mass, n, position);
+                ReceiveDissolve(mass, n, position, pool);
             }
             catch (Exception e)
             {
@@ -593,7 +599,7 @@ namespace MistWorms.Colony
         /// Creates <paramref name="n"/> worms in the Fleeing state, each leaping (0.3 to 0.6 m high, 0.5 to 1.5 m away from the centre) from the place of a
         /// visible worm of the heap, then fleeing for Worm.FleeDuration. They are worms that already existed, so the population cap does not apply.
         /// </summary>
-        private void ReceiveDissolve(ZDOID mass, int n, Vector3 position)
+        private void ReceiveDissolve(ZDOID mass, int n, Vector3 position, ZPackage pool)
         {
             DissolveLost = 0;
 #if MW_DEV
@@ -604,10 +610,12 @@ namespace MistWorms.Colony
             if (Store == null || Disabled || n <= 0 || n > MWConfig.Mass.MaxCount.Value)
             {
                 DissolveLost = Math.Max(0, n);
+                DropRefusedDissolvePool(pool, position);
                 Plugin.Log.LogWarning($"[Colony] dissolution of mass {mass} ({n} worms) refused (store {(Store != null ? "ok" : "missing")}, disabled {Disabled})");
                 return;
             }
 
+            PrepareDissolvePool(pool, n);
             if (_releaseBuf == null || _releaseBuf.Length < n) _releaseBuf = new Vector3[n];
             int drawn = 0;
             WritheMassVisual visual = null;
@@ -642,6 +650,7 @@ namespace MistWorms.Colony
                 if (slot < 0)
                 {
                     DissolveLost++;
+                    ShareToReserve();   // the worm is lost, its share of the pool is not
                     continue;
                 }
 
@@ -659,6 +668,7 @@ namespace MistWorms.Colony
                     break;
                 }
 
+                GiveDissolvedShare(slot);
                 s.fleeFrom[slot] = position;
                 s.subPhase[slot] = LeapPhase;
                 s.absorbFrom[slot] = from;

@@ -210,6 +210,7 @@ namespace MistWorms.Dev
                 { "ribbonLength", m.IsStream ? m.RibbonLength : 0f },
                 { "hitSpheres", m.HitSphereCount },
                 { "target", m.TargetId.ToString() },
+                { "pool", m.PoolJson() },
             };
             var ai = m.GetComponent<WritheMassAI>();
             if (ai != null)

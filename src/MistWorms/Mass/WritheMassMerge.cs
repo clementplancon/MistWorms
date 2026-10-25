@@ -1,5 +1,6 @@
 using System;
 using MistWorms.Config;
+using MistWorms.Drops;
 using MistWorms.Render;
 using UnityEngine;
 
@@ -172,7 +173,7 @@ namespace MistWorms.Mass
         {
             int k = N;
             int bigBefore = big.N;
-            int accepted = big.AddWorms(k);
+            int accepted = big.AddWorms(k, OwnerPool());   // the pool (quantities and carries) goes with the worms; a cut group takes the fraction accepted/k
             Plugin.Log.LogInfo($"[Mass] merge: {ZdoId} (n={k}) into {big.ZdoId}: the big one {bigBefore} -> {big.N}, accepted {accepted}");
             if (accepted < 0 || accepted >= k)
             {
@@ -192,6 +193,7 @@ namespace MistWorms.Mass
                 RemoveWorms(accepted);
                 WormsTransferred += accepted;
             }
+            SavePool();   // what the big mass did not take stays here, with the worms that stay
             CancelMerge();
             _transferCooldownUntil = Time.time + MassMergeMath.TransferCooldown;
         }
@@ -211,7 +213,14 @@ namespace MistWorms.Mass
 
         private void TransferPartial(WritheMassState big, int k, float now)
         {
-            int accepted = big.AddWorms(k);
+            // The pool of the worms that leave is cut off first (prorata k/n, decisions.md 79) and handed over with them; what is not taken comes back.
+            MassPool own = OwnerPool();
+            s_poolTransfer.Clear();
+            own.MoveFraction(s_poolTransfer, k, N);
+            int accepted = big.AddWorms(k, s_poolTransfer);
+            if (accepted != -1 && !s_poolTransfer.IsEmpty) own.Merge(s_poolTransfer);
+            s_poolTransfer.Clear();
+            SavePool();
             _transferCooldownUntil = now + MassMergeMath.TransferCooldown;
             if (accepted == 0) return;
             int moved = accepted > 0 ? accepted : k;     // a remote big mass applies its own cap on the RPC

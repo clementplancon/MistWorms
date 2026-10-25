@@ -22,7 +22,7 @@ namespace MistWorms.Bites
             if (ZRoutedRpc.instance == null) return;
             try
             {
-                ZRoutedRpc.instance.Register<ZDOID, float, float, Vector3, Vector3>(MWNames.RpcWormBite, OnBite);
+                ZRoutedRpc.instance.Register<ZDOID, float, float, Vector3, Vector3, ZPackage>(MWNames.RpcWormBite, OnBite);
             }
             catch (ArgumentException)
             {
@@ -31,7 +31,7 @@ namespace MistWorms.Bites
         }
 
         /// <summary>Sends a strike on <paramref name="target"/> to its owner (possibly this peer: handled synchronously). False if it cannot be routed.</summary>
-        public static bool SendToPlayer(Player target, Vector3 point, Vector3 dir)
+        public static bool SendToPlayer(Player target, Vector3 point, Vector3 dir, ZDOID colony, int slot, int generation)
         {
             ZRoutedRpc rpc = ZRoutedRpc.instance;
             if (rpc == null || target == null) return false;
@@ -41,7 +41,7 @@ namespace MistWorms.Bites
             if (id.IsNone() || owner == 0L) return false;
 
             rpc.InvokeRoutedRPC(owner, MWNames.RpcWormBite, id, MWConfig.Worm.CobraDurability.Value,
-                MWConfig.Worm.CobraCreatureDamage.Value, point, dir);
+                MWConfig.Worm.CobraCreatureDamage.Value, point, dir, WormTag(colony, slot, generation));
             return true;
         }
 
@@ -71,7 +71,7 @@ namespace MistWorms.Bites
             return hit;
         }
 
-        private static void OnBite(long sender, ZDOID targetId, float durability, float hpDamage, Vector3 point, Vector3 dir)
+        private static void OnBite(long sender, ZDOID targetId, float durability, float hpDamage, Vector3 point, Vector3 dir, ZPackage worm)
         {
             try
             {
@@ -81,6 +81,7 @@ namespace MistWorms.Bites
 
                 HitData hit = NewHit(hpDamage, point, dir);
                 WormBiteContext.Begin(target, durability, hpDamage);
+                ReadWormTag(worm);
                 try
                 {
                     target.Damage(hit);
@@ -93,6 +94,33 @@ namespace MistWorms.Bites
             catch (Exception e)
             {
                 Plugin.LogException("WormBite.OnBite", e);
+            }
+        }
+
+        /// <summary>The worm behind a strike (colony, slot, generation) as a package: the routed RPC is at its six parameter limit (decision 141).</summary>
+        private static ZPackage WormTag(ZDOID colony, int slot, int generation)
+        {
+            var pkg = new ZPackage();
+            pkg.Write(colony);
+            pkg.Write(slot);
+            pkg.Write(generation);
+            return pkg;
+        }
+
+        private static void ReadWormTag(ZPackage pkg)
+        {
+            try
+            {
+                if (pkg == null || pkg.Size() == 0) return;
+                pkg.SetPos(0);
+                ZDOID colony = pkg.ReadZDOID();
+                int slot = pkg.ReadInt();
+                int generation = pkg.ReadInt();
+                WormBiteContext.SetWorm(colony, slot, generation);
+            }
+            catch (Exception)
+            {
+                // A malformed tag: the strike still bites, what it eats just belongs to nobody.
             }
         }
 

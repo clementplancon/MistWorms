@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using MistWorms.Colony;
 using MistWorms.Config;
+using MistWorms.Drops;
 using MistWorms.Localization;
 using MistWorms.Render;
 using UnityEngine;
@@ -201,7 +202,7 @@ namespace MistWorms.Mass
             s_all.Add(this);
             if (_character != null) s_byCharacter[_character] = this;
 
-            if (_nview != null) _nview.Register<int>(MWNames.RpcMassAdd, RPC_MassAdd);
+            if (_nview != null) _nview.Register<int, ZPackage>(MWNames.RpcMassAdd, RPC_MassAdd);
 
             ApplyConfig();
             CreateHitVolume();
@@ -260,6 +261,7 @@ namespace MistWorms.Mass
                 _nextReconcile = Time.time + ReconcilePeriod;
                 Reconcile();
             }
+            PoolTick();
             MergeTick(Time.time);
             EngulfCollisionTick(Time.time);
         }
@@ -503,6 +505,7 @@ namespace MistWorms.Mass
                 DestroyReason = $"killed: health {health:0.#} (vanilla death), last hit by {LastAttackerText()}";
                 // Vanilla CheckDeath follows; clients see the last worms go.
                 WriteCount(0, 0f);
+                PoolOnDeath();   // the last worm hands out everything left (spec Â§7.3)
                 return;
             }
 
@@ -521,6 +524,7 @@ namespace MistWorms.Mass
             WriteCount(newN, newPartial);
 
             int kills = n - newN;
+            if (kills > 0) PoolOnLoss(kills, n);   // the dead worms' share of the pool, before a dissolution hands the rest over
             if (kills > 0 && newN < MWConfig.Mass.DissolveThreshold.Value) BeginDissolve(newN);
         }
 
@@ -528,12 +532,13 @@ namespace MistWorms.Mass
         /// Adds worms (absorption, fusion). The owner caps at Mass.MaxCount and returns the number accepted; any other peer forwards the
         /// request to the owner and returns -1 (the owner decides).
         /// </summary>
-        public int AddWorms(int k)
+        public int AddWorms(int k, MassPool donor = null)
         {
             if (k <= 0 || !Valid) return 0;
             if (!_nview.IsOwner())
             {
-                _nview.InvokeRPC(MWNames.RpcMassAdd, k);
+                _nview.InvokeRPC(MWNames.RpcMassAdd, k, DonorPackage(donor));
+                if (donor != null) donor.Clear();   // the pool left with the worms
                 return -1;
             }
             if (_dissolving || _merging || _character == null || _character.IsDead()) return 0;
@@ -545,14 +550,22 @@ namespace MistWorms.Mass
             float partial = Partial;
             ImposeHealth(n + accepted, partial);
             WriteCount(n + accepted, partial);
+            TakeDonorPool(donor, accepted, k);   // the pool comes with the worms (fraction accepted/k when the cap cut the group)
             return accepted;
         }
 
-        private void RPC_MassAdd(long sender, int k)
+        private void RPC_MassAdd(long sender, int k, ZPackage pool)
         {
             try
             {
-                if (IsOwner) AddWorms(k);
+                if (!s_poolRpcIn.Read(pool))
+                {
+                    Plugin.Log.LogWarning($"[Pool] mass {ZdoId}: unreadable pool in MW_MassAdd, ignored");
+                    s_poolRpcIn.Clear();
+                }
+                // Validation: no peer adds more worms than a mass can hold. Refused worms are gone, their pool is not: it is dropped (same result whoever owns the mass).
+                if (k > 0 && k <= MWConfig.Mass.MaxCount.Value && IsOwner) AddWorms(k, s_poolRpcIn);
+                DropLeftover(s_poolRpcIn);
             }
             catch (Exception e)
             {
@@ -626,11 +639,12 @@ namespace MistWorms.Mass
             if (colony == null)
             {
                 Plugin.Log.LogWarning($"[Mass] {ZdoId} dissolved with {n} worms but colony {colonyId} is not loaded here: the worms are lost");
+                PoolOnDeath();   // nobody to hand the pool to: it is dropped (nothing is lost silently)
             }
             else
             {
-                // The loot pool of the mass (phase 6) will travel in this package.
-                colony.RequestDissolve(ZdoId, n, position, new ZPackage());
+                // The loot pool of the mass travels in this package and is shared among the worms released (spec Â§7.1).
+                colony.RequestDissolve(ZdoId, n, position, TakePoolPackage());
             }
             Invoke(nameof(DestroyMass), DissolveDestroyDelay);
         }

@@ -210,7 +210,7 @@ namespace MistWorms.Colony
                         Vector3 dir = closest - s.pos[i];
                         dir.y = 0f;
                         dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : forward;
-                        landed = WormBite.SendToPlayer(target, closest, dir);
+                        landed = WormBite.SendToPlayer(target, closest, dir, ZdoId, i, s.generation[i]);
                     }
                 }
             }

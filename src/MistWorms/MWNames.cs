@@ -30,7 +30,7 @@ namespace MistWorms
         public const string ZdoMassState = "mw_state";         // byte: MassStateCodes (mode + transition + Stream bit)
         public const string ZdoMassColony = "mw_colony";       // ZDOID of the colony the worms come from and return to
         public const string ZdoMassBorn = "mw_born";           // long: network time (ticks) of the birth, for the growth animation
-        public const string ZdoMassPool = "mw_pool";           // byte[]: loot pool, empty until phase 6
+        public const string ZdoMassPool = "mw_pool";           // byte[]: loot pool (MassPool.Write: version, count, then hash + quantity + carry per entry)
         public const string ZdoMassTarget = "mw_target";       // ZDOID of the creature the mass hunts (ZDOID.None = none)
         public const string ZdoMassStreamWidth = "mw_sw";      // float: width of the ribbon while the Stream bit is set (spec §4.7)
 
@@ -40,7 +40,9 @@ namespace MistWorms
         public const string RpcMassBite = "MW_MassBite";       // routed RPC to the owner of the engulfed player: ZDOID target, ZDOID mass, durability P, health damage, int worms, Vector3 dir
         public const string RpcMassParry = "MW_MassParry";     // routed RPC to the owner of a mass: ZDOID mass (its tick was parried perfectly)
         public const string RpcInfest = "MW_Infest";           // routed RPC to the owner of the engulfed player: ZDOID target, bool on
-        public const string RpcMassAdd = "MW_MassAdd";         // ZNetView RPC to the mass owner: int k worms to add
+        public const string RpcMassAdd = "MW_MassAdd";         // ZNetView RPC to the mass owner: int k worms to add, ZPackage pool they bring (MassPool.Write)
+        public const string RpcConsumed = "MW_Consumed";       // routed RPC to the mass owner: ZDOID mass, ZPackage (int count <= 16, then int prefab hash + float quantity <= 50 per entry)
+        public const string RpcWormConsumed = "MW_WormConsumed"; // routed RPC to the colony owner: ZDOID colony, int slot, int generation, ZPackage (same payload as MW_Consumed)
         public const string RpcMassDissolve = "MW_Dissolve";   // ZNetView RPC to the colony owner: ZDOID mass, int n, Vector3 position, ZPackage pool
     }
 }

@@ -296,14 +296,32 @@ La colonie ne s'éveille que pour un joueur ; une fois éveillée, elle dévore 
 | Joueurs | oui | `Targets.AttackPlayers` | 0,6 (`Targets.PlayerWeight`) |
 | Créatures apprivoisées | oui | `Targets.AttackTamed` | 0,8 |
 | Créatures sauvages (fouineurs, tiques, couvains, soldats, dvergar…) | oui | `Targets.AttackCreatures` | 1,0 |
-| Structures (`WearNTear` : pièces construites par les joueurs, portes et objets dvergr destructibles de la mine) | oui | `Targets.AttackStructures` | 1,5 |
+| Structures (`WearNTear` : pièces construites par les joueurs, portes ; `Destructible` dvergr de la mine, ci-dessous) | oui | `Targets.AttackStructures` | 1,5 |
 | Nids, vers, amas, pierres tombales, portails, objets non destructibles | jamais | — | — |
 
-Choix de cible, réévalué toutes les 0,5 s : parmi les cibles visibles à moins de `Mass.TargetRange` (20 m), la plus petite valeur `distance × poids` gagne ; une cible engloutie est conservée jusqu'au détachement (§4.9). Un ver seul suit les mêmes règles avec `Worm.ViewRange` (20 m) pour portée de ciblage (§3.1). Les prefabs listés dans `Targets.ExcludedPrefabs` (défaut `SW_DivineWhale`) ne sont jamais ciblés, ni par les vers ni par les amas (§10.4 ; phase 6, plus la sélection de cibles de l'amas en 4B). Les joueurs sont donc préférés à distance égale, mais un fouineur collé à l'amas sera mangé avant un joueur à 15 m.
+Structures cibles : les `WearNTear` et les `Destructible` dvergr de la mine, reconnus par préfixe de prefab (`dvergrtown_`, `dvergrprops_`, constantes de `VanillaNames`). Ce ne sont jamais les nids, ni d'autres `Destructible`.
+
+Choix de cible, réévalué toutes les 0,5 s :
+
+- **Distance** : 3D, au point le plus proche (`Character` : son centre ; structure : le collider le plus proche).
+- **Visibilité** : linecast `ViewBlockMask` depuis l'œil du ver ou de l'amas jusqu'au centre de la cible, en ignorant le collider de la cible.
+- **Score** : `distance × poids` ; parmi les cibles visibles à moins de `Mass.TargetRange` (20 m), la plus petite valeur gagne.
+- Le `FindEnemy` vanilla n'est pas utilisé : il n'a pas de poids.
+
+Suite : une cible engloutie est conservée jusqu'au détachement (§4.9). Un ver seul suit les mêmes règles avec `Worm.ViewRange` (20 m) pour portée de ciblage (§3.1). Les vers virtuels ne sont pas des `Character` : leur ciblage applique la règle de faction de l'amas (§5.4) par notre propre code, sans patch d'`IsEnemy`. Les prefabs listés dans `Targets.ExcludedPrefabs` (défaut `SW_DivineWhale`) ne sont jamais ciblés, ni par les vers ni par les amas (§10.4 ; phase 6, plus la sélection de cibles de l'amas en 4B). Les joueurs sont donc préférés à distance égale, mais un fouineur collé à l'amas sera mangé avant un joueur à 15 m.
 
 ### 5.4 Factions et guerre dans la mine
 
-L'amas doit être ennemi de toutes les factions, y compris `MistlandsMonsters` et `Dverger`, pour que fouineurs et dvergar ripostent et pour que la mine devienne un champ de bataille à trois camps. Implémentation : faction `PlayerSpawned`, la seule hostile à toutes les autres dans les deux sens (`Faction.Boss` ne convient pas, décision 1.1 ligne 28), sans postfix sur `BaseAI.IsEnemy` pour l'amas. Conséquence voulue : les créatures de la mine tuent les amas (décision 121). Le harnais (§15) imprime la matrice `IsEnemy` pour vérifier.
+L'amas doit être ennemi de toutes les factions, y compris `MistlandsMonsters` et `Dverger`, pour que fouineurs et dvergar ripostent et pour que la mine devienne un champ de bataille à trois camps. Implémentation : faction `PlayerSpawned`, la seule hostile à toutes les autres dans les deux sens (`Faction.Boss` ne convient pas, décision 1.1 ligne 28), sans postfix sur `BaseAI.IsEnemy` pour l'amas. Conséquence voulue : les créatures de la mine tuent les amas (décision 121). Le harnais (§15) imprime la matrice `IsEnemy` réelle (un amas contre une créature de chaque faction présente) et S19 la compare à la matrice attendue ci-dessous.
+
+| Autre côté | `IsEnemy(amas, autre)` | `IsEnemy(autre, amas)` |
+| --- | --- | --- |
+| Toute faction vanilla (joueurs, `MistlandsMonsters`, `Dverger`, `ForestMonsters`, etc.) | true | true |
+| `PlayerSpawned` (autre amas) | false | false |
+| `TrainingDummy` (exception vanilla) | false | false |
+| Baleine SkyWhale (postfix SkyWhale, §10.4) | false | false |
+
+Les vers virtuels suivent la même règle (§5.3).
 
 Quand l'amas tue une créature ou détruit une structure, ce qu'elles auraient laissé tomber va dans son pool au lieu du sol (§7.4) : « ça drop tout ce que ça a bouffé ».
 
@@ -327,7 +345,7 @@ Toutes les `Worm.BiteInterval` (0,5 s), l'amas englouti autour d'une cible produ
 1. **Éligibles** : par défaut (`Engulf.IncludeUnequippedInventory` = true), tous les objets de l'inventaire du joueur, équipés ou non (toutes les cases, emplacements rapides compris) ; si la clé est à false, seules les pièces **équipées**. Dans les deux cas : tels que `m_shared.m_useDurability` et `m_durability > 0`, **sauf** le Wisplight (`Demister`, décisions 8 et 9) tant qu'il reste un autre éligible. Les objets sans durabilité (matériaux, flèches, nourriture, trophées, Megingjord…) ne sont jamais touchés.
 2. **Nombre de pièces mordues par tick** : `k = clamp(ceil(n / 10 × Engulf.ItemsPerTenWorms), 1, nombre d'éligibles)` — un gros amas ronge plusieurs pièces à la fois.
 3. `k` objets tirés au hasard sans remise parmi les éligibles ; chacun perd `P / k` points, plafonné à sa durabilité restante ; l'excédent est reporté sur un autre éligible tiré au hasard, jusqu'à épuisement de `P` ou des éligibles.
-4. **Wisplight en dernier** (`Engulf.WisplightLast = true`) : il ne devient éligible que lorsqu'aucun autre éligible ne subsiste. Sa destruction ramène la brume : c'est le coup de grâce voulu. Le Wisplight n'a pas de durabilité en vanilla : au démarrage (`ObjectDB` prêt), le prefab `Engulf.WisplightPrefab` (`Demister`) reçoit une durabilité virtuelle (`m_useDurability` = true, `m_maxDurability` = `Engulf.WisplightVirtualDurability`, défaut 100, `m_durabilityPerLevel` = 0), conditionnée à la clé de config ; les instances déjà dans des inventaires qui étaient à 0 sans durabilité reçoivent `m_durability` = max (première fois seulement). Il ne s'use alors que sous les morsures, se casse à 0 comme une pièce d'armure (comportement vanilla) et se répare gratuitement à l'établi, comme le reste.
+4. **Wisplight en dernier** (`Engulf.WisplightLast = true`) : il ne devient éligible que lorsqu'aucun autre éligible ne subsiste. Sa destruction ramène la brume : c'est le coup de grâce voulu. Les valeurs de durabilité du `Demister` sont lues au démarrage (`ObjectDB` prêt) et journalisées ; s'il n'a pas de durabilité, le prefab `Engulf.WisplightPrefab` (`Demister`) reçoit une durabilité virtuelle (`m_useDurability` = true, `m_maxDurability` = `Engulf.WisplightVirtualDurability`, défaut 100, `m_durabilityPerLevel` = 0), conditionnée à la clé de config ; les instances déjà dans des inventaires qui étaient à 0 sans durabilité reçoivent `m_durability` = max (première fois seulement). Il ne s'use alors que sous les morsures, se casse à 0 comme une pièce d'armure (comportement vanilla) et se répare gratuitement à l'établi, comme le reste.
 5. **Phase PV** : le reste de `P` va aux PV **dans le même tick** quand les éligibles sont épuisés en cours de tick, au prorata `reste / P × dégâts PV` (`n × Worm.HealthDamagePerBite` dégâts perçants par tick, via le chemin vanilla ; ce reste remplace la décision 54 (3) « reste de P perdu », décision 131). S'il ne reste aucun éligible (Wisplight inclus) au début du tick, tout le tick va aux PV (l'armure est nulle à ce stade si toutes les pièces sont cassées ; un bouclier levé mais cassé ne bloque plus non plus). Le coup de cobra d'un ver seul garde ses 2 dégâts perçants (`Worm.CobraCreatureDamage`) quand il ne reste aucun éligible.
 6. Un objet à 0 suit le comportement vanilla : cassé, déséquipé automatiquement, réparable gratuitement à l'établi (exploit assumé, §0) ; un objet vanilla `m_destroyBroken` disparaît comme en vanilla.
 
@@ -342,8 +360,8 @@ Toutes les `Worm.BiteInterval` (0,5 s), l'amas englouti autour d'une cible produ
 
 Phase 6 : en phase 5, l'amas ne cible que des joueurs (le ciblage « tout » arrive avec la phase 6).
 
-- Créature engloutie (apprivoisée ou sauvage) : coup agrégé perçant, armure et résistances vanilla de la créature appliquées, riposte vanilla (la créature attaque l'amas). Pas d'effet Infesté sur les créatures (mais ralentissement : `m_speed` de la créature × 0,5 via un `StatusEffect` sans icône si la créature a un `SEMan`).
-- Structure : coup agrégé contondant sur `WearNTear` ; une porte fermée est une cible valide (l'amas la mange plutôt que de la contourner) ; les pièces à durabilité infinie ou protégées par une pierre de garde suivent la règle vanilla (pas de dégâts).
+- Créature engloutie (apprivoisée ou sauvage) : coup agrégé perçant, armure et résistances vanilla de la créature appliquées, riposte vanilla (la créature attaque l'amas). Pas d'effet Infesté sur les créatures (mais ralentissement : `StatusEffect` caché sans icône `MW_SE_Engulfed`, qui applique `m_speedModifier` = `Engulf.SlowFactor` − 1 ; appliqué par le propriétaire de la créature, sur le même modèle qu'Infesté, §6.2).
+- Structure : coup agrégé contondant sur un `WearNTear` ou un `Destructible` dvergr (§5.3) ; une porte fermée est une cible valide (l'amas la mange plutôt que de la contourner) ; les pièces à durabilité infinie ou protégées par une pierre de garde suivent la règle vanilla (pas de dégâts).
 - Ce que la cible aurait laissé tomber va dans le pool (§7.4).
 
 ### 6.6 Texte et retour visuel
@@ -360,34 +378,39 @@ Tout ce que l'amas dévore entre dans un **pool** commun porté par l'amas ; cha
 
 ### 7.1 Le pool
 
-Le pool est un dictionnaire `prefab → quantité (float)`. Il existe sur chaque amas et sur chaque ver libre (vide pour un ver qui n'a rien mordu). Absorption d'un ver → son pool est additionné à celui de l'amas. Fusion d'amas → addition. Dissolution → division à parts égales entre les vers libérés (fractions conservées). Dormance → persisté avec l'amas ou le ver (§11.4). Chaque pool porte aussi un reste fractionnaire par ressource, `carry[r]` (§7.3), additionné, divisé et persisté comme le pool.
+Le pool est une table fixe sans allocation `prefab → quantité (float)` (§11.3). Il existe sur chaque amas et sur chaque ver libre (vide pour un ver qui n'a rien mordu). Absorption d'un ver → son pool est additionné à celui de l'amas. Fusion d'amas → addition. Dissolution → division à parts égales entre les vers libérés (fractions conservées). Dormance → persisté avec l'amas ou le ver (§11.4). Chaque pool porte aussi un reste fractionnaire par ressource, `carry[r]` (§7.3), additionné, divisé et persisté comme le pool.
 
 ### 7.2 Ce qu'une morsure d'équipement ajoute au pool
 
-Pour un objet de qualité `q` ayant perdu `d` points de durabilité (après blocage) sur une durabilité maximale `Dmax(q)` (`ItemData.GetMaxDurability(q)`) :
+Pour un objet de qualité `q` ayant perdu `d` points de durabilité sur une durabilité maximale `Dmax(q)` (`ItemData.GetMaxDurability(q)`), `d` étant la différence de `m_durability` avant et après l'application, en `float`, telle que `BiteInventory` la calcule (après blocage) :
 
 ```latex
-\text{pool}[r] \mathrel{+}= \frac{d}{D_{max}(q)} \times \left( a_r + (q-1) \times u_r \right) \quad \text{pour chaque ressource } r \text{ de la recette}
+\text{pool}[r] \mathrel{+}= \frac{d}{D_{max}(q)} \times \rho \times C_r(q) \qquad C_r(q) = a_r + \sum_{l=2}^{q} g_r(l) \quad \text{pour chaque ressource } r \text{ de la recette}
 ```
 
-- `a_r` = `Recipe.m_resources[r].m_amount` (coût de fabrication), `u_r` = `m_amountPerLevel` (coût par niveau d'amélioration) ; `Drops.IncludeUpgradeMaterials = true` ajoute le second terme.
+- `C_r(q)` est le **coût vanilla cumulé** de l'objet : coût de fabrication `a_r` (qualité 1) plus la somme des coûts d'amélioration des niveaux 2 à `q`. Les quantités viennent de `Requirement.GetAmount(level)` vanilla (`g_r(l)` = `GetAmount(l)`), `m_upgraderResource` compris, avec la même sémantique que l'atelier. Cette formule remplace la formule linéaire `a_r + (q−1) × u_r`.
+- `Drops.IncludeUpgradeMaterials = true` ajoute le second terme (la somme sur `l`) ; à false, `C_r(q) = a_r`.
 - Recette = `ObjectDB.GetRecipe(item)` ; objet sans recette, ou recette sans ressources (objets de marchand, de quête, de drop) → rien.
-- `Drops.EquipmentDropRatio` (défaut 1,0) multiplie le tout ; il existe pour le jour où l'exploit « réparer gratis » lasserait.
-- Le calcul se fait sur le client de la cible (seul à connaître son inventaire) et le résultat est envoyé à l'amas par RPC `RPC_Consumed(list<prefab, float>)` (§11).
+- `ρ` = `Drops.EquipmentDropRatio` (défaut 1,0) multiplie le tout ; il existe pour le jour où l'exploit « réparer gratis » lasserait.
+- Le calcul se fait sur le client de la cible (seul à connaître son inventaire) et le résultat est envoyé à l'amas par RPC `MW_Consumed(ZDOID mass, ZPackage)` (§11.3).
 
-Exemple : une cuirasse rembourrée q1 (10 fer, 20 fil de lin, 1000 de durabilité) qui perd 437 points → +4,37 fer et +8,74 fil de lin dans le pool.
+Exemple : une cuirasse rembourrée q1 (10 fer, 20 fil de lin, 1000 de durabilité) qui perd 437 points → +4,37 fer et +8,74 fil de lin dans le pool (en qualité 1, `C_r(1) = a_r` : l'exemple est inchangé).
 
 ### 7.3 Ce qui tombe quand un ver meurt
 
 - Le calcul est indépendant du chemin (phase 6). Chaque ressource `r` garde un reste fractionnaire `carry[r]`. Pour `k` vers tués d'un coup sur un amas de `n` (avant les morts) : `share = pool[r] × k / n` ; `pool[r] −= share` ; `carry[r] += share` ; on droppe `floor(carry[r])` objets au point d'impact (`ItemDrop` vanilla, empilés par `m_maxStackSize`) et on les retire de `carry[r]`. Le total droppé est ainsi le `floor` de la part cumulée, quel que soit le découpage des coups (un coup de zone ou ver par ver). Exemple : 40 vers qui ont rongé 4,37 fer ; chaque ver tué en rend 4,37 / 40 = 0,109, donc rien pour les premiers (le `carry` monte), puis 1 fer dès le 10e ver tué. Les gros coups de zone rendent plus régulièrement.
-- Mort du dernier ver (`n` → 0) : on droppe `floor(pool[r] + carry[r])` pour chaque entrée ; le reste fractionnaire est perdu (« arrondi à l'intérieur »).
+- Mort du dernier ver (`n` → 0) : on droppe `floor(pool[r] + carry[r])` pour chaque entrée ; le reste fractionnaire est perdu (« arrondi à l'intérieur »). Tout est droppé en piles maximales, **sans perte** d'objets, sur plusieurs frames (3 objets par frame) si plus de 60 objets.
 - Ver libre tué : `floor` de son propre pool (reste `carry` compris), reste perdu.
-- Les drops apparaissent avec la physique vanilla d'`ItemDrop` (petite impulsion aléatoire), et sont limités à 60 objets par événement pour éviter une pluie d'items (le surplus reste dans le pool pour le ver suivant, ou est droppé en piles maximales au dernier ver).
+- Les drops apparaissent avec la physique vanilla d'`ItemDrop` (petite impulsion aléatoire), et sont limités par `Drops.MaxItemsPerDropEvent` (60) pour éviter une pluie d'items. La limite compte des objets `ItemDrop` déjà empilés (`m_maxStackSize`). Un événement = un appel de répartition (un coup, qui peut tuer `k` vers). Le surplus reste dans le pool pour le ver suivant ; au dernier ver, voir plus haut. Ordre : drops natifs d'abord (§7.5), puis pool, chacun avec sa limite propre.
 
 ### 7.4 Créatures et structures dévorées
 
-- Créature tuée par un amas ou un ver (dernier coup `m_lastHit.m_attacker` = nôtre) : la liste de drop vanilla (`CharacterDrop.GenerateDropList`, étoiles et modificateurs de monde compris) est calculée normalement puis **capturée** dans le pool au lieu d'être créée au sol (patch sur `CharacterDrop.GenerateDropList`, méthode d'instance, et gestion du chemin ragdoll ; l'effet de mort de l'amas n'a pas de `Ragdoll` ; §10.3, phase 6). Les trophées et objets à chance en font partie tels qu'obtenus.
-- Structure détruite par un amas ou un ver : les ressources que `Piece.DropResources` aurait rendues sont capturées de la même façon ; les dégâts partiels ne rendent rien.
+- **Créature tuée par un amas** (dernier coup `m_lastHit.m_attacker` = l'amas) : la liste de drop vanilla (`CharacterDrop.GenerateDropList`, étoiles et modificateurs de monde compris) est calculée normalement puis **capturée** dans le pool au lieu d'être créée au sol. Un postfix de `GenerateDropList` (méthode d'instance) capture la liste dans le pool et **vide** la liste retournée : le ragdoll stocke alors une liste vide, ce qui évite les doublons. L'amas n'a pas de `Ragdoll`, même chemin. Les trophées et objets à chance en font partie tels qu'obtenus (§10.3).
+- **Créature tuée par un ver seul** : le cobra reste sans attaquant (§11.1). Un **registre « dernier coup de ver »** est écrit au coup de cobra : clé = `ZDOID` de la créature, valeur = la colonie et l'heure, expiration au bout de 2 s. Le postfix de `GenerateDropList` le consulte en plus de `m_lastHit.m_attacker`. Le butin capturé va dans le pool du ver tueur, ou de la colonie si le ver n'existe plus.
+- **Structure détruite par un amas ou un ver** : les ressources sont capturées de la même façon ; les dégâts partiels ne rendent rien.
+    - `WearNTear` : ce que `Piece.DropResources` aurait rendu, avec la règle vanilla ÷3 si la pièce n'a pas été posée par un joueur.
+    - `Destructible` dvergr (§5.3) : ce que `DropOnDestroyed` aurait rendu.
+    - Une pièce qui s'effondre (dégâts structurels sans attaquant) n'est pas capturée : ses drops suivent le vanilla.
 - Ces quantités sont entières ; elles suivent ensuite la règle 7.3 comme le reste.
 
 ### 7.5 Drops natifs (indépendants du pool)
@@ -395,10 +418,10 @@ Exemple : une cuirasse rembourrée q1 (10 fer, 20 fil de lin, 1000 de durabilit�
 | Drop | Probabilité par ver tué | Clé | Item vanilla |
 | --- | --- | --- | --- |
 | Appât de pêche | 8 % | `Drops.BaitChance` | un prefab de la famille `FishingBait*`, tiré selon `Drops.BaitWeights` |
-| Entrailles | 8 % | `Drops.EntrailsChance` | `Entrails` **\[À VÉRIFIER\]** |
-| Sac de sang | 4 % | `Drops.BloodbagChance` | `Bloodbag` **\[À VÉRIFIER\]** |
+| Entrailles | 8 % | `Drops.EntrailsChance` | `Entrails` |
+| Sac de sang | 4 % | `Drops.BloodbagChance` | `Bloodbag` |
 
-Les trois tirages sont indépendants ; aucun trophée, aucun item nouveau, aucune icône à créer. **Pondération des appâts par rareté** : au premier lancement, le mod énumère les items dont le prefab commence par `FishingBait` **\[À VÉRIFIER : noms exacts après le Deep North\]** et écrit dans la config `Drops.BaitWeights` une liste `prefab:poids` avec : appât de base (acheté chez Haldor) = 40, appât des Terres brumeuses = 25, tout autre appât = `10 / (1 + T)` arrondi au minimum 2, où `T` = nombre d'ingrédients de la recette qui sont des trophées (les appâts fabriqués avec un trophée de boss ou de mini-boss sont les plus rares). L'utilisateur peut ensuite éditer la liste ; un prefab inconnu dans la config est ignoré avec un avertissement dans le log.
+Les trois tirages sont indépendants ; aucun trophée, aucun item nouveau, aucune icône à créer. **Pondération des appâts par rareté** : au premier lancement, le mod énumère les items dont le prefab commence par `FishingBait` et écrit dans la config `Drops.BaitWeights` une liste `prefab:poids` avec : appât de base (acheté chez Haldor) = 40, appât des Terres brumeuses = 25, tout autre appât = `max(2, round(10 / (1 + T)))`, arrondi loin de zéro (2,5 donne 3, décision 57), où `T` = nombre d'ingrédients de la recette qui sont des trophées (les appâts fabriqués avec un trophée de boss ou de mini-boss sont les plus rares). L'utilisateur peut ensuite éditer la liste ; un prefab inconnu dans la config est ignoré avec un avertissement dans le log.
 
 ### 7.6 Ce que ne font pas les drops
 
@@ -418,13 +441,13 @@ Chaque salle d'une mine infestée reçoit un petit nid et quelques vers isolés 
 | Vers isolés par salle | 3 (± 1), Sleeping, dispersés dans la salle à ≥ 4 m du nid | `Nest.FreeWormsPerRoom` |
 | Ponte | 1 ver Sleeping toutes les 20 s à 1–2 m du nid | `Nest.SpawnInterval` |
 | Plafond par nid | 50 vers vivants issus de ce nid (libres ou absorbés dans un amas) | `Nest.MaxAlivePerNest` |
-| Destruction | effet et son vanilla réutilisés **\[À VÉRIFIER : vfx/sfx de destruction d'un sac d'œufs de fouineur\]**, libère 5 vers actifs, aucun drop | `Nest.ReleaseOnDestroy` |
+| Destruction | effet et son vanilla réutilisés (`m_destroyedEffect` du destructible choisi, `fx_egg_splash`, décision 13), libère 5 vers actifs, aucun drop | `Nest.ReleaseOnDestroy` |
 | Taille visuelle | monticule ≈ 0,9 m de large, 0,5 m de haut, pulsation lente | — |
 | Réveil | §5.1 ; rayon de réveil 10 m | `Nest.WakeRadius` |
 
 - La ponte n'a lieu que lorsque la mine est chargée et qu'un joueur est dans la mine (zone chargée côté propriétaire) : pas de rattrapage du temps écoulé hors ligne. « Si on laisse faire » = rester ou revenir souvent : une mine de 8 nids explorée 25 minutes gagne 100 vers.
 - Un nid ne pond pas pendant qu'il est attaqué (3 s après le dernier coup) ni pendant la dormance de son groupe.
-- Un nid n'est jamais une cible pour les vers ni pour les créatures vanilla (pas de `Character`, un `Destructible` dans une couche que l'IA vanilla n'attaque pas spontanément **\[À VÉRIFIER : les fouineurs attaquent-ils les `Destructible` non-pièces ? a priori non\]**).
+- Un nid n'est jamais une cible pour les vers ni pour les créatures vanilla (pas de `Character`, un `Destructible` que l'IA vanilla ne choisit pas comme cible, décision 14 ; il peut subir des dégâts collatéraux, et n'est pas dans la liste des `Destructible` dvergr cibles de §5.3).
 
 ### 8.2 Plafonds
 
@@ -448,7 +471,7 @@ Le compte par nid est tenu via l'origine de chaque ver (`nestIndex`, §11) y com
 ### 8.4 Fin de vie et nettoyage
 
 - Mine propre = tous les nids détruits ; les vers restants vivent jusqu'à leur mort, aucun nouveau n'apparaît, la colonie reste pour les persister puis se supprime quand elle est vide.
-- Aucun despawn par distance ou par temps ; aucun événement de raid ; aucune migration hors de la mine (les vers sont clampés à la boîte englobante du donjon + 2 m, et un ver qui tombe hors de la boîte est détruit sans drop).
+- Aucun despawn par distance ou par temps ; aucun événement de raid ; aucune migration hors de la mine (les vers sont clampés à la boîte englobante du donjon + 2 m, et un ver qui tombe hors de la boîte est détruit sans drop, et son pool est perdu : cas rare et accepté ; la dormance, elle, conserve le pool tel quel).
 
 ## 9. Design — feu, résistances et interactions diverses
 
@@ -529,9 +552,11 @@ Le pair propriétaire simule la colonie et ses amas ; chaque morsure voyage comm
 | `Character.Stagger`, `Character.AddStaggerDamage` | prefix (skip) pour `MW_WritheMass` | Jamais d'étourdissement (§4.8) |
 | `HitData.m_pushForce` (point exact choisi au dump) | prefix | Recul de l'amas × `clamp(10/n, KnockbackMinFactor, 1)` (§4.8) |
 | `Character.GetHoverName` | postfix pour `MW_WritheMass` | Nom avec compteur (§4.3) |
-| `CharacterDrop.GenerateDropList` (instance) + chemin ragdoll | prefix/postfix | Capture des drops de créatures tuées par l'amas (§7.4, phase 6), via un drapeau thread-static posé quand `m_lastHit.m_attacker` est nôtre ; l'effet de mort de l'amas n'a pas de `Ragdoll` |
-| `WearNTear.Damage` + `WearNTear.Destroy` + `Piece.DropResources` | prefix/postfix | Mémoriser le dernier attaquant par pièce ; capturer les ressources d'une pièce détruite par l'amas (§7.4) |
-| `BaseAI.IsEnemy` | aucun pour l'amas (faction `PlayerSpawned`, §5.4) | Le harnais imprime la matrice pour vérifier |
+| `CharacterDrop.GenerateDropList` (instance) | postfix | Si `m_lastHit.m_attacker` est un amas, ou si le registre « dernier coup de ver » désigne la créature (§7.4) : capture la liste dans le pool et **vide** la liste retournée (le ragdoll stocke une liste vide) ; l'effet de mort de l'amas n'a pas de `Ragdoll` |
+| Registre « dernier coup de ver » (pas un patch) | écrit au coup de cobra | `ZDOID` de la créature → colonie + heure, expire en 2 s (§7.4, §11.1) |
+| `WearNTear.Damage` + `WearNTear.Destroy` + `Piece.DropResources` | prefix/postfix | Mémoriser le dernier attaquant par pièce ; capturer les ressources d'une pièce détruite par l'amas ou un ver, règle vanilla ÷3 comprise ; une pièce qui s'effondre sans attaquant n'est pas capturée (§7.4) |
+| `Destructible` dvergr (`DropOnDestroyed`) | prefix/postfix | Capturer les drops d'un `Destructible` dvergr (préfixes `dvergrtown_`, `dvergrprops_`) détruit par l'amas ou un ver ; inerte sur tout autre `Destructible`, nids compris (§5.3, §7.4) |
+| `BaseAI.IsEnemy` | aucun pour l'amas (faction `PlayerSpawned`, §5.4) | Le harnais imprime la matrice réelle ; S19 la compare à la matrice attendue de §5.4 |
 | `ZNet.SaveWorld` | prefix | Forcer un instantané des colonies avant la sauvegarde (§11.4) |
 | `Game.Start` / `FejdStartup` | postfix (`#if MW_DEV`) | QuickStart (§15) |
 
@@ -544,7 +569,7 @@ L'utilisateur demande que MistWorms et SkyWhale tournent ensemble sur le même s
 1. un patch ne modifie le résultat que si une créature ou un objet du mod est en jeu ;
 2. un prefix ne renvoie jamais `false` sur un objet qui n'est pas au mod.
 
-- **Patchs communs** : `Character.ApplyDamage` et `BaseAI.IsEnemy`. SkyWhale patche la surcharge statique `BaseAI.IsEnemy(Character a, Character b)` : `false` si `a` est la baleine, ou si `b` est la baleine et `a` n'est pas un `Player`. Nos vers ne sont pas des `Player` ; l'exclusion par prefab (ci-dessous) tient.
+- **Patchs communs** : `Character.ApplyDamage` et `BaseAI.IsEnemy`. SkyWhale patche la surcharge statique `BaseAI.IsEnemy(Character a, Character b)` : `false` si `a` est la baleine, ou si `b` est la baleine et `a` n'est pas un `Player`. Nos vers ne sont pas des `Player` ; l'exclusion par prefab (ci-dessous) tient. Ce postfix s'ajoute à la matrice attendue de §5.4 (vérifiée par S19) : contre la baleine, `IsEnemy` vaut false dans les deux sens pour l'amas, et `Targets.ExcludedPrefabs` couvre la baleine.
 - **Noms** : préfixes de prefab `MW_` pour nous, `SW_` pour SkyWhale ; clés ZDO `mw_*` pour nous, `sw_*` pour SkyWhale.
 - **Couches** : la coque, les nageoires et la capsule racine de la baleine sont sur `hitbox` (18), partagée avec nos proxys ; son pont est sur `vehicle` (28), ses triggers sur `character_trigger`. Nos requêtes physiques n'utilisent pas `hitbox` (`SolidMask` et `ViewBlockMask` sont les masques vanilla de `BaseAI`) ; toute requête future sur `hitbox` doit filtrer sur `WormProxy`. Le pont `vehicle` est dans `SolidMask` et `ViewBlockMask`, comme un bateau pour les créatures vanilla : accepté. De son côté, SkyWhale filtre aussi sur ses propres composants ses requêtes sur `hitbox`.
 - **Exclusion de cible** : `Targets.ExcludedPrefabs` (défaut `SW_DivineWhale`, §14) ; ces prefabs ne sont jamais ciblés par les vers ni par les amas (§5.3). Phase 6, plus la sélection de cibles de l'amas en 4B.
@@ -564,7 +589,7 @@ Budget sur le pair propriétaire, mine entière à 400 vers actifs : **≤ 1,0 m
 - **Pathfinding** : pas de chemin par défaut (les salles sont ouvertes). Un ver qui n'a pas progressé de 0,5 m en 3 s demande un chemin vanilla (`Pathfinding.instance.GetPath`, agent le plus petit) ; budget global 8 requêtes/s par colonie, cache 10 s, suivi par points de passage. Les amas utilisent le pathfinding vanilla de `MonsterAI` en permanence.
 - **Perception** : un test de visibilité par ver et par 0,5 s au plus (raycast vers le joueur le plus proche), cible choisie selon §5.3 ; les joueurs sont lus une fois par tick depuis `Player.GetAllPlayers()`, les créatures depuis `Character.GetAllCharacters()` filtrées par distance via la grille.
 - **Formation/absorption** : la grille spatiale sert aussi à trouver les groupes (§4.1) ; une passe toutes les 0,25 s.
-- **Coup de cobra** : sphère de 0,5 m devant la tête, cible = `Character` ou `WearNTear` le plus proche ; émet une `HitData` vanilla (attaquant = la colonie, avec un marqueur « ver » ; le `m_attacker` est le ZDOID de la colonie, dont le `Character` est absent : les patches identifient un attaquant « nôtre » par ZDOID enregistré, pas par composant **\[À VÉRIFIER : `HitData.GetAttacker()` tolère un ZDOID sans `Character`, sinon créer un `Character` fantôme désactivé sur la colonie\]**).
+- **Coup de cobra** : sphère de 0,5 m devant la tête, cible = `Character`, `WearNTear` ou `Destructible` dvergr le plus proche ; émet une `HitData` vanilla **sans attaquant** (`m_attacker` vide, décision 20 : `Character.RPC_Damage` jette un coup dont l'attaquant est un ZDOID sans `Character`), avec un marqueur « ver » porté par `m_hitType` ou un champ réservé. L'attribution du butin passe par le registre « dernier coup de ver » (§7.4), qui remplace l'identification par ZDOID.
 
 ### 11.2 IA de l'amas
 
@@ -574,13 +599,17 @@ Budget sur le pair propriétaire, mine entière à 400 vers actifs : **≤ 1,0 m
 
 | Canal | Contenu | Cadence |
 | --- | --- | --- |
-| ZDO colonie `mw_snap` (byte\[\]) | instantané complet : par ver `pos` (3 × int16, 2 cm, relatif à l'origine du donjon), `heading` (byte), `state` (byte), `hp` (byte = `hp / Worm.Health × 255`, soit la fraction de vie quelle que soit la config), `nestIndex` (byte) = 9 octets ; + nids (index, vivants) + groupes (actif/dormant) + pools des vers libres (liste compacte) | toutes les 5 s si modifié, avant sauvegarde, au changement de propriétaire |
+| ZDO colonie `mw_snap` (byte\[\]) | instantané complet : par ver `pos` (3 × int16, 2 cm, relatif à l'origine du donjon), `heading` (byte), `state` (byte), `hp` (byte = `hp / Worm.Health × 255`, soit la fraction de vie quelle que soit la config), `nestIndex` (byte) = 9 octets ; + nids (index, vivants) + groupes (actif/dormant) + pools des vers libres (table de pools partagée par colonie, liste compacte) | toutes les 5 s si modifié, avant sauvegarde, au changement de propriétaire |
 | RPC colonie `RPC_Delta` (ZRoutedRpc vers les pairs à moins de 120 m) | vers modifiés depuis le dernier envoi : index + pos + heading + state ; morts (index) ; naissances (index + nestIndex) | 5 Hz (`Network.SyncRate`) tant qu'un ver actif existe ; rien en dormance |
 | RPC colonie `RPC_WormHit(index, dégâts, attaquant, point)` | coup reçu par un proxy sur un client non propriétaire | à l'événement |
-| ZDO amas | `mw_n` (int), `mw_partial` (float), `mw_pool` (byte\[\] : liste prefab-hash + float), `mw_nests` (byte\[\]), `mw_state` (byte : Idle/Hunt/Engulf/Dormant, §4.10) + un bit `Stream` séparé (forme, pas état), `mw_target` (ZDOID) + `ZSyncTransform` vanilla | à la modification (ZDO vanilla) |
-| RPC amas `RPC_Consumed(list)` | depuis le client de la cible mordue : ce qui est entré dans le pool | à chaque tick de morsure ayant mangé quelque chose |
+| ZDO amas | `mw_n` (int), `mw_partial` (float), `mw_pool` (byte\[\] versionné, ci-dessous), `mw_nests` (byte\[\]), `mw_state` (byte : Idle/Hunt/Engulf/Dormant, §4.10) + un bit `Stream` séparé (forme, pas état), `mw_target` (ZDOID) + `ZSyncTransform` vanilla | à la modification (ZDO vanilla) |
+| RPC amas `MW_Consumed(ZDOID mass, ZPackage)` | du propriétaire de la cible vers le propriétaire de l'amas : ce qui est entré dans le pool, un `int` prefabHash et un `float` quantité par entrée | à chaque tick de morsure ayant mangé quelque chose |
 | RPC amas `RPC_Absorb(index)` / colonie `RPC_Dissolve(n, pool)` | transferts ver ↔ amas ; le pool de `RPC_Dissolve` voyage dans un `ZPackage` (`ZRoutedRpc` ne sait pas sérialiser `byte[]`) | à l'événement |
 
+- **Validation de `MW_Consumed`** côté amas : prefab connu dans l'`ObjectDB`, quantité entre 0 et 50 par entrée et par tick, au plus 16 entrées. Le reste est ignoré, avec un log de dev.
+- **Stockage du pool** : tables fixes sans allocation. Un amas : au plus 16 ressources (`int hash[16]`, `float qty[16]`, `float carry[16]`). Les vers libres : une table de pools partagée par colonie, slots préalloués, `poolIndex` dans `WormStore` (-1 tant que le ver n'a rien mangé).
+- **Format de `mw_pool`** (`byte[]` dans la ZDO, permis : seul le RPC est limité) : un octet de version, le nombre d'entrées, puis (hash, qty, carry) par entrée.
+- **Cible non joueur** : `WormStore` reçoit `targetZdoUser` (`long`) et `targetZdoId` (`uint`) ; `TargetKind` vaut `Player`, `Tamed`, `Creature` ou `Structure`.
 - Sur les clients non propriétaires, les vers continuent à cap et vitesse constants entre deux deltas (dead reckoning) puis sont recalés par interpolation sur 0,2 s ; les animations (phase du flipbook) sont locales et jamais synchronisées.
 - Un pair qui devient propriétaire repart de `mw_snap` ; les deltas sont idempotents (état absolu, pas de différentiel).
 - Taille : 400 vers actifs × 9 o × 5 Hz = 18 Ko/s au pire théorique ; en pratique seuls les vers qui bougent sont envoyés (les absorbés et dormants ne le sont pas), objectif ≤ 6 Ko/s ; le harnais mesure.
@@ -804,20 +833,21 @@ Tout est exécuté sur le thread principal via une file ; les requêtes sont sé
 | S02b | 240 vers spawnés, joueur visible (variante de S02) | fusion jusqu'à 200, jamais au-delà : un amas de 200 et un de 40 |
 | S03b | Parade sans stagger (variante de S03, phase 5 : elle demande le blocage des morsures) | une parade parfaite contre un tick d'amas en Engulf : tick annulé (durabilité et PV inchangés), écart jusqu'au tick suivant de 1,0 s ± 0,1, aucun stagger de l'amas ; plus un blocage simple de comparaison : perte réduite |
 | S04 | Engloutissement, set rembourré complet q1 + Wisplight + 10 objets divers, mode dieu off | (amas de 40, terrain ouvert puis mine) effet Infesté actif ; vitesse × 0,5 mesurée sur 2 s de marche forcée ; PV inchangés tant qu'un éligible subsiste ; perte de durabilité totale ≈ 80/s ± 25 % ; Wisplight intact tant qu'il reste autre chose ; puis Wisplight ; puis PV baissent ; texte « Équipement −P » affiché ; roulade : tick annulé et pas de libération ; blocage simple : perte réduite ; détachement par sprint (téléport de dev du joueur à `r + 2,5 m`, puis 1 s) ; Infesté retiré ensuite ; clip de l'engloutissement |
-| S05 | Pool : inventaire = cuirasse rembourrée seule ; stop à 50 % puis amas tué par coups injectés | fer droppé = floor(10 × d / 1000) et fil de lin = floor(20 × d / 1000), où d = durabilité réellement perdue par la cuirasse (lue avant les coups) ; même résultat que l'amas meure d'un seul coup ou ver par ver ; aucun reste positif après le dernier ver |
+| S05 | Pool : inventaire = cuirasse rembourrée seule ; l'engloutissement est arrêté (`mw_kill` du lien, ou détachement forcé) quand la cuirasse a perdu 50 % de sa durabilité ; puis deux amas identiques tués par coups injectés, l'un en une fois, l'autre ver par ver | pour **chaque** ressource de la recette q1 (10 fer, 20 fil de lin, et toute autre), butin = floor(coût × d / Dmax), où d = durabilité réellement perdue par la cuirasse (lue avant les coups) ; même résultat dans les deux cas ; aucun reste positif après le dernier ver |
 | S06 | Torche en main | torche tenue : aucun engloutissement pendant 10 s, amas à ≥ 4 m **du bord** ; épée équipée → engloutissement en ≤ 5 s ; un feu de camp posé à 3 m d'un amas en Engulf le détache et le fait fuir 3 s ; un ver libre près d'un joueur qui tient une torche fuit |
 | S07 | Amas de 8 ; 4 tués | amas dissous, 4 vers libres en fuite ; regroupement en ≤ 15 s si 3+ proches ; hauteur de bond vérifiée sur le sommet analytique |
 | S08 | Coulée : amas de 200 dans un couloir de mine de 2 m (site plat à ±0,5 m, recherche jusqu'à environ 300 m) | progression ≥ 10 m en ≤ 20 s ; mode Stream observé ; proxies frappables pendant la coulée |
 | S09 | Nid, `SpawnInterval` forcé à 2 s | +3 vers en 6 s ; arrêt à `MaxAlivePerNest` ; aucune ponte pendant 3 s après un coup |
 | S10 | 450 vers demandés | vivants ≤ 400 (sauf `force`) |
 | S11 | Perf : 400 vers actifs + 2 amas de 200, 30 s, caméra sur la mêlée | sim moyenne ≤ 1,0 ms, max ≤ 3 ms ; rendu ≤ 0,5 ms ; appels instanciés ≤ 64 au total ; GC ≤ 0,5 Mo sur 30 s ; réseau ≤ 6 Ko/s (en multijoueur S17) |
-| S12 | Fouineur spawné près d'un amas actif | le fouineur prend des dégâts et riposte ; à sa mort, aucun item au sol, pool augmenté de sa liste de drop |
-| S13 | Porte en bois construite près d'un amas | détruite ; ressources dans le pool, rien au sol |
-| S14 | Dormance (`CalmDelay` forcé à 5 s), joueur à 60 m | amas rentrés et dissous en dormants, n et pool conservés ; retour du joueur → réveil, même n |
+| S12 | Fouineur spawné près d'un amas actif dans la mine, **sans retrait des créatures** (exception à la règle de retrait ci-dessous) | le fouineur prend des dégâts et riposte ; à sa mort, aucun objet au sol et pool augmenté exactement de la liste produite par `GenerateDropList`, capturée par le patch et journalisée |
+| S13 | Porte en bois construite près d'un amas, **en terrain ouvert** (la mine peut interdire la construction) | porte détruite ; ressources (÷3 vanilla selon le cas) dans le pool, rien au sol |
+| S14 | Dormance (phase 7 ; `CalmDelay` forcé à 5 s), joueur à 60 m | amas rentrés et dissous en dormants, n et pool conservés ; retour du joueur → réveil, même n |
 | S15 | Sauvegarde / rechargement du monde | mêmes compteurs, pools, nids, timers (± 1 ver) |
 | S16 | Ensemencement d'une vraie mine (`/tp-mine`) | ≥ 1 nid par salle éligible, ≤ 24 nids, vers isolés présents, aucun objet hors de la boîte du donjon, mine vanilla intacte ; mine déjà visitée avant le mod → ensemencée au premier chargement, une seule fois |
 | S17 | Multijoueur local : serveur dédié + 1 client (2 si une seconde instance peut démarrer) | config synchronisée, client sans mod refusé, amas visible et frappable depuis un non-propriétaire, bande passante mesurée |
 | S18 | S18_GroupCoherence : a) 30 vers chassent un joueur immobile en terrain ouvert ; b) 20 vers en mine, spawnés en passes autour du joueur (comme P3_Wander) avec ligne de vue (phase 4A) | a) en régime établi, ≥ 95 % des paires de voisins ont leurs milieux de corps à plus de 0,2 m (les paires dont les deux vers sont dans la détente de 0,25 s sont exclues du ratio ; la séparation est prioritaire pendant la récupération, repositionnement 0,5×), et les chasseurs arrivés couvrent ≥ 240° autour de la cible (secteurs de 30° occupés) ; b) aucun ver sans progrès (moins de 0,5 m) pendant plus de 6 s alors que son but est atteignable (compatible avec le chemin demandé à 3 s, §11.1 ; un ver à moins de 2,5 m du joueur ou en Striking n'est pas compté comme bloqué), et aucune violation mur/sol (mêmes contrôles que P3_Wander). Le couloir de 2,5 m n'est pas une précondition : la largeur du passage le plus étroit et le taux de chemins de chasse sont informatifs |
+| S19 | S19_Factions : une créature spawnée par faction pertinente (`MistlandsMonsters`, `Dverger`, `ForestMonsters`, etc.), l'amas à portée, ligne de vue dégagée | la matrice `IsEnemy` réelle (amas contre chaque créature, dans les deux sens, imprimée par `/state`) est identique à la matrice attendue de §5.4 |
 | V01 | Visuel : le ver de près, à l'échelle du joueur (refait en phase 4A : look « pâle de caverne », crawl et idle) | captures relues par Claude Code : rien d'invisible ou de noir, échelle 0,4 m, ombres présentes |
 | V02–V06 | Visuels : V02 amas de 10, V03 amas de 200, V04 amas de 50 (comme le code), V05 engloutissement, V06 nid, à côté du joueur ; V02 à V04 refaits en phase 4B (à l'arrêt, avec séquences de forme : la silhouette change en continu) avec un vrai `MW_WritheMass` en tas de vers, dans une vraie mine avec repli en extérieur | captures relues par Claude Code : rien d'invisible ou de noir, échelles conformes à §4.5, ombres présentes, tas lisible comme des vers entremêlés ; le repère « 20 ≈ couvain » se vérifie en V02/V04 par la table, sans capture dédiée |
 | V07 | V07_WormLight : ver de près sous une torche, puis sous une lampe dvergr ; captures à 0,5 m et 2 m, et séquence de 4 captures de reptation (phase 4A) | reflets nets, ondulation en S lisible |
@@ -827,7 +857,7 @@ Tout est exécuté sur le thread principal via une file ; les requêtes sont sé
 | V11 | V11_MassEngulf : captures et clip d'un amas de 50 puis de 200 qui englobe un joueur immobile (`engulf` forcé en dev avant la phase 5) (phase 4B-3 ; dans une vraie mine avec repli en extérieur) | lobe en colonne autour du joueur, vers qui grimpent et le recouvrent, jamais de forme pleine au centre |
 | P4_MassPerf | Budgets de rendu de l'amas (§12.1) : 2 amas de 200 et 100 vers libres dans le champ, build `Profile` (phase 4B-3) | thread principal ≤ 0,05 ms par amas en LOD0, rendu total ≤ 0,6 ms, worker ≤ 1 ms par frame, appels instanciés ≤ 64, ≤ 450 k triangles, allocation contrôlée en différentiel (avec/sans amas), garde-fou en jeu ≤ 256 Ko par fenêtre de 300 frames, médiane (bruit de la sonde 20 à 80 Ko ; la preuve du zéro allocation est faite par les tests unitaires) ; écart de temps de frame journalisé (≤ 2 ms) |
 
-Les scénarios en mine retirent les créatures vanilla à moins de 40 m (elles tuent les amas, §5.4) ; un journal de dev donne la cause de chaque disparition d'amas (`DestroyReason`, dernier attaquant).
+Les scénarios en mine retirent les créatures vanilla à moins de 40 m (elles tuent les amas, §5.4), sauf S12, qui garde son fouineur ; un journal de dev donne la cause de chaque disparition d'amas (`DestroyReason`, dernier attaquant).
 
 Les clips (`vh.py clip` / `assemble`, en GIF ou WebP) font partie des livrables visuels des scénarios V : cadrage à 3 m (2 m pour V09) avec une lumière d'appoint de dev ; `ResetPlayerState` est appelé avant chaque scénario.
 
@@ -864,7 +894,7 @@ La livraison est un seul bloc, mais le travail suit dix phases (0 à 9) dans cet
         - **4B-4 — Côté colonie** : Gathering, formation, absorption, fusion, dissolution (après une perte seulement) avec les transitions de §12.4 ; S02, S02b, S07, V09.
         - **4B-5 — Sons de l'amas**, sang sur un coup sans perte, non-régression complète.
 6. **Phase 5 — Engloutissement et équipement**. Effet Infesté, tick agrégé, patches `ApplyArmor` / `ApplyDamage`, sélection des pièces, Wisplight, phase PV, blocage, texte flottant, peur du feu (durée de fuite de l'amas = `Fire.FearDuration`), état Engulf de l'amas (§4.10), règle de parade du mod (§4.8, §6.4). Passes : 5-1 (état Engulf, tick, Infesté, choix des pièces, S04), 5-2 (feu et parade, S06, S03b), 5-3 (non-régression complète et documentation, captures et clips). Fini quand : S04, S06 et S03b passent.
-7. **Phase 6 — Pool et drops**. Pool, `RPC_Consumed`, parts entières par reste fractionnaire `carry` (§7.3), reliquat, capture des drops de créatures (patch `CharacterDrop.GenerateDropList`) et de structures, ciblage « tout », factions. Fini quand : S05, S12, S13 passent et la matrice `IsEnemy` est conforme.
+7. **Phase 6 — Pool et drops**. Pool, `MW_Consumed`, parts entières par reste fractionnaire `carry` (§7.3), reliquat, capture des drops de créatures (patch `CharacterDrop.GenerateDropList`) et de structures, ciblage « tout », factions. Deux passes : 6-1 (pool : structure fixe, coût cumulé, `MW_Consumed`, partage, fusion, dissolution, S05) et 6-2 (ciblage « tout » et captures : créatures, structures, registre, S12, S13, S19). Fini quand : S05, S12, S13 et S19 passent (S19 = matrice `IsEnemy` conforme).
 8. **Phase 7 — Nids, spawn, dormance, persistance**. Nid, ponte, plafonds, ensemencement des mines, alerte et retour au calme, instantanés, sauvegarde. Fini quand : S09, S10, S14, S15, S16 passent.
 9. **Phase 8 — Performance et multijoueur**. Profilage, cadences LOD, deltas réseau, dead reckoning, serveur local, tests non-propriétaire, effets de coup et de mort des vers chez les pairs distants (§12.4), coût des amas en tant que créatures (≈ 650 octets par frame pour 2 amas : `Character`, IA, physique ; P4, G(a)). Fini quand : S11 et S17 passent avec les budgets de §11.
 10. **Phase 9 — Packaging et livraison**. Build Release sans `Dev/`, manifest, README, CHANGELOG, icône, zip Thunderstore, guide serveur, `docs/test-report.md` final, revue du code (patches protégés, aucune allocation dans les boucles chaudes, aucun `Debug.Log` oublié). Fini quand : §19 est entièrement coché.
@@ -927,7 +957,7 @@ Un repli activé est consigné dans `docs/decisions.md` et, s'il change une règ
 Le mod est livrable quand chaque case est cochée avec, pour les règles de jeu, le scénario correspondant vert dans `docs/test-report.md`.
 
 - [ ] Le jeu moddé (copie de dev) démarre avec BepInEx + Jötunn + MistWorms sans erreur ni avertissement dans `LogOutput.log`
-- [ ] `vh launch` arrive en jeu sans intervention ; `vh scenario-all` termine en vert (S01–S18, S02b, S03b, V01–V11, P4_MassPerf)
+- [ ] `vh launch` arrive en jeu sans intervention ; `vh scenario-all` termine en vert (S01–S19, S02b, S03b, V01–V11, P4_MassPerf)
 - [ ] Un ver seul meurt d'un coup d'arme en bronze ; son coup de cobra ne touche que l'équipement (S01, S04)
 - [ ] Le ver est « pâle de caverne », luisant sous les torches, ondule en S (serpentine + péristaltique) en marche et au repos, et jette un petit sang vert à chaque coup et à sa mort (V01, V07, V08)
 - [ ] Des vers libres en groupe ne se chevauchent pas, avancent en file dans les couloirs et encerclent leur cible (S18)
@@ -941,9 +971,10 @@ Le mod est livrable quand chaque case est cochée avec, pour les règles de jeu,
 - [ ] Engloutissement : Infesté, vitesse ÷ 2, attaques et roulade possibles, roulade sans libération (tick perdu), fuite par sprint, feu (torche tenue comprise) ou dissolution (S04, S06)
 - [ ] Morsures : 1 point de durabilité par ver toutes les 0,5 s ; tout l'inventaire au hasard, équipé ou non (seules les pièces équipées si `IncludeUnequippedInventory` = false) ; Wisplight en dernier ; PV seulement après (le reste d'un tick va aux PV) ; blocage réduit, armure non ; parade parfaite : tick annulé, suivant à 1,0 s (S03b, S04)
 - [ ] Pool : parts entières par ver tué, reliquat au dernier, arrondi vers le bas, recette de base + améliorations, rien pour les objets sans recette (S05)
-- [ ] Tout est cible une fois éveillé (joueurs, apprivoisés, créatures, dvergar, structures) ; rien ne s'éveille sans joueur ; ce qui est dévoré va dans le pool (S12, S13, S14)
+- [ ] Tout est cible une fois éveillé (joueurs, apprivoisés, créatures, dvergar, structures) ; rien ne s'éveille sans joueur ; ce qui est dévoré va dans le pool (S12, S13) ; « rien ne s'éveille sans joueur » relève de S14, donc du critère de la phase 7
 - [ ] Drops natifs : appâts pondérés par rareté, entrailles, sac de sang ; aucun trophée ; aucun asset nouveau pour les items (S01)
 - [ ] Un nid par salle éligible + vers isolés ; ponte toutes les 20 s ; plafonds 50 / 200 / 400 ; mine propre une fois les nids détruits ; jamais hors mine (S09, S10, S16)
+- [ ] Factions : l'amas est ennemi de toutes les factions vanilla dans les deux sens, sauf `PlayerSpawned`, `TrainingDummy` et la baleine SkyWhale (S19)
 - [ ] Dormance et réveil conservent compteurs et pools ; sauvegarde/rechargement idem (S14, S15)
 - [ ] Performance : 400 vers actifs + 2 amas de 200 ≤ 1,0 ms de simulation, ≤ 0,6 ms de rendu, ≤ 64 appels instanciés au total, GC stable, ≤ 6 Ko/s (S11, S17)
 - [ ] Multijoueur : config imposée par le serveur, client sans mod refusé, amas frappable depuis un non-propriétaire (S17)
@@ -988,11 +1019,11 @@ Chaque ligne est une hypothèse de ce document ; Claude Code la confirme ou la c
 &\text{PV}_{amas} = n \cdot H_w \qquad kills = \left\lfloor \frac{partial + D}{H_w} \right\rfloor,\ partial \leftarrow (partial + D) \bmod H_w \\
 &r(n) = R_{10}\,(n/10)^{e} \qquad knockback = clamp(10/n,\ k_{min},\ 1) \\
 &P_{tick} = n \cdot b \cdot f_{block} \qquad k_{items} = clamp(\lceil \iota\, n/10 \rceil,\ 1,\ |eligibles|) \\
-&pool[r] \mathrel{+}= \frac{d}{D_{max}(q)}\,(a_r + (q-1)\,u_r)\,\rho \qquad share_r = pool[r] \cdot \frac{k}{n},\ carry_r \mathrel{+}= share_r,\ part_r = \lfloor carry_r \rfloor
+&pool[r] \mathrel{+}= \frac{d}{D_{max}(q)}\,\rho\,C_r(q) \qquad share_r = pool[r] \cdot \frac{k}{n},\ carry_r \mathrel{+}= share_r,\ part_r = \lfloor carry_r \rfloor
 \end{aligned}
 ```
 
-Avec `H_w` = `Worm.Health`, `D` = dégâts effectifs après résistances et blocage, `b` = `Worm.DurabilityPerBite`, `f_block` = facteur de blocage vanilla (1 sans bouclier), `ρ` = `Drops.EquipmentDropRatio`, `k` = vers tués par ce coup, `n` = compte avant le coup, `ι` = `Engulf.ItemsPerTenWorms`, `carry_r` = reste fractionnaire de la ressource `r` (§7.3), diminué de `part_r` après le drop.
+Avec `H_w` = `Worm.Health`, `D` = dégâts effectifs après résistances et blocage, `b` = `Worm.DurabilityPerBite`, `f_block` = facteur de blocage vanilla (1 sans bouclier), `ρ` = `Drops.EquipmentDropRatio`, `C_r(q)` = coût vanilla cumulé de la ressource `r` jusqu'à la qualité `q` (§7.2), `k` = vers tués par ce coup, `n` = compte avant le coup, `ι` = `Engulf.ItemsPerTenWorms`, `carry_r` = reste fractionnaire de la ressource `r` (§7.3), diminué de `part_r` après le drop.
 
 ### 20.3 Déroulé de référence (pour calibrer et pour tester)
 

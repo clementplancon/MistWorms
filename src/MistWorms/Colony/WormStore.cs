@@ -1,4 +1,5 @@
 using System;
+using MistWorms.Drops;
 using UnityEngine;
 
 namespace MistWorms.Colony
@@ -11,6 +12,9 @@ namespace MistWorms.Colony
     internal sealed class WormStore
     {
         public readonly int Capacity;
+
+        /// <summary>The pools of the worms that ate something; a worm points to its pool with <see cref="poolIndex"/>. Freed with the slot.</summary>
+        public readonly PoolTable Pools;
 
         /// <summary>1 + the highest slot ever handed out; loops over the store stop here.</summary>
         public int HighWater { get; private set; }
@@ -28,7 +32,7 @@ namespace MistWorms.Colony
         public readonly short[] nestIndex;        // -1 = none (nests arrive in phase 7)
         public readonly byte[] targetKind;        // TargetKind
         public readonly long[] targetId;          // player id for TargetKind.Player, 0 = none
-        public readonly int[] poolIndex;          // -1 in phase 3 (loot pool arrives in phase 6)
+        public readonly int[] poolIndex;          // index in Pools, -1 while the worm has eaten nothing (spec 7.1)
         public readonly bool[] alive;
         public readonly ushort[] generation;      // bumped on every reuse of the slot (proxies, phase 3B)
         public readonly int[] proxyIndex;         // pool index of the hit proxy attached to the slot, -1 = none (owned by ProxyManager)
@@ -83,6 +87,7 @@ namespace MistWorms.Colony
         {
             if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
             Capacity = capacity;
+            Pools = new PoolTable(capacity);
 
             pos = new Vector3[capacity];
             prevPos = new Vector3[capacity];
@@ -213,6 +218,7 @@ namespace MistWorms.Colony
         public void Free(int i)
         {
             if ((uint)i >= (uint)Capacity || !alive[i]) return;
+            if (poolIndex[i] >= 0) { Pools.Release(poolIndex[i]); poolIndex[i] = -1; }
             alive[i] = false;
             state[i] = (byte)WormState.Dead;
             AliveCount--;

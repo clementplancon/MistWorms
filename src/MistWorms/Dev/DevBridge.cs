@@ -608,6 +608,10 @@ namespace MistWorms.Dev
             { "bloodbag", Drops.WormDrops.Bloodbag },
             { "itemsSpawned", Drops.WormDrops.ItemsSpawned },
             { "poolItems", Drops.WormDrops.PoolItems },
+            { "poolPending", Drops.WormDrops.PendingStacks },
+            { "poolRpcSent", Drops.PoolRpc.Sent },
+            { "poolRpcReceived", Drops.PoolRpc.Received },
+            { "poolRpcIgnored", Drops.PoolRpc.IgnoredEntries },
         };
 
         /// <summary>

@@ -249,6 +249,8 @@ namespace MistWorms.Colony
         {
             if (Store == null || (uint)i >= (uint)Store.Capacity || !Store.alive[i]) return;
             Vector3 where = Store.pos[i];
+            _killPool.Clear();
+            if (Store.poolIndex[i] >= 0 && withDrops) _killPool.CopyFrom(Store.Pools.Get(Store.poolIndex[i]));   // Free releases the slot
             ReleasePath(i);
             ResetIdleSound(i);
 #if MW_DEV
@@ -262,7 +264,7 @@ namespace MistWorms.Colony
             {
                 WormEffects.PlayDeath(ref _deathFx, where + Vector3.up * 0.1f, Time.time);
                 WormDrops.DropFor(_dropRng, where);
-                // Phase 6: the dying worm also hands out its share of the loot pool (spec §7.3).
+                WormDrops.DropPoolRest(_killPool, where + Vector3.up * 0.3f);   // a free worm hands out its own pool, floor of quantity + carry, the fraction is lost: the loot pool (spec §7.3).
             }
             catch (Exception e)
             {

@@ -28,8 +28,20 @@ namespace MistWorms.Patches
                 {
                     WormBite.Register();
                     Mass.MassEngulf.Register();
+                    Drops.PoolRpc.Register();
                 }
                 catch (Exception e) { Plugin.LogException("DamagePatches.GameStart", e); }
+            }
+        }
+
+        /// <summary>The queue of pool items waiting to come out must not outlive the world that produced them.</summary>
+        [HarmonyPatch(typeof(ZNetScene), "OnDestroy")]
+        private static class SceneEndPatch
+        {
+            private static void Prefix()
+            {
+                try { Drops.WormDrops.ClearPending(); }
+                catch (Exception e) { Plugin.LogException("DamagePatches.SceneEnd", e); }
             }
         }
 
@@ -149,7 +161,11 @@ namespace MistWorms.Patches
                         WormBiteContext.DurabilityEaten += result.Eaten;
                     }
 #endif
-                    if (result.Eaten > 0f) WormBite.ShowEquipmentText(hit.m_point, result.Eaten);
+                    if (result.Eaten > 0f)
+                    {
+                        WormBite.ShowEquipmentText(hit.m_point, result.Eaten);
+                        Drops.PoolRpc.SendBiteResult();   // what was eaten goes into the pool of the mass or of the worm that bit (spec §7.2)
+                    }
 
                     // What no item could absorb goes to health in the same tick, prorated (plan 5, A7): nothing left to eat = all of it.
                     float healthShare = Mathf.Clamp01(result.Remaining / p);
