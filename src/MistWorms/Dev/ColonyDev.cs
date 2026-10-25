@@ -13,6 +13,7 @@ namespace MistWorms.Dev
     internal static class ColonyDev
     {
         private const int SpawnTries = 10;
+        private const float SightSpawnRange = 11.5f;     // under WormSense.HuntRange (12 m)
         private const float MaxSpawnSlopeDeg = 60f;
 
         private static readonly System.Random s_rng = new System.Random();
@@ -66,7 +67,7 @@ namespace MistWorms.Dev
         /// the player's chest (never behind a wall or inside rock). Respects Colony.MaxAlivePerMine unless <paramref name="force"/>.
         /// Returns how many were created.
         /// </summary>
-        public static int Spawn(int n, float radius, WormState state, bool force, out WormColony colony, out string note, int tries = SpawnTries)
+        public static int Spawn(int n, float radius, WormState state, bool force, out WormColony colony, out string note, int tries = SpawnTries, bool sight = false)
         {
             colony = null;
             note = null;
@@ -95,6 +96,9 @@ namespace MistWorms.Dev
                     if (Vector3.Angle(hit.normal, Vector3.up) > MaxSpawnSlopeDeg) continue;
                     if (!WormMath.InsideBox(hit.point, colony.BoxCenter, colony.BoxHalfSize)) continue;
                     if (Physics.Linecast(chest, hit.point + Vector3.up * 0.3f, mask, QueryTriggerInteraction.Ignore)) continue;
+                    // sight: the worm itself must see the player (eye 0.15 m up, to the player's eye, view blockers) from within the range at which a lone worm picks a target.
+                    if (sight && (Vector3.Distance(hit.point + Vector3.up * 0.15f, player.GetCenterPoint()) > SightSpawnRange
+                                  || Physics.Linecast(hit.point + Vector3.up * 0.15f, player.GetEyePoint(), WormPhysics.ViewBlockMask, QueryTriggerInteraction.Ignore))) continue;
 
                     int slot = colony.AddWorm(hit.point, state, (float)s_rng.NextDouble() * Mathf.PI * 2f - Mathf.PI, force);
                     if (slot < 0) return created; // cap reached or store full

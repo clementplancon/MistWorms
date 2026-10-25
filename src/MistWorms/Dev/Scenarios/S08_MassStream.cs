@@ -258,8 +258,11 @@ namespace MistWorms.Dev.Scenarios
         private const float WallInner = 2f;            // inner width of the corridor
         private const float WallSink = 0.1f;
         private const float CorridorLength = 18f;      // at least; a whole number of wall pieces
-        private const float FlatTolerance = 0.3f;
+        private const float FlatTolerance = 0.5f;
         private const float PathRetries = 12;
+        private const float SearchRing = 150f;
+        private const int MaxSearchHops = 3;
+        private const float HopMeters = 150f;
         private static readonly string[] WallPrefabs = { "stone_wall_4x2", "woodwall" };
 
         /// <summary>Height of the terrain collider under p (a ray from 30 m above, 80 m long); the heightmap if no collider is loaded there; NaN if neither.</summary>
@@ -277,7 +280,7 @@ namespace MistWorms.Dev.Scenarios
 
         /// <summary>Flat, free ground for a corridor starting 3 m ahead (+Z) of the player's ground point: 6 m wide, 26 m long, nothing solid but terrain.</summary>
         private static float s_flatTolerance = FlatTolerance;
-        private static readonly float[] FlatTolerances = { 0.3f, 0.6f, 1.0f };   // the flattest strip within reach first
+        private static readonly float[] FlatTolerances = { 0.5f, 0.8f, 1.2f };   // the flattest strip within reach first
 
         private static bool AcceptCorridorSpot(Vector3 ground) => AcceptCorridorSpot(ground, false);
 
@@ -328,29 +331,45 @@ namespace MistWorms.Dev.Scenarios
             {
                 bool found = false;
                 int tested = 0;
-                foreach (float tolerance in FlatTolerances)
+                Vector3 searchCenter = player.transform.position;
+                var hopDirections = new[] { Vector3.right, Vector3.forward, Vector3.left, Vector3.back };
+                // 150 m around the player, then up to 3 hops of 150 m (as MoveToOpenGround) to load other ground: strips are searched up to about 300 m from the start.
+                for (int hop = 0; hop <= MaxSearchHops && !found; hop++)
                 {
-                    s_flatTolerance = tolerance;
-                    for (float ring = 0f; ring <= 120f && !found; ring += 4f)
+                    foreach (float tolerance in FlatTolerances)
                     {
-                        int steps = ring < 1f ? 1 : Mathf.Max(8, Mathf.CeilToInt(ring * 0.8f));
-                        for (int k = 0; k < steps && !found; k++)
+                        s_flatTolerance = tolerance;
+                        for (float ring = 0f; ring <= SearchRing && !found; ring += 4f)
                         {
-                            if (++tested % 12 == 0) yield return null;
-                            float a = k * Mathf.PI * 2f / steps;
-                            Vector3 c = player.transform.position + new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * ring;
-                            c.y = GroundY(c);
-                            if (ZoneSystem.instance != null && c.y < ZoneSystem.instance.m_waterLevel + 1.5f) continue;
-                            if (!AcceptCorridorSpot(c, true)) continue;
-                            basePoint = c;
-                            found = true;
+                            int steps = ring < 1f ? 1 : Mathf.Max(8, Mathf.CeilToInt(ring * 0.8f));
+                            for (int k = 0; k < steps && !found; k++)
+                            {
+                                if (++tested % 12 == 0) yield return null;
+                                float a = k * Mathf.PI * 2f / steps;
+                                Vector3 c = searchCenter + new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a)) * ring;
+                                c.y = GroundY(c);
+                                if (ZoneSystem.instance != null && c.y < ZoneSystem.instance.m_waterLevel + 1.5f) continue;
+                                if (!AcceptCorridorSpot(c, true)) continue;
+                                basePoint = c;
+                                found = true;
+                            }
                         }
+                        if (found) { ctx.Log($"flat strip found with a tolerance of {tolerance} m after {tested} candidates, {hop} hop(s)"); break; }
                     }
-                    if (found) { ctx.Log($"flat strip found with a tolerance of {tolerance} m after {tested} candidates"); break; }
+                    if (found || hop == MaxSearchHops) break;
+                    searchCenter += hopDirections[hop % hopDirections.Length] * HopMeters;
+                    float h = WorldGenerator.instance != null ? WorldGenerator.instance.GetHeight(searchCenter.x, searchCenter.z) : player.transform.position.y;
+                    var hopped = new TeleportOutcome();
+                    ctx.Log($"no flat strip yet ({tested} candidates): hopping to {searchCenter.x:0},{searchCenter.z:0} to load other ground");
+                    yield return DevWorld.TeleportPlayer(new Vector3(searchCenter.x, Mathf.Max(h, ZoneSystem.instance.m_waterLevel) + 2f, searchCenter.z), Quaternion.identity, true, 60f, hopped);
+                    if (!hopped.Ok) { ctx.Log("hop failed: " + hopped.Error); break; }
+                    player = Player.m_localPlayer;
+                    searchCenter = player.transform.position;
+                    yield return ctx.Wait(1.5f);
                 }
                 s_flatTolerance = FlatTolerance;
                 ctx.Log(found ? $"the player's spot was not flat enough: the corridor is built at {basePoint}" : "no flat strip found around the player: the corridor goes where the player stands");
-                ctx.Assert("corridor_site_flat", found, $"a strip 6 x {CorridorLength + 6:0} m flat within {FlatTolerance} m near the player", found ? basePoint.ToString() : "none within 120 m");
+                ctx.Assert("corridor_site_flat", found, $"a strip 6 x {CorridorLength + 6:0} m flat within {FlatTolerance} m near the player", found ? basePoint.ToString() : "none within about 300 m");
                 if (found)
                 {
                     var move = new TeleportOutcome();

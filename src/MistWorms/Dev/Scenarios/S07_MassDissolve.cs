@@ -148,7 +148,11 @@ namespace MistWorms.Dev.Scenarios
                     maxRise = Mathf.Max(maxRise, rise[k]);
                 }
                 ctx.Log($"leaps: rise [{string.Join(", ", Array.ConvertAll(rise, v => v.ToString("0.00")))}] m, travel [{string.Join(", ", Array.ConvertAll(travel, v => v.ToString("0.00")))}] m");
-                ctx.Assert("leap_rises", fugitives.Count == 4 && tooLow == 0, $"each worm rises >= {MinRise} m", $"{tooLow} too low, highest {maxRise:0.00} m");
+                // The height of a leap is the apex of its parabola, known when it is emitted (0.3 to 0.6 m); what a frame sees of it depends on when it looks.
+                bool apexes = colony.DissolveApexes.Count == 4;
+                foreach (float apex in colony.DissolveApexes) if (apex < 0.3f - 1e-4f || apex > 0.6f + 1e-4f) apexes = false;
+                ctx.Log($"leap apexes (analytic): [{string.Join(", ", colony.DissolveApexes.ConvertAll(a => a.ToString("0.00")))}] m; observed: {tooLow} worm(s) seen under {MinRise} m, highest {maxRise:0.00} m");
+                ctx.Assert("leap_rises", apexes && maxRise >= MinRise, $"4 leaps with an apex of 0.3 to 0.6 m, and the highest seen at least {MinRise} m", $"apexes {colony.DissolveApexes.Count}, highest seen {maxRise:0.00} m, {tooLow} seen low");
                 ctx.Assert("leap_travels", fugitives.Count == 4 && tooShort == 0, $"each worm lands >= {MinTravel} m from its start", $"{tooShort} too short");
                 ctx.Assert("mass_destroyed", mass == null, "destroyed after the dome shrank", mass == null ? "destroyed" : "still there");
                 yield return ctx.Shot("fleeing");

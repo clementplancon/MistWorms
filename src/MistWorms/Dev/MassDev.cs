@@ -180,6 +180,7 @@ namespace MistWorms.Dev
         public static void Destroy(WritheMassState mass)
         {
             if (mass == null) return;
+            mass.DestroyReason = "dev destroy (MassDev.Destroy: scenario cleanup, mw_kill)";
             if (ZNetScene.instance != null) ZNetScene.instance.Destroy(mass.gameObject);
             else UnityEngine.Object.Destroy(mass.gameObject);
         }

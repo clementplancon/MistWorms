@@ -29,7 +29,8 @@ namespace MistWorms.Dev.Scenarios
     {
         private const int StartCount = 40;
         private const float SpawnDistance = 4.5f;     // inside the 5 m of open ground the scenario asks for
-        private const float FlatRadius = 6f, FlatTolerance = 0.3f;     // the ground around the player is level within this over this radius
+        private const float FlatRadius = 6f, FlatTolerance = 0.5f;     // the terrain around the player is level within this over this radius (0.3 found no site in 32000 candidates)
+        private const float LevelTolerance = 0.3f;                      // the floor under the mass against the floor under the player
         private const float HipHeight = 0.9f;
         private const float MeleeDistance = 3.2f;      // capsule edge at 2.6 m (outside the sword reach), hit sphere edge at about 2 m (inside)
         private const float SwordReach = 2.4f;         // SwordBronze, dump section 7
@@ -300,7 +301,7 @@ namespace MistWorms.Dev.Scenarios
         /// <summary>True when the terrain within FlatRadius of <paramref name="g"/> (centre and 12 points on two rings) is level with it within FlatTolerance.</summary>
         private static bool FlatAround(Vector3 g)
         {
-            int mask = WormPhysics.SolidMask;
+            int mask = LayerMask.GetMask(VanillaNames.LayerTerrain);      // terrain only: a tree or a rock on a ring is not a slope
             for (int ring = 1; ring <= 2; ring++)
                 for (int k = 0; k < 12; k++)
                 {
@@ -327,7 +328,7 @@ namespace MistWorms.Dev.Scenarios
                 Vector3 hip = player.transform.position + Vector3.up * HipHeight;
                 float dy = mass.transform.position.y - player.transform.position.y;
                 bool clear = !mass.TryGetHitSphere(out Vector3 centre, out _) ? true : !Physics.Linecast(hip, new Vector3(centre.x, hip.y, centre.z), WormPhysics.SolidMask, QueryTriggerInteraction.Ignore);
-                if (Mathf.Abs(dy) <= FlatTolerance && clear)
+                if (Mathf.Abs(dy) <= LevelTolerance && clear)
                 {
                     if (firstMass != null) MassDev.Destroy(firstMass);
                     if (k > 0) ctx.Log($"melee site: direction {k * 45} deg, floor {dy:+0.00;-0.00} m, line clear");

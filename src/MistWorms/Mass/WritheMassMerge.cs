@@ -28,6 +28,7 @@ namespace MistWorms.Mass
         private const int TransferGlideMax = 8;
         private static readonly Vector3[] s_transferPoints = new Vector3[TransferGlideMax];
 
+        private int _slidersIn;       // masses of this peer that slide onto this one right now: it does not slide itself meanwhile
         private bool _merging;
         private bool _frozenBeforeMerge;
         private WritheMassState _mergeInto;
@@ -50,7 +51,7 @@ namespace MistWorms.Mass
 
         private void MergeTick(float now)
         {
-            if (!MergeEnabled || !IsOwner || _dissolving || _merging || now < _nextMerge) return;
+            if (!MergeEnabled || !IsOwner || _dissolving || _merging || _slidersIn > 0 || now < _nextMerge) return;
             _nextMerge = now + MergePeriod;
             if (_character == null || _character.IsDead()) return;
             byte myCode = StateCode;
@@ -101,10 +102,10 @@ namespace MistWorms.Mass
                 }
                 if (!iAmSmaller) continue;   // the other one slides, its owner acts
 
-                int moved = MassMergeMath.Transfer(n, nb, max, out bool complete);
-                if (moved <= 0) continue;
+                MassMergeMath.MergePlan plan = MassMergeMath.Decide(n, mine.UserID, mine.ID, nb, theirs.UserID, theirs.ID, max, out int moved);
+                if (plan == MassMergeMath.MergePlan.None) continue;
                 _seekTarget = null;
-                if (complete) BeginSlide(b, now);
+                if (plan == MassMergeMath.MergePlan.Complete) BeginSlide(b, now);
                 else if (now >= _transferCooldownUntil) TransferPartial(b, moved, now);
                 return;
             }
@@ -132,13 +133,14 @@ namespace MistWorms.Mass
         {
             _merging = true;
             _mergeInto = big;
+            big._slidersIn++;
             _mergeFrom = transform.position;
             _mergeT0 = now;
             _frozenBeforeMerge = FreezeAI;
             FreezeAI = true;
             WriteState(MassStateCodes.With(StateCode, MassStateCodes.Merging, true));
             SetBodiesIgnoring(big, true);
-            Plugin.Log.LogInfo($"[Mass] {ZdoId} ({N}) slides onto {big.ZdoId} ({big.N})");
+            Plugin.Log.LogInfo($"[Mass] merge: {ZdoId} (n={N}) slides onto {big.ZdoId} (n={big.N}), the smaller of the two goes to the bigger");
         }
 
         private void SetBodiesIgnoring(WritheMassState other, bool ignore)
@@ -169,12 +171,16 @@ namespace MistWorms.Mass
         private void FinishMerge(WritheMassState big)
         {
             int k = N;
+            int bigBefore = big.N;
             int accepted = big.AddWorms(k);
+            Plugin.Log.LogInfo($"[Mass] merge: {ZdoId} (n={k}) into {big.ZdoId}: the big one {bigBefore} -> {big.N}, accepted {accepted}");
             if (accepted < 0 || accepted >= k)
             {
                 // Done (a remote big mass takes the RPC and applies its own cap).
                 MergesCompleted++;
+                DestroyReason = $"merged into {big.ZdoId} (n={k} given, accepted {accepted})";
                 _merging = false;
+                if (big._slidersIn > 0) big._slidersIn--;
                 SetBodiesIgnoring(big, false);
                 DestroyMass();
                 return;
@@ -194,6 +200,7 @@ namespace MistWorms.Mass
         {
             if (!_merging) return;
             _merging = false;
+            if (_mergeInto != null && _mergeInto._slidersIn > 0) _mergeInto._slidersIn--;
             SetBodiesIgnoring(_mergeInto, false);
             _mergeInto = null;
             FreezeAI = _frozenBeforeMerge;

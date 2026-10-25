@@ -19,9 +19,8 @@ namespace MistWorms.Dev.Scenarios
     /// </summary>
     internal abstract class MassFormScenario : IDevScenario
     {
-        private const float SpawnStartRadius = 8f;
-        private const float SpawnGrowth = 1.5f;
-        private const int SpawnPasses = 10;
+        private const float SpawnRadius = 10f;      // inside the 12 m at which a lone worm picks a target (WormSense.HuntRange): every worm can sense the player at once
+        private const int SpawnPasses = 30;
         private const float StableSeconds = 1f;      // the expected masses must stand this long (they could still be merging)
 
         public abstract string Name { get; }
@@ -78,8 +77,8 @@ namespace MistWorms.Dev.Scenarios
                 int created = 0;
                 for (int pass = 0; pass < SpawnPasses && created < Worms; pass++)
                 {
-                    float radius = SpawnStartRadius + pass * SpawnGrowth;
-                    created += ColonyDev.Spawn(Worms - created, radius, WormState.Idle, true, out colony, out string how);
+                    float radius = SpawnRadius;
+                    created += ColonyDev.Spawn(Worms - created, radius, WormState.Idle, true, out colony, out string how, tries: 30, sight: true);
                     if (pass == 0) ctx.Log($"colony: {how}");
                 }
                 ctx.Assert("worms_spawned", created == Worms, Worms, created);
@@ -115,6 +114,7 @@ namespace MistWorms.Dev.Scenarios
 
                 SortedCounts(colony, counts);
                 for (int k = 0; k < counts.Count; k++) maxSeen = Math.Max(maxSeen, counts[k]);
+                if (colony.Store.AliveCount > 0) LogStragglers(ctx, colony, player);
                 string want = "[" + string.Join(", ", expected) + "]";
                 ctx.Assert("expected_masses_within_time", doneAt >= 0f && doneAt <= seconds, $"{want} and no free worm within {seconds:0} s",
                     doneAt >= 0f ? $"{doneAt:0.0} s" : $"[{string.Join(", ", counts)}] and {colony.Store.AliveCount} free worms after {seconds:0} s");
@@ -148,6 +148,29 @@ namespace MistWorms.Dev.Scenarios
                 ctx.ClearInventory();
                 Player p = Player.m_localPlayer;
                 if (p != null) p.SetGodMode(false);
+            }
+        }
+
+        /// <summary>What lies between a worm and its goal at the height of the wall probe of the simulation: the first solid thing a straight line meets.</summary>
+        private static string Blocker(Vector3 from, Vector3 to)
+        {
+            Vector3 lift = Vector3.up * WormPhysics.WallHeight;
+            if (Physics.Linecast(from + lift, to + lift, out RaycastHit hit, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore))
+                return $"blocked by {hit.collider.name} (layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at {hit.distance:0.0} m of {Vector3.Distance(from, to):0.0} m, normal {hit.normal}";
+            return $"straight line to the goal ({Vector3.Distance(from, to):0.0} m) is clear";
+        }
+
+        /// <summary>The worms still free at the end: state, distance to the player and to the nearest mass, target, line of sight, time in the state.</summary>
+        private static void LogStragglers(ScenarioContext ctx, WormColony colony, Player player)
+        {
+            WormStore s = colony.Store;
+            for (int i = 0; i < s.HighWater; i++)
+            {
+                if (!s.alive[i]) continue;
+                float toMass = float.MaxValue;
+                foreach (WritheMassState m in WritheMassState.All)
+                    if (m != null && m.Valid) toMass = Math.Min(toMass, Vector3.Distance(m.transform.position, s.pos[i]));
+                ctx.Log($"straggler {i}: {(WormState)s.state[i]} for {s.stateTime[i]:0.0} s (history: {colony.DevStateHistory(i)}), {Vector3.Distance(player.transform.position, s.pos[i]):0.0} m from the player, {(toMass == float.MaxValue ? -1f : toMass):0.0} m from the nearest mass, target {s.targetId[i]}, line of sight {s.hasLos[i]}, goal {s.wanderGoal[i]}, gather kind {s.subPhase[i]} (1 = a mass, 2 = a group), {colony.DevStepInfo(i)}, stalls on the way to a mass {colony.GatherStalls}, goal to the nearest mass {(toMass == float.MaxValue ? -1f : 0f):0}; colony masses:{colony.DevMassTable()}; {Blocker(s.pos[i], s.wanderGoal[i])}");
             }
         }
 

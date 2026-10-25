@@ -43,6 +43,23 @@ namespace MistWorms.Mass
             return id1 < id2;
         }
 
+        public enum MergePlan { None, Complete, Partial }
+
+        /// <summary>
+        /// What a mass does about another one it touches, decided by its own owner and no other: nothing unless it is the smaller of the two (<see cref="IsSmaller"/>)
+        /// and the other one has room; then all its worms slide onto the other (<see cref="MergePlan.Complete"/>) or exactly <paramref name="moved"/> are handed over
+        /// (<see cref="MergePlan.Partial"/>). Of two masses at most one acts, the smaller.
+        /// </summary>
+        public static MergePlan Decide(int nMe, long userMe, uint idMe, int nOther, long userOther, uint idOther, int max, out int moved)
+        {
+            moved = 0;
+            if (nMe <= 0 || nOther <= 0 || nOther >= max) return MergePlan.None;
+            if (!IsSmaller(nMe, userMe, idMe, nOther, userOther, idOther)) return MergePlan.None;
+            moved = Transfer(nMe, nOther, max, out bool complete);
+            if (moved <= 0) return MergePlan.None;
+            return complete ? MergePlan.Complete : MergePlan.Partial;
+        }
+
         /// <summary>
         /// Worms the small mass gives the big one: all of them when they fit (<paramref name="complete"/>), otherwise exactly
         /// <c>max - nBig</c> (0 when the big one is full) and the small mass keeps the rest.

@@ -184,7 +184,8 @@ class MassFrameParams:
     def __init__(self, r, n, sigma=0.0, streamK=0.0, ribbonW=0.0, ribbonL=0.0, t=0.0,
                  tread=0.0, boil=0.0, odoFlux=0.0, odoBorder=0.0,
                  targetTurns=0.0, targetDist=-1.0, pseudoRamp=0.0, engulf=0.0, lobeTread=None,
-                 blocked=(False, False, False, False), camL=None):
+                 blocked=(False, False, False, False), camL=None, yawRate=0.0, speed=0.0,
+                 frame=None):
         self.r = _(r)
         self.n = int(n)
         self.sigma = _(sigma)                 # smoothed speed ratio v / MoveSpeed, 0..1
@@ -205,6 +206,10 @@ class MassFrameParams:
         self.engulf = _(engulf)               # 0..1: a lobe centres on the target and climbs around it
         self.blocked = tuple(bool(b) for b in blocked)   # 4 ground quadrants blocked by a wall (border worms stay inside)
         self.camL = camL                      # unit vector toward the camera in the local frame (inner-place culling), None = off
+        self.yawRate = _(yawRate)             # turns per second the heap turns toward its left: the poured worms are turned back to hold still in the world
+        self.speed = _(speed)                 # m/s of the heap
+        # world frame of the heap (rootX, rootZ, fwdX, fwdZ, leftX, leftZ, yaw in turns), None = the poured worms are not anchored in the world
+        self.frame = tuple(_(x) for x in frame) if frame is not None else None
 
 
 class SlotOut:
@@ -231,6 +236,11 @@ class Slots:
                 "boilPhi", "rollFlux", "borderRank", "thr", "hv", "hr", "hph", "eSlide", "eSlidePh", "eOut", "ePit", "thr2", "as0", "ahz", "ahy")
         for k in keys:
             setattr(self, k, [None] * count)
+        # a worm poured on the ground lies still in the WORLD: where it touched down (world x, z), the heading of the heap then (turns), its cycle
+        self.pourWx = [_(0.0)] * count
+        self.pourWz = [_(0.0)] * count
+        self.pourYaw = [_(0.0)] * count
+        self.pourCyc = [None] * count
         h0 = hash01(self.seed, 0, 0)
         h1 = hash01(self.seed, 0, 1)
         border_rank = 0
@@ -555,6 +565,27 @@ def boil_line(S, i, c, rl):
     return sx, sz, ex, ez, (hb * _(2.0) - _(1.0)) * K.BoilTwistMax * _(0.5)
 
 
+def _anchor_poured(P, S, i, cyc, pos, f, u):
+    """A worm poured on the ground lies still in the world: remembered at touch-down (world point and heading of the heap), put back there until the cycle ends."""
+    rx, rz, fx, fz, lx, lz, yaw = P.frame
+    det = fx * lz - lx * fz
+    if abs(det) < _(0.2):
+        return pos, f, u
+    if S.pourCyc[i] != cyc:
+        S.pourWx[i] = rx + fx * pos[0] + lx * pos[2]
+        S.pourWz[i] = rz + fz * pos[0] + lz * pos[2]
+        S.pourYaw[i] = yaw
+        S.pourCyc[i] = cyc
+        return pos, f, u
+    dx, dz = S.pourWx[i] - rx, S.pourWz[i] - rz
+    x = (dx * lz - lx * dz) / det
+    z = (fx * dz - fz * dx) / det
+    turned = -(yaw - S.pourYaw[i])
+    turned -= np.floor(turned + _(0.5))
+    ca, sa = cos_t(turned), sin_t(turned)
+    return ((x, pos[1], z), (ca * f[0] - sa * f[2], f[1], sa * f[0] + ca * f[2]), (ca * u[0] - sa * u[2], u[1], sa * u[0] + ca * u[2]))
+
+
 def eval_flux(P, S, G, L, j, i):
     t = P.t
     sg = P.sigma
@@ -632,6 +663,24 @@ def eval_flux(P, S, G, L, j, i):
     if wpour > _(0.0):
         # anchored to the slow centre of the lobe, not to its drifting and swinging one: the poured worm holds still in the world
         pos = (pos[0] + wpour * (L.sx - L.cx), pos[1], pos[2] + wpour * (L.sz - L.cz))
+    if exit_blend and P.yawRate != _(0.0) and sg > _(0.0) and mu > K.SurfaceEnd:
+        # the heap turns: a worm poured on the ground holds still in the world only if it is turned back by what the heap turned since it touched down
+        tp = (mu - K.SurfaceEnd) * L.lt / max(P.speed, _(0.3))
+        tp = min(tp, _(1.5))
+        gate = sg * smooth01((mu - K.SurfaceEnd) / _(0.04))
+        run = (mu - K.SurfaceEnd) * L.lt * gate                  # metres the straight pour model walked it back
+        ang = -P.yawRate * tp * gate
+        rad = -ang * _(2.0 * np.pi)                              # what the heap turned, radians (left positive)
+        chord_x, chord_z = run, _(0.0)                           # its path since the touch-down is an arc, not a line: the chord in the frame of the touch-down
+        if abs(rad) > _(1e-3):
+            chord_x, chord_z = run * np.sin(rad) / rad, run * (_(1.0) - np.cos(rad)) / rad
+        ca, sa = cos_t(ang), sin_t(ang)
+        bx, bz = pos[0] + run - chord_x, pos[2] - chord_z
+        pos = (ca * bx - sa * bz, pos[1], sa * bx + ca * bz)
+        f = (ca * f[0] - sa * f[2], f[1], sa * f[0] + ca * f[2])
+        u = (ca * u[0] - sa * u[2], u[1], sa * u[0] + ca * u[2])
+    if P.frame is not None and exit_blend and anim == ANIM_IDLE and sg > _(0.5):
+        pos, f, u = _anchor_poured(P, S, i, c, pos, f, u)
     if anim == ANIM_IDLE:
         frame = int(np.floor(t * _(6.0) + S.animPhase[i] * _(IDLE_FRAMES))) % IDLE_FRAMES
     else:

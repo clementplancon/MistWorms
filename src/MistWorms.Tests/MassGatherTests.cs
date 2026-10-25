@@ -1,6 +1,7 @@
 using System;
 using MistWorms.Colony;
 using MistWorms.Mass;
+using MistWorms.Render;
 using UnityEngine;
 using Xunit;
 
@@ -97,6 +98,31 @@ namespace MistWorms.Tests
         }
 
         [Fact]
+        public void AWormThatStaysStillOutsideTheReachOfAMassIsStalled()
+        {
+            float r = MassMath.Radius(39, 0.83f, 0.36f);
+            Assert.True(WormGather.IsStalled(3.3f, r, 0f), "3.3 m from a mass of 39 and motionless is a failure");
+            Assert.False(WormGather.IsStalled(3.3f, r, 1.2f), "it is moving");
+            Assert.False(WormGather.IsStalled(2.0f, r, 0f), "inside the reach it is absorbed, not stalled");
+        }
+
+        [Fact]
+        public void AMassWithRoomBeatsAGroupAndTheWormTouchesItsWiderEnvelope()
+        {
+            Vector3[] pos = { new Vector3(10, 0, 0), new Vector3(4, 0, 0), new Vector3(2.8f, 0, 0) };
+            int[] load = { 5, 200, 39 };
+            Vector3 worm = Vector3.zero;
+            Assert.Equal(2, WormGather.NearestMass(worm, pos, load, 3, 200, 30f, 4f));          // the nearest with room: the full one at 4 m is skipped
+            Assert.Equal(-1, WormGather.NearestMass(worm, pos, new[] { 200, 200, 200 }, 3, 200, 30f, 4f));
+            Assert.Equal(-1, WormGather.NearestMass(worm, pos, load, 3, 200, 2f, 4f));            // out of range
+            Assert.Equal(-1, WormGather.NearestMass(new Vector3(0, 9, 0), pos, load, 3, 200, 30f, 4f));   // another floor
+            // A mass of 39 (r about 1.35): the worm at 2.8 m used to wait for ever (r + 0.5 = 1.95); the envelope reaches 2.26.
+            float r = MassMath.Radius(39, 0.83f, 0.36f);
+            Assert.True(WormGather.AbsorbReach(r) > r + 0.5f);
+            Assert.True(WormGather.AbsorbReach(r) >= 2.2f);
+        }
+
+        [Fact]
         public void GroupCentroidNeedsOthersWithinTheRadius()
         {
             Vector3[] pos = { new Vector3(0, 0, 0), new Vector3(4, 0, 0), new Vector3(8, 0, 0), new Vector3(100, 0, 0) };
@@ -155,6 +181,38 @@ namespace MistWorms.Tests
             int moved = MassMergeMath.Transfer(small, big, max, out bool isComplete);
             Assert.Equal(expected, moved);
             Assert.Equal(complete, isComplete);
+        }
+
+        [Fact]
+        public void OfTwoMassesExactlyTheSmallerOneActsAndNeverTheBigOne()
+        {
+            int[] counts = { 1, 3, 10, 15, 40, 100, 199, 200 };
+            foreach (int a in counts)
+                foreach (int b in counts)
+                    foreach (bool aLowerId in new[] { true, false })
+                    {
+                        uint idA = aLowerId ? 1u : 2u, idB = aLowerId ? 2u : 1u;
+                        var planA = MassMergeMath.Decide(a, 7, idA, b, 7, idB, 200, out int movedA);
+                        var planB = MassMergeMath.Decide(b, 7, idB, a, 7, idA, 200, out int movedB);
+                        bool aActs = planA != MassMergeMath.MergePlan.None, bActs = planB != MassMergeMath.MergePlan.None;
+                        Assert.False(aActs && bActs, $"both act: {a} and {b}");
+                        if (aActs) { Assert.True(a < b || (a == b && aLowerId), $"the bigger acts: {a} vs {b}"); Assert.True(b < 200); Assert.True(movedA >= 1 && movedA <= a); }
+                        if (bActs) { Assert.True(b < a || (a == b && !aLowerId), $"the bigger acts: {b} vs {a}"); Assert.True(a < 200); Assert.True(movedB >= 1 && movedB <= b); }
+                        bool someoneHasRoom = a < 200 && b < 200 && !(a == 200 || b == 200);
+                        if (someoneHasRoom) Assert.True(aActs ^ bActs, $"nobody acts for {a} and {b}");
+                    }
+        }
+
+        [Fact]
+        public void AMassThatIsFullIsNeverTheTargetAndTheDecisionMovesTheRightCount()
+        {
+            Assert.Equal(MassMergeMath.MergePlan.None, MassMergeMath.Decide(10, 1, 1, 200, 1, 2, 200, out int moved));
+            Assert.Equal(0, moved);
+            Assert.Equal(MassMergeMath.MergePlan.Complete, MassMergeMath.Decide(10, 1, 1, 15, 1, 2, 200, out moved));
+            Assert.Equal(10, moved);
+            Assert.Equal(MassMergeMath.MergePlan.Partial, MassMergeMath.Decide(150, 1, 1, 190, 1, 2, 200, out moved));
+            Assert.Equal(10, moved);
+            Assert.Equal(MassMergeMath.MergePlan.None, MassMergeMath.Decide(15, 1, 1, 10, 1, 2, 200, out _));    // the bigger never moves
         }
 
         [Fact]

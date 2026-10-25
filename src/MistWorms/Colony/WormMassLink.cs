@@ -31,6 +31,7 @@ namespace MistWorms.Colony
         private const int GatherMinGroup = 2;                // spec §3.3: at least 2 other active worms
         private const float GatherGoalInterval = 0.25f;
         private const float GatherGrace = 0.6f;              // a worm that just began to gather keeps going while the scan tables catch up
+        private const float GatherDirectSeconds = 2f;       // a stalled gatherer steers by its goal alone this long
         private const float GatherPatience = 12f;            // a gathering worm of a group that never forms hunts after this long
         private const int MaxFormPerTick = 2;
         private const byte GatherNone = 0, GatherMass = 1, GatherGroup = 2;
@@ -52,6 +53,8 @@ namespace MistWorms.Colony
         public int MassesFormed { get; private set; }
         public int WormsAbsorbed { get; private set; }
         public int WormsFormed { get; private set; }
+        /// <summary>Times a worm on its way to a mass made no progress outside its reach and was set straight at it (dev checks).</summary>
+        public int GatherStalls { get; private set; }
 
         private struct MassRef
         {
@@ -64,6 +67,8 @@ namespace MistWorms.Colony
         }
 
         private MassRef[] _masses = new MassRef[8];
+        private Vector3[] _massPos = new Vector3[8];     // live positions of the masses (every tick) and their load (count + climbing), for WormGather.NearestMass
+        private int[] _massLoad = new int[8];
         private int _massCount;
         private float _nextMassTick;
         private bool _massPrefabMissing;
@@ -89,6 +94,14 @@ namespace MistWorms.Colony
 
         private void InitMassLink(int capacity)
         {
+#if MW_DEV
+            _histState = new byte[capacity * HistoryLength];
+            _histTime = new float[capacity * HistoryLength];
+            _histCount = new int[capacity];
+            _dbgStep = new StepResult[capacity];
+            _dbgTravel = new float[capacity];
+            _dbgSteps = new int[capacity];
+#endif
             _actPos = new Vector3[capacity];
             _actIdx = new int[capacity];
             _actState = new byte[capacity];
@@ -103,12 +116,27 @@ namespace MistWorms.Colony
 
         private void MassTick(float now)
         {
-            if (now < _nextMassTick || _actPos == null) return;
+            if (_actPos == null) return;
+            if (now < _nextMassTick) { SyncMassPositions(); return; }
             _nextMassTick = now + MassTickInterval;
             RefreshMasses();
+            SyncMassPositions();
             if (!GatheringEnabled) return;
             AbsorbScan(now);
             TryForm(now);
+        }
+
+        /// <summary>Positions and loads of the known masses as of this tick: a mass wanders at 2.4 m/s, a goal taken from the last scan is up to 0.6 m old.</summary>
+        private void SyncMassPositions()
+        {
+            if (_massPos.Length < _massCount) { _massPos = new Vector3[_masses.Length]; _massLoad = new int[_masses.Length]; }
+            for (int k = 0; k < _massCount; k++)
+            {
+                WritheMassState m = _masses[k].State;
+                if (m != null && m.Valid) _masses[k].Pos = m.transform.position;
+                _massPos[k] = _masses[k].Pos;
+                _massLoad[k] = _masses[k].N + _masses[k].Pending;
+            }
         }
 
         private void RefreshMasses()
@@ -171,18 +199,7 @@ namespace MistWorms.Colony
         {
             Vector3 p = Store.pos[i];
             int max = MWConfig.Mass.MaxCount.Value;
-            float best = radius * radius;
-            int bi = -1;
-            for (int k = 0; k < _massCount; k++)
-            {
-                if (_masses[k].N + _masses[k].Pending >= max) continue;
-                Vector3 q = _masses[k].Pos;
-                float dx = q.x - p.x, dz = q.z - p.z;
-                float d2 = dx * dx + dz * dz;
-                if (d2 > best || Mathf.Abs(q.y - p.y) > GatherMaxDy) continue;
-                best = d2;
-                bi = k;
-            }
+            int bi = WormGather.NearestMass(p, _massPos, _massLoad, _massCount, max, radius, GatherMaxDy);
             if (bi >= 0)
             {
                 goal = _masses[bi].Pos;
@@ -237,10 +254,19 @@ namespace MistWorms.Colony
                 return;
             }
 
-            if (now >= s.approachNext[i])
+            // A mass with room within reach beats any group, and its goal is its position of this tick, at every step.
+            float gatherRadius = Mathf.Max(MWConfig.Mass.GatherRadius.Value, MWConfig.Mass.RegroupRadius.Value);
+            int mk = WormGather.NearestMass(s.pos[i], _massPos, _massLoad, _massCount, MWConfig.Mass.MaxCount.Value, gatherRadius, GatherMaxDy);
+            if (mk >= 0)
+            {
+                s.subPhase[i] = GatherMass;
+                s.wanderGoal[i] = _massPos[mk];
+                if (TryBeginAbsorb(i, mk, now)) return;
+            }
+            else if (now >= s.approachNext[i])
             {
                 s.approachNext[i] = now + GatherGoalInterval;
-                float radius = Mathf.Max(MWConfig.Mass.GatherRadius.Value, MWConfig.Mass.RegroupRadius.Value);
+                float radius = gatherRadius;
                 byte kind = FindGatherGoal(i, radius, out Vector3 goal);
                 if (kind == GatherNone && s.stateTime[i] < GatherGrace) return;   // the tables of the scan may predate this worm and its neighbours
                 if (kind == GatherNone)
@@ -266,9 +292,16 @@ namespace MistWorms.Colony
             Vector3 toGoal = target - s.pos[i];
             toGoal.y = 0f;
             bool toMass = s.subPhase[i] == GatherMass;
-            if (CheckStuck(i, now) && toGoal.sqrMagnitude > 4f) TryRequestPath(i, target, now);
+            bool stuck = CheckStuck(i, now);      // true once per 3 s window without 0.5 m of progress
+            if (stuck && toGoal.sqrMagnitude > 4f) TryRequestPath(i, target, now);
+            if (stuck && toMass && mk >= 0 && WormGather.IsStalled(toGoal.magnitude, _masses[mk].R, 0f))
+            {
+                // Waiting outside the reach of the mass for something that cannot come: for the next 2 s only the goal steers (avoidance and separation may cancel it).
+                s.directUntil[i] = now + GatherDirectSeconds;
+                GatherStalls++;
+            }
             target = FollowPath(i, target);
-            MoveWorm(i, target, MWConfig.Worm.MoveSpeed.Value, now, dt, noiseWeight: 0f, stopAtGoal: !toMass);
+            MoveWorm(i, toMass && now < s.directUntil[i] ? s.wanderGoal[i] : target, MWConfig.Worm.MoveSpeed.Value, now, dt, noiseWeight: 0f, stopAtGoal: !toMass, direct: toMass && now < s.directUntil[i]);
         }
 
         // ------------------------------------------------------------------ formation (spec §4.1)
@@ -343,6 +376,7 @@ namespace MistWorms.Colony
             e.R = MassMath.Radius(k);
             e.N = k;
             e.Pending = 0;
+            SyncMassPositions();
 
             MassesFormed++;
             WormsFormed += k;
@@ -372,21 +406,28 @@ namespace MistWorms.Colony
                 if (st != (byte)WormState.Idle && st != (byte)WormState.Gathering && st != (byte)WormState.Hunting) continue;
                 Vector3 p = s.pos[i];
                 for (int k = 0; k < _massCount; k++)
-                {
-                    if (_masses[k].N + _masses[k].Pending >= max) continue;
-                    Vector3 q = _masses[k].Pos;
-                    float dx = q.x - p.x, dz = q.z - p.z;
-                    float reach = _masses[k].R + AbsorbMargin;
-                    if (dx * dx + dz * dz > reach * reach || Mathf.Abs(q.y - p.y) > AbsorbMaxDy) continue;
-
-                    s.massRef[i] = _masses[k].Id;
-                    s.absorbFrom[i] = p;
-                    SetState(i, WormState.Absorbing, now);
-                    s.nextSimTime[i] = now;
-                    _masses[k].Pending++;
-                    break;
-                }
+                    if (TryBeginAbsorb(i, k, now)) break;
             }
+        }
+
+        /// <summary>The worm starts to climb onto mass <paramref name="k"/> when it touches its visible envelope (<see cref="WormGather.AbsorbReach"/>) and the mass has room.</summary>
+        private bool TryBeginAbsorb(int i, int k, float now)
+        {
+            WormStore s = Store;
+            if (_masses[k].N + _masses[k].Pending >= MWConfig.Mass.MaxCount.Value) return false;
+            Vector3 p = s.pos[i];
+            Vector3 q = _masses[k].Pos;
+            float dx = q.x - p.x, dz = q.z - p.z;
+            float reach = WormGather.AbsorbReach(_masses[k].R);
+            if (dx * dx + dz * dz > reach * reach || Mathf.Abs(q.y - p.y) > AbsorbMaxDy) return false;
+
+            s.massRef[i] = _masses[k].Id;
+            s.absorbFrom[i] = p;
+            SetState(i, WormState.Absorbing, now);
+            s.nextSimTime[i] = now;
+            _masses[k].Pending++;
+            _massLoad[k]++;
+            return true;
         }
 
         private void StepAbsorbing(int i, float now, float dt)
@@ -478,8 +519,73 @@ namespace MistWorms.Colony
         }
 
 #if MW_DEV
+        // State history of each worm (the last HistoryLength changes), for the dev journals of stragglers.
+        private const int HistoryLength = 8;
+        private byte[] _histState;
+        private float[] _histTime;
+        private int[] _histCount;
+
+        private void RecordHistory(int i, WormState state, float now)
+        {
+            if (_histCount == null) return;
+            int at = i * HistoryLength + (_histCount[i] % HistoryLength);
+            _histState[at] = (byte)state;
+            _histTime[at] = now;
+            _histCount[i]++;
+        }
+
+        /// <summary>"Idle.0 > Hunting.5 > Gathering.0" (times in seconds before now), the last states of worm <paramref name="i"/>.</summary>
+        public string DevStateHistory(int i)
+        {
+            if (_histCount == null || _histCount[i] == 0) return "(none)";
+            int total = _histCount[i];
+            int first = total > HistoryLength ? total - HistoryLength : 0;
+            var sb = new System.Text.StringBuilder();
+            for (int k = first; k < total; k++)
+            {
+                int at = i * HistoryLength + (k % HistoryLength);
+                if (sb.Length > 0) sb.Append(" > ");
+                sb.Append((WormState)_histState[at]).Append('@').Append((Time.time - _histTime[at]).ToString("0.0")).Append(" s ago");
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>The masses this colony knows, as its worms see them: count, load, colony match, position of this tick against the real one (dev checks, S02 stragglers).</summary>
+        private StepResult[] _dbgStep;
+        private float[] _dbgTravel;
+        private int[] _dbgSteps;
+
+        /// <summary>What the last steps of worm <paramref name="i"/> did: result of the last physical step, the distance it tried, steps taken, speed, avoidance direction (S02 stragglers).</summary>
+        public string DevStepInfo(int i)
+        {
+            if (_dbgStep == null) return "(no step info)";
+            WormStore s = Store;
+            string result = (int)_dbgStep[i] < 0 ? "no travel (speed capped or turning)" : _dbgStep[i].ToString();
+            return $"last step {result}, tried {_dbgTravel[i]:0.000} m, {_dbgSteps[i]} steps in all, speed {s.lastSpeed[i]:0.00} m/s, heading {s.heading[i]:0.00} rad, avoid {s.avoidDir[i]}, direct until {s.directUntil[i]:0.0} (now {Time.time:0.0}), sim interval {s.simInterval[i]:0.000} s, path slot {s.pathSlot[i]}, progress window start {s.progressTime[i]:0.0}";
+        }
+
+        public string DevMassTable()
+        {
+            var sb = new System.Text.StringBuilder();
+            for (int k = 0; k < _massCount; k++)
+            {
+                WritheMassState m = _masses[k].State;
+                sb.Append($" [mass {_masses[k].Id} n={_masses[k].N} pending={_masses[k].Pending} colonyMatch={(m != null && m.ColonyId == ZdoId)} synced={_massPos[k]} real={(m != null ? m.transform.position : Vector3.zero)} load={_massLoad[k]}]");
+            }
+            foreach (WritheMassState m in WritheMassState.All)
+            {
+                if (m == null || !m.Valid) continue;
+                bool known = false;
+                for (int k = 0; k < _massCount; k++) if (_masses[k].Id == m.ZdoId) known = true;
+                if (!known) sb.Append($" [UNKNOWN mass {m.ZdoId} n={m.N} colonyMatch={m.ColonyId == ZdoId} state={MassStateCodes.Describe(m.StateCode)} dissolving={m.Dissolving} at {m.transform.position}]");
+            }
+            return sb.Length > 0 ? sb.ToString() : " (no mass)";
+        }
+
         /// <summary>Where the worms of the last dissolution started their leap (dev checks), and how many of those places were worms the layout had drawn.</summary>
         public readonly List<Vector3> DissolveStarts = new List<Vector3>();
+        /// <summary>The apex height (m) of the parabola of each leap of the last dissolution, known when the leap is emitted (the observed height depends on when the frames are looked at).</summary>
+        public readonly List<float> DissolveApexes = new List<float>();
         public int DissolveFromDrawn { get; private set; }
 #endif
 
@@ -492,6 +598,7 @@ namespace MistWorms.Colony
             DissolveLost = 0;
 #if MW_DEV
             DissolveStarts.Clear();
+            DissolveApexes.Clear();
             DissolveFromDrawn = 0;
 #endif
             if (Store == null || Disabled || n <= 0 || n > MWConfig.Mass.MaxCount.Value)
@@ -562,6 +669,7 @@ namespace MistWorms.Colony
                 DissolvedWorms++;
 #if MW_DEV
                 DissolveStarts.Add(from);
+                DissolveApexes.Add(s.leapHeight[slot]);
 #endif
             }
             Plugin.Log.LogInfo($"[Colony] mass {mass} dissolved: {n - DissolveLost}/{n} fleeing worms created at {position} ({drawn} from drawn worms of the heap)");

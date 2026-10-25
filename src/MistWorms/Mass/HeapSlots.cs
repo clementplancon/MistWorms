@@ -49,6 +49,10 @@ namespace MistWorms.Mass
         public readonly int[] BoilCm;
         public readonly float[] BoilH;
 
+        /// <summary>A worm poured on the ground lies still in the WORLD: where it touched down (world x, z), the heading of the heap then (turns), and the cycle it belongs to (phase 4B-4 follow-up).</summary>
+        public readonly float[] PourWx, PourWz, PourYaw;
+        public readonly int[] PourCyc;
+
         public HeapSlots(uint seed) : this(seed, MassLayoutConst.SlotCount) { }
 
         public HeapSlots(uint seed, int count)
@@ -75,6 +79,8 @@ namespace MistWorms.Mass
             EvalFrame = new int[count];
             BoilCm = new int[count];
             BoilH = new float[count * 4];
+            PourWx = new float[count]; PourWz = new float[count]; PourYaw = new float[count]; PourCyc = new int[count];
+            for (int i = 0; i < count; i++) PourCyc[i] = int.MinValue;
             for (int i = 0; i < count; i++) BoilCm[i] = -1;
             for (int i = 0; i < count; i++) EvalFrame[i] = NotEvaluated;
 

@@ -163,7 +163,7 @@ Chaque ligne est une clé `Resist.<Type>` acceptant les valeurs `HitData.DamageM
 
 1. **Sleeping** — dormant autour de son nid (§5), à demi enfoui, animation de pulsation lente. Se réveille : nid alerté, joueur dans la vue/ouïe dormante, ou dégâts reçus (par lui, son nid ou un ver à moins de 5 m).
 2. **Idle** — actif sans cible : erre dans un rayon de 6 m autour de son nid (ou de sa position de réveil), pauses aléatoires de 1 à 3 s.
-3. **Gathering** — a détecté un joueur et il existe un amas ou un groupe (≥ 2 autres vers actifs) à moins de 20 m : se dirige vers l'amas le plus proche, sinon vers le centroïde du groupe. À moins de `Mass.FormRadius` du centroïde avec ≥ 3 vers → formation d'un amas (§4.1). À moins de (rayon de l'amas + 0,5 m) d'un amas → passe en Absorbing (§4.1). Alignement avec les voisins de même état (voir « Comportement de groupe » ci-dessous).
+3. **Gathering** — a détecté un joueur et il existe un amas ou un groupe (≥ 2 autres vers actifs) à moins de 20 m : se dirige vers l'amas le plus proche, sinon vers le centroïde du groupe. À moins de `Mass.FormRadius` du centroïde avec ≥ 3 vers → formation d'un amas (§4.1). À moins de `r × 1,3 + 0,5 m` d'un amas (enveloppe en lobes) → passe en Absorbing (§4.1). Alignement avec les voisins de même état (voir « Comportement de groupe » ci-dessous).
 4. **Hunting** — a détecté un joueur et rien à rejoindre : se dirige vers la cible la plus proche (règles de ciblage §5) ; à ≤ 1,2 m passe en Striking. Les vers qui chassent la même cible prennent chacun une place d'approche autour d'elle, et s'alignent sur leurs voisins en Hunting (voir « Comportement de groupe » ci-dessous).
 5. **Striking** — préparation (se dresse), frappe (sphère de 0,5 m devant la tête), récupération ; puis Hunting. Réévalue « quelqu'un à rejoindre ? » à chaque récupération.
 6. **Fleeing** — après la dissolution d'un amas (§4.4) ou si un feu est à moins de `Fire.FearRadius` : s'éloigne pendant `Worm.FleeDuration` (4 s) à vitesse × 1,35, puis Gathering si un groupe existe à moins de `Mass.RegroupRadius` (30 m), sinon Idle. La durée de fuite d'un amas est différente : il suit `Fire.FearDuration` (3 s, §9.1, phase 5).
@@ -177,7 +177,8 @@ Chaque ligne est une clé `Resist.<Type>` acceptant les valeurs `HitData.DamageM
 - **Places d'approche** : les vers qui chassent la même cible se répartissent autour d'elle. Chaque ver reçoit un angle d'approche, dérivé de son indice, réparti sur 360° parmi les chasseurs de cette cible. Il vise le point à `Worm.CobraRange` de la cible dans cette direction s'il est atteignable (sol, pas de mur), sinon le point direct. Ils encerclent au lieu de s'empiler sur un point.
 - **Cohésion légère** en errance (Idle) : poids 0,2 vers le centre des voisins à moins de 3 m ; les vers errent en grappes lâches.
 - **Alignement** en Gathering et en Hunting : poids 0,3 vers le cap moyen des voisins de même état.
-- Gathering inchangé : convergence vers l'amas le plus proche, sinon vers le centroïde du groupe.
+- Gathering : il vise en priorité l'amas de la colonie le plus proche qui a de la place (recalculé à chaque pas), sinon le centroïde du groupe. Un ver en Hunting qui voit un amas de sa colonie bascule en Gathering.
+- **Déblocage** : un ver qui progresse de moins de 0,5 m en 3 s hors de portée de sa cible fait 2 s de pas directs vers son but (décision 120).
 
 Un ver ne saute pas, ne nage pas, ne grimpe pas aux murs ; il franchit une marche ≤ 0,4 m et une pente ≤ 60°. Il ne despawn jamais tant que la mine est chargée : son état est persisté (§11.4).
 
@@ -188,7 +189,7 @@ L'amas est un seul être aux yeux du jeu : une créature (`Character`) dont les 
 ### 4.1 Formation et absorption
 
 - Un amas naît quand ≥ `Mass.FormThreshold` (3) vers actifs en état Gathering sont à moins de `Mass.FormRadius` (2,5 m) de leur centroïde : la colonie crée un `MW_WritheMass` au centroïde avec `n` = nombre de vers, et retire ces vers de la simulation (état Absorbed). Rendu seulement, la logique reste celle de la spec : les vers rassemblés deviennent les premiers vers du tas et glissent vers lui en 0,4 s, tandis que le tas pousse de 0 à r(n) en 0,5 s (§12.4).
-- Un ver actif à moins de (rayon + 0,5 m) d'un amas passe en Absorbing (0,5 s, §3.3) ; à la fin de l'animation il est absorbé : `n` += 1, son pool (§7) fusionne, son nid d'origine est compté dans `nestCounts` de l'amas.
+- Un ver actif à moins de `r × 1,3 + 0,5 m` d'un amas (enveloppe en lobes) passe en Absorbing (0,5 s, §3.3) ; à la fin de l'animation il est absorbé : `n` += 1, son pool (§7) fusionne, son nid d'origine est compté dans `nestCounts` de l'amas.
 - Deux amas en contact (distance < max(r1 + r2, 1,35 m), capsules de 0,6 m) fusionnent si `n1 + n2 ≤ Mass.MaxCount` (200) : le plus gros absorbe le plus petit (compteur, pool, nestCounts). Sinon, le plus petit transfère exactement `200 − n1` vers au plus gros et continue seul avec le reste ; un amas plein (200) n'absorbe plus rien. Le pool et `nestCounts` sont transférés au prorata des vers transférés ; le `partial` (§4.2) du plus petit est perdu dans une fusion complète, et conservé par le reste dans une fusion partielle. Un reste qui passe sous `Mass.DissolveThreshold` à la suite d'une fusion partielle (sans perte par dégâts) ne se dissout pas : seules les pertes déclenchent la dissolution (§4.4). Rendu : le plus petit amas glisse vers le plus gros ; ses vers coulent vers le gros, chacun vers une place libre, en 0,5 s, et le gros grossit avec le lissage du rayon (§4.5, §12.4). Recherche de fusion : un amas qui en voit un plus gros de sa colonie à moins de 8 m le rejoint, prioritairement sur la chasse pendant 6 s au plus ; deux grappes formées de part et d'autre d'un joueur finissent ainsi en un seul amas.
 - Les vers libres qui ne peuvent rejoindre un amas plein forment entre eux un nouvel amas selon la règle de formation.
 - Un amas formé à 3 ou 4 vers (sous `Mass.DissolveThreshold`) vit jusqu'à sa première perte : la dissolution ne s'applique qu'après une perte (§4.4).
@@ -242,7 +243,7 @@ r(n) = R_{10} \left( \frac{n}{10} \right)^{e} \quad R_{10} = 0{,}83\ \text{m},\ 
 - Hors combat (actif sans cible), l'amas erre à 6 m de son dernier point d'intérêt et retourne vers son nid d'origine majoritaire quand la colonie se calme (§5.2).
 
 - **Aide de marche** : une aide `StepAssist` soulève l'amas de 0,35 m pour franchir une marche ; elle est limitée à l'amas (décision 102).
-- **Filet anti-chute (exigence)** : si l'amas descend de plus de 3 m sous sa dernière position au sol, ou tombe à plus de 15 m/s sans sol à moins de 5 m, il est remis à sa dernière position au sol.
+- **Filet anti-chute** : l'amas n'est remis à sa dernière position au sol que dans trois cas : aucun sol n'est sous lui (raycast de 50 m), il est sous le terrain en extérieur (y < hauteur du terrain − 1 m), ou il tombe à plus de 30 m/s. Une chute vers un sol réel est laissée à la physique : un amas peut sauter d'un rebord (décision 119).
 
 ### 4.7 Passages étroits — la « coulée »
 
@@ -300,7 +301,7 @@ Choix de cible, réévalué toutes les 0,5 s : parmi les cibles visibles à moin
 
 ### 5.4 Factions et guerre dans la mine
 
-L'amas doit être ennemi de toutes les factions, y compris `MistlandsMonsters` et `Dverger`, pour que fouineurs et dvergar ripostent et pour que la mine devienne un champ de bataille à trois camps. Implémentation : faction `PlayerSpawned`, la seule hostile à toutes les autres dans les deux sens (`Faction.Boss` ne convient pas, décision 1.1 ligne 28), sans postfix sur `BaseAI.IsEnemy` pour l'amas. Le harnais (§15) imprime la matrice `IsEnemy` pour vérifier.
+L'amas doit être ennemi de toutes les factions, y compris `MistlandsMonsters` et `Dverger`, pour que fouineurs et dvergar ripostent et pour que la mine devienne un champ de bataille à trois camps. Implémentation : faction `PlayerSpawned`, la seule hostile à toutes les autres dans les deux sens (`Faction.Boss` ne convient pas, décision 1.1 ligne 28), sans postfix sur `BaseAI.IsEnemy` pour l'amas. Conséquence voulue : les créatures de la mine tuent les amas (décision 121). Le harnais (§15) imprime la matrice `IsEnemy` pour vérifier.
 
 Quand l'amas tue une créature ou détruit une structure, ce qu'elles auraient laissé tomber va dans son pool au lieu du sol (§7.4) : « ça drop tout ce que ça a bouffé ».
 
@@ -789,15 +790,15 @@ Tout est exécuté sur le thread principal via une file ; les requêtes sont sé
 | --- | --- | --- |
 | S00 | S00_Smoke : démarrage, pont de dev, scénario trivial (outillage de la phase 1) | plugin chargé (GUID, version), config liée au plugin (`Worm.Health`), jeton `$mw_mass` traduit, joueur local présent en jeu |
 | S01 | Ver seul, une épée en bronze | mort en 1 coup ; aucun drop de pool ; drop natif selon les probabilités sur 200 répétitions (± 3 pts) |
-| S02 | 40 vers spawnés, joueur visible | un seul amas de 40 en ≤ 10 s ; `hp = 40 × Worm.Health` ; nom « Amas grouillant (40) » |
+| S02 | 40 vers spawnés, joueur visible (le spawn garantit la ligne de vue ver → joueur) | un seul amas de 40 en ≤ 10 s ; `hp = 40 × Worm.Health` ; nom « Amas grouillant (40) » |
 | S03 | Coup injecté de 55 contondant sur un amas de 40 | n = 35, partial = 5 ; 22 perçant → n = 34 (11 effectifs, partial 6) ; 30 feu → ×2 = 60 → n = 28, partial 6 |
 | S02b | 240 vers spawnés, joueur visible (variante de S02) | fusion jusqu'à 200, jamais au-delà : un amas de 200 et un de 40 |
 | S03b | Parade sans stagger (variante de S03, phase 5 : elle demande le blocage des morsures) | parade parfaite : tick de morsure annulé, suivant retardé de 0,5 s, aucun stagger |
 | S04 | Engloutissement, set rembourré complet q1 + Wisplight + 10 objets divers, mode dieu off | effet Infesté actif ; PV inchangés tant qu'un éligible subsiste ; perte de durabilité totale ≈ 80/s ± 25 % ; Wisplight intact tant qu'il reste autre chose ; puis Wisplight ; puis PV baissent |
 | S05 | Pool : inventaire = cuirasse rembourrée seule ; stop à 50 % puis amas tué par coups injectés | fer droppé = floor(10 × d / 1000) et fil de lin = floor(20 × d / 1000), où d = durabilité réellement perdue par la cuirasse (lue avant les coups) ; même résultat que l'amas meure d'un seul coup ou ver par ver ; aucun reste positif après le dernier ver |
 | S06 | Torche en main | aucun engloutissement pendant 10 s, amas à ≥ 4 m ; épée équipée → engloutissement en ≤ 5 s |
-| S07 | Amas de 8 ; 4 tués | amas dissous, 4 vers libres en fuite ; regroupement en ≤ 15 s si 3+ proches |
-| S08 | Coulée : amas de 200 dans un couloir de mine de 2 m | progression ≥ 10 m en ≤ 20 s ; mode Stream observé ; proxies frappables pendant la coulée |
+| S07 | Amas de 8 ; 4 tués | amas dissous, 4 vers libres en fuite ; regroupement en ≤ 15 s si 3+ proches ; hauteur de bond vérifiée sur le sommet analytique |
+| S08 | Coulée : amas de 200 dans un couloir de mine de 2 m (site plat à ±0,5 m, recherche jusqu'à environ 300 m) | progression ≥ 10 m en ≤ 20 s ; mode Stream observé ; proxies frappables pendant la coulée |
 | S09 | Nid, `SpawnInterval` forcé à 2 s | +3 vers en 6 s ; arrêt à `MaxAlivePerNest` ; aucune ponte pendant 3 s après un coup |
 | S10 | 450 vers demandés | vivants ≤ 400 (sauf `force`) |
 | S11 | Perf : 400 vers actifs + 2 amas de 200, 30 s, caméra sur la mêlée | sim moyenne ≤ 1,0 ms, max ≤ 3 ms ; rendu ≤ 0,5 ms ; appels instanciés ≤ 64 au total ; GC ≤ 0,5 Mo sur 30 s ; réseau ≤ 6 Ko/s (en multijoueur S17) |
@@ -811,11 +812,13 @@ Tout est exécuté sur le thread principal via une file ; les requêtes sont sé
 | V01 | Visuel : le ver de près, à l'échelle du joueur (refait en phase 4A : look « pâle de caverne », crawl et idle) | captures relues par Claude Code : rien d'invisible ou de noir, échelle 0,4 m, ombres présentes |
 | V02–V06 | Visuels : V02 amas de 10, V03 amas de 200, V04 amas de 50 (comme le code), V05 engloutissement, V06 nid, à côté du joueur ; V02 à V04 refaits en phase 4B (à l'arrêt, avec séquences de forme : la silhouette change en continu) avec un vrai `MW_WritheMass` en tas de vers, dans une vraie mine avec repli en extérieur | captures relues par Claude Code : rien d'invisible ou de noir, échelles conformes à §4.5, ombres présentes, tas lisible comme des vers entremêlés ; le repère « 20 ≈ couvain » se vérifie en V02/V04 par la table, sans capture dédiée |
 | V07 | V07_WormLight : ver de près sous une torche, puis sous une lampe dvergr ; captures à 0,5 m et 2 m, et séquence de 4 captures de reptation (phase 4A) | reflets nets, ondulation en S lisible |
-| V08 | V08_BloodHit : coup sur un ver, capture au moment du jet, puis à la mort (phase 4A) | jet vert, petit (≈ 0,3 m) |
+| V08 | V08_BloodHit : coup sur un ver, capture au moment du jet, puis à la mort (phase 4A) | jet vert, petit (≤ 0,6 m ; le jet varie de 0,25 à 0,58 m, la valeur nominale restant ≈ 0,3 m) |
 | V09 | V09_MassTransitions : captures de la formation (3 vers puis tas), d'une absorption, d'une fusion, d'une dissolution et d'une mort de ver du tas (phase 4B-4, adapté au modèle en tas de vers ; dans une vraie mine avec repli en extérieur, clip cadré à 2 m) | transitions lisibles, jamais de saut de rayon |
 | V10 | V10_MassMoving : un amas de 50, puis de 200, chasse le joueur sur terrain ouvert (course de 25 m ou plus) ; séquence de captures de côté et de face (tapis roulant, pseudopode vers la cible, lobes qui s'étirent) ; puis coulée dans le couloir artificiel de S08 (phase 4B-3) | avance lisible comme une colonie, pas un tas inerte qui glisse ; pseudopode visible ; lobes alignés et file serrée en coulée |
 | V11 | V11_MassEngulf : captures et clip d'un amas de 50 puis de 200 qui englobe un joueur immobile (`engulf` forcé en dev avant la phase 5) (phase 4B-3 ; dans une vraie mine avec repli en extérieur) | lobe en colonne autour du joueur, vers qui grimpent et le recouvrent, jamais de forme pleine au centre |
-| P4_MassPerf | Budgets de rendu de l'amas (§12.1) : 2 amas de 200 et 100 vers libres dans le champ, build `Profile` (phase 4B-3) | thread principal ≤ 0,05 ms par amas en LOD0, rendu total ≤ 0,6 ms, worker ≤ 1 ms par frame, appels instanciés ≤ 64, ≤ 450 k triangles, allocation contrôlée en différentiel (avec/sans amas) ; écart de temps de frame journalisé (≤ 2 ms) |
+| P4_MassPerf | Budgets de rendu de l'amas (§12.1) : 2 amas de 200 et 100 vers libres dans le champ, build `Profile` (phase 4B-3) | thread principal ≤ 0,05 ms par amas en LOD0, rendu total ≤ 0,6 ms, worker ≤ 1 ms par frame, appels instanciés ≤ 64, ≤ 450 k triangles, allocation contrôlée en différentiel (avec/sans amas), garde-fou en jeu ≤ 256 Ko par fenêtre de 300 frames, médiane (bruit de la sonde 20 à 80 Ko ; la preuve du zéro allocation est faite par les tests unitaires) ; écart de temps de frame journalisé (≤ 2 ms) |
+
+Les scénarios en mine retirent les créatures vanilla à moins de 40 m (elles tuent les amas, §5.4) ; un journal de dev donne la cause de chaque disparition d'amas (`DestroyReason`, dernier attaquant).
 
 Les clips (`vh.py clip` / `assemble`, en GIF ou WebP) font partie des livrables visuels des scénarios V : cadrage à 3 m (2 m pour V09) avec une lumière d'appoint de dev ; `ResetPlayerState` est appelé avant chaque scénario.
 
@@ -843,9 +846,9 @@ La livraison est un seul bloc, mais le travail suit dix phases (0 à 9) dans cet
 2. **Phase 1 — Squelette du mod et harnais**. Plugin, config (§14), localisation, QuickStart, DevBridge, `vh.py`, tests xunit vides, `build.ps1`. Fini quand : `vh launch` arrive en jeu dans `MWTest` sans clic, `/status` répond, `vh scenario` exécute un scénario vide, `dotnet test` passe.
 3. **Phase 2 — Assets**. Scripts Blender, loader glTF, `AssetCatalog`, rendu instancié d'un ver et d'un dôme statiques devant le joueur, choix du shader. Fini quand : V01–V03 (ver, amas 10 et 200 immobiles) sont validés visuellement et le chargement prend < 300 ms.
 4. **Phase 3 — Vers virtuels**. Colonie, SoA, états Idle/Hunting/Striking/Fleeing, proxies et routage des coups, coup de cobra avec règle d'équipement, drops natifs, mort. Fini quand : S01 passe, 100 vers errent sans tomber dans le sol ni traverser les murs (vérifié en mine réelle).
-5. **Phase 4 — Finition du ver, puis amas**, en deux temps.
+5. **Phase 4 — Finition du ver, puis amas** (**terminée**), en deux temps.
     - **Phase 4A — Finition du ver** (**terminée**). Asset « pâle de caverne » (§13.4), crawl 16 images et idle 8 images (§12.1), variation par instance (échelle, roulis), sang vert (§12.4), sons du ver seul (§12.3 : idle/reptation 4 sources max à < 12 m, cobra, coup reçu, mort), comportement de groupe des vers libres (§3.3, §11.1, sans formation d'amas), remesure du chargement des assets (< 300 ms, §13.3). Fini quand : V01 (refait), V07 et V08 sont validés visuellement ; S18 passe ; S00, S01, P3_Cobra et P3_Wander (mine) passent toujours.
-    - **Phase 4B — Amas**, en cinq passes (**en cours** : 4B-1 à 4B-4 faites, 4B-5 restante). Fini quand : S02, S03, S07 et S08 passent ; V02 à V04 sont refaits avec un vrai `MW_WritheMass` en tas de vers ; V09, V10 et V11 sont validés visuellement ; P4_MassPerf passe. Code dans `src/MistWorms/Mass/`.
+    - **Phase 4B — Amas**, en cinq passes (**terminée**). Fini quand : S02, S03, S07 et S08 passent ; V02 à V04 sont refaits avec un vrai `MW_WritheMass` en tas de vers ; V09, V10 et V11 sont validés visuellement ; P4_MassPerf passe. Code dans `src/MistWorms/Mass/`.
         - **4B-1 — Entité** : prefab créature (avec `Humanoid`), PV, nom au survol, recul, pas de stagger, zone de coup (sphères `hitbox`, §4.5).
         - **4B-2 — IA et coulée** : `WritheMassAI` (états Idle, Hunt, Dormant en stub, §4.10), coulée, aide de marche et filet anti-chute (§4.6).
         - **4B-3 — Rendu « tas de vers »** : Blender (`coil`, LOD1, preview ; plus de noyau), code (lobes, rôles, remplissage en volume, mouvement analytique, culling, LOD, rendu de l'englobement piloté par `engulf`, transitions de base), vers proches de la caméra masqués caméra dedans (§6.6), P4_MassPerf, V02 à V04, V10, V11.
@@ -854,7 +857,7 @@ La livraison est un seul bloc, mais le travail suit dix phases (0 à 9) dans cet
 6. **Phase 5 — Engloutissement et équipement**. Effet Infesté, tick agrégé, patches `ApplyArmor` / `ApplyDamage`, sélection des pièces, Wisplight, phase PV, blocage, texte flottant, peur du feu (durée de fuite de l'amas = `Fire.FearDuration`), état Engulf de l'amas (§4.10), règle de parade du mod (§4.8, §6.4). Fini quand : S04, S06 et S03b passent.
 7. **Phase 6 — Pool et drops**. Pool, `RPC_Consumed`, parts entières par reste fractionnaire `carry` (§7.3), reliquat, capture des drops de créatures (patch `CharacterDrop.GenerateDropList`) et de structures, ciblage « tout », factions. Fini quand : S05, S12, S13 passent et la matrice `IsEnemy` est conforme.
 8. **Phase 7 — Nids, spawn, dormance, persistance**. Nid, ponte, plafonds, ensemencement des mines, alerte et retour au calme, instantanés, sauvegarde. Fini quand : S09, S10, S14, S15, S16 passent.
-9. **Phase 8 — Performance et multijoueur**. Profilage, cadences LOD, deltas réseau, dead reckoning, serveur local, tests non-propriétaire, effets de coup et de mort des vers chez les pairs distants (§12.4). Fini quand : S11 et S17 passent avec les budgets de §11.
+9. **Phase 8 — Performance et multijoueur**. Profilage, cadences LOD, deltas réseau, dead reckoning, serveur local, tests non-propriétaire, effets de coup et de mort des vers chez les pairs distants (§12.4), coût des amas en tant que créatures (≈ 650 octets par frame pour 2 amas : `Character`, IA, physique ; P4, G(a)). Fini quand : S11 et S17 passent avec les budgets de §11.
 10. **Phase 9 — Packaging et livraison**. Build Release sans `Dev/`, manifest, README, CHANGELOG, icône, zip Thunderstore, guide serveur, `docs/test-report.md` final, revue du code (patches protégés, aucune allocation dans les boucles chaudes, aucun `Debug.Log` oublié). Fini quand : §19 est entièrement coché.
 
 Règles de conduite pendant les phases : jamais plus d'un **\[À VÉRIFIER\]** ouvert dans une phase en cours ; toute déviation de la spec (valeur, règle, nom) est notée dans `docs/decisions.md` avec sa raison ; un scénario rouge n'est jamais contourné en changeant ses assertions sans l'inscrire dans ce fichier ; les scénarios des phases précédentes sont rejoués (`vh scenario-all`) à la fin de chaque phase.

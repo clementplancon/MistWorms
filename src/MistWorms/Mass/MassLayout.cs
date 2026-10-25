@@ -27,6 +27,12 @@ namespace MistWorms.Mass
         public float TargetTurns;     // target heading in the local frame (turns from +X toward +Z)
         public float TargetDist;      // target distance from the heap centre; negative = no target
         public float PseudoRamp;      // 0..1: PseudoLobe stretches toward the target
+        public float YawRate;         // turns per second the heap turns toward its left (the poured worms hold still in the world while it turns), 0 = straight
+        public float Speed;           // m/s of the heap (the time a poured worm has been on the ground follows from it)
+        public bool HasFrame;         // the world frame of the heap is given (below): the poured worms are then anchored in the world
+        public float RootX, RootZ;    // world x, z of the heap root
+        public float FwdX, FwdZ, LeftX, LeftZ;   // world x, z of the forward and left axes of the heap (not unit when the heap is tilted)
+        public float FrameYaw;        // heading of the heap in the world, turns
         public float Engulf;          // 0..1: EngulfLobe centres on the target and climbs around it
         public bool Blocked0, Blocked1, Blocked2, Blocked3;   // ground quadrants blocked by a wall (border worms stay inside)
         public bool HasCam;           // inner-place culling against CamL
@@ -203,6 +209,9 @@ namespace MistWorms.Mass
 
         // ------------------------------------------------------------------------------------------ envelope (footprint of the heap, border ring)
         struct Env { public float AF, AB, AS, H, Breath, Rp, WScale; }
+
+        const float PourMinSpeed = 0.3f;     // m/s: under it the heap is not walking and a poured worm does not exist
+        const float PourMaxTime = 1.5f;      // s a poured worm is followed back at most
 
         public static float RPlace(int n, float r)
         {
@@ -559,12 +568,60 @@ namespace MistWorms.Mass
                 pos.X += wpour * (L.Sx - L.Cx);
                 pos.Z += wpour * (L.Sz - L.Cz);
             }
+            // (the turn correction below is for callers that give no world frame)
+            if (exitBlend && P.YawRate != 0f && sg > 0f && mu > C.SurfaceEnd)
+            {
+                // The heap turns: a worm poured on the ground holds still in the world only if it is turned back by what the heap turned since it touched down
+                // (the time it has been on the ground follows from mu, Lt and the speed). About the root, which is the origin of the heap frame.
+                float gate = sg * Smooth01((mu - C.SurfaceEnd) / 0.04f);
+                float run = (mu - C.SurfaceEnd) * L.Lt * gate;                       // metres the straight pour model walked it back
+                float tp = (mu - C.SurfaceEnd) * L.Lt / (P.Speed > PourMinSpeed ? P.Speed : PourMinSpeed);
+                tp = tp > PourMaxTime ? PourMaxTime : tp;
+                float ang = -P.YawRate * tp * gate;
+                float rad = -ang * TwoPi;                                             // what the heap turned, radians (left positive)
+                float chordX = run, chordZ = 0f;                                      // its path since the touch-down is an arc, not a line: the chord in the frame of the touch-down
+                if (rad > 1e-3f || rad < -1e-3f) { chordX = run * (float)Math.Sin(rad) / rad; chordZ = run * (1f - (float)Math.Cos(rad)) / rad; }
+                float ca = CosT(ang), sa = SinT(ang);
+                float bx = pos.X + run - chordX, bz = pos.Z - chordZ;                 // undo the straight walk, apply the arc
+                pos = new V3(ca * bx - sa * bz, pos.Y, sa * bx + ca * bz);
+                f = new V3(ca * f.X - sa * f.Z, f.Y, sa * f.X + ca * f.Z);
+                u = new V3(ca * u.X - sa * u.Z, u.Y, sa * u.X + ca * u.Z);
+            }
+            if (P.HasFrame && exitBlend && anim == AnimIdle && sg > 0.5f) AnchorPoured(P, S, i, cyc, ref pos, ref f, ref u);
             int frame;
             if (anim == AnimIdle) frame = FloorI(t * 6f + S.AnimPhase[i] * (float)IdleFrames) % IdleFrames;
             else frame = FloorI(P.OdoFlux + (float)i * C.CrawlPhaseStep) % CrawlFrames;
             o.I = i; o.Visible = !hidden; o.Role = RoleFlux; o.Anim = anim; o.Frame = frame; o.Lobe = j;
             o.Lod0 = lod0Phase && (!P.HasCam || Dot(nh, P.CamL) > C.Lod0FaceDot);
             o.Pos = pos; o.Fwd = f; o.Up = u; o.Prio = S.Prio[i];
+        }
+
+        /// <summary>
+        /// A worm poured on the ground (idle flux at speed) lies still in the world: at touch-down its world position and the heading of the heap are
+        /// remembered in the places, and until the cycle ends it is put back at that world point, turned back by what the heap turned. The places of a
+        /// poured worm are never cached, so this runs every frame.
+        /// </summary>
+        static void AnchorPoured(in MassFrameParams P, HeapSlots S, int i, int cyc, ref V3 pos, ref V3 f, ref V3 u)
+        {
+            float det = P.FwdX * P.LeftZ - P.LeftX * P.FwdZ;
+            if (det < 0.2f && det > -0.2f) return;
+            if (S.PourCyc[i] != cyc)
+            {
+                S.PourWx[i] = P.RootX + P.FwdX * pos.X + P.LeftX * pos.Z;
+                S.PourWz[i] = P.RootZ + P.FwdZ * pos.X + P.LeftZ * pos.Z;
+                S.PourYaw[i] = P.FrameYaw;
+                S.PourCyc[i] = cyc;
+                return;
+            }
+            float dx = S.PourWx[i] - P.RootX, dz = S.PourWz[i] - P.RootZ;
+            float x = (dx * P.LeftZ - P.LeftX * dz) / det;
+            float z = (P.FwdX * dz - P.FwdZ * dx) / det;
+            float turned = -(P.FrameYaw - S.PourYaw[i]);
+            turned -= FloorF(turned + 0.5f);
+            float ca = CosT(turned), sa = SinT(turned);
+            pos = new V3(x, pos.Y, z);
+            f = new V3(ca * f.X - sa * f.Z, f.Y, sa * f.X + ca * f.Z);
+            u = new V3(ca * u.X - sa * u.Z, u.Y, sa * u.X + ca * u.Z);
         }
 
         static bool Blocked(in MassFrameParams P, int q)

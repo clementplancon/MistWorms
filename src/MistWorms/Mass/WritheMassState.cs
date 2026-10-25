@@ -66,6 +66,22 @@ namespace MistWorms.Mass
         public bool IsOwner => Valid && _nview.IsOwner();
         public bool Dissolving => _dissolving;
 
+        /// <summary>Why this mass is being destroyed (set by whoever destroys it); logged in dev builds when it goes.</summary>
+        public string DestroyReason { get; set; }
+#if MW_DEV
+        /// <summary>Prefab name of the last creature that hit this mass on this peer (dev journal of its disappearance).</summary>
+        public string LastAttacker { get; private set; }
+        private string _idText = "?", _lastState = "";
+        private int _lastN;
+        private float _lastHealth;
+
+        public void NoteHit(HitData hit)
+        {
+            Character a = hit != null ? hit.GetAttacker() : null;
+            LastAttacker = a != null ? Utils.GetPrefabName(a.gameObject) : (hit != null && hit.HaveAttacker() ? "an attacker not found" : "no attacker");
+        }
+#endif
+
 #if MW_DEV
         /// <summary>Calls of Character.ApplyDamage seen on this mass (hits and burning ticks): a single melee swing must count once.</summary>
         public int DamageCalls { get; private set; }
@@ -204,6 +220,7 @@ namespace MistWorms.Mass
                 else if (_character != null && !_character.IsDead())
                 {
                     Plugin.Log.LogWarning($"[Mass] {_nview.GetZDO().m_uid} has no worm count (mw_n = 0): destroyed");
+                    DestroyReason = "no worm count (mw_n = 0) at load";
                     DestroyMass();
                 }
             }
@@ -212,6 +229,10 @@ namespace MistWorms.Mass
 
         private void OnDestroy()
         {
+#if MW_DEV
+            // The journal of the disappearance of a mass (a mass that vanishes in a scenario is otherwise a mystery): why, the last creature that hit it, its last state.
+            Plugin.Log.LogInfo($"[Mass] {_idText} (n={_lastN}) removed: {DestroyReason ?? "unknown (the scene, a zone unload or a destroy that did not say why)"}; last hit by {LastAttacker ?? "nobody"}; health {_lastHealth:0.#}; state {_lastState}");
+#endif
             s_all.Remove(this);
             if (_character != null) s_byCharacter.Remove(_character);
         }
@@ -221,6 +242,9 @@ namespace MistWorms.Mass
             if (!Valid) return;
 
             int n = N;
+#if MW_DEV
+            _lastN = n; _lastHealth = Health; _lastState = MassStateCodes.Describe(StateCode); _idText = ZdoId.ToString();
+#endif
             bool stream = IsStream;
             float width = stream ? StreamWidth : 0f;
             if (n != _hitN || stream != _hitStream || Math.Abs(width - _hitWidth) > 0.01f)
@@ -237,9 +261,8 @@ namespace MistWorms.Mass
         // ------------------------------------------------------------------ fall safety net (owner)
 
         private const float GroundStableSeconds = 0.5f;
-        private const float RescueDepth = 3f;             // below the last stable ground
-        private const float RescueSpeed = 15f;            // downward, with no floor within RescueFloorProbe
-        private const float RescueFloorProbe = 5f;
+        private const float RescueLookDepth = 1f;         // below the last stable ground, from which the rule is looked at (the rule itself: MassRescue)
+        private const float RescueLookSpeed = 10f;        // downward, from which the rule is looked at
 
         private Vector3 _lastGround;
         private bool _haveGround;
@@ -247,6 +270,17 @@ namespace MistWorms.Mass
 
         /// <summary>Times the mass was put back on its last stable ground after falling out of the world (a floor that was not there).</summary>
         public int FallRescues { get; private set; }
+
+        /// <summary>
+        /// The body was moved on purpose to <paramref name="position"/> (a dev placement): the fall rescue forgets the ground it remembered, which belongs to the old place.
+        /// Without it a mass put on a floor more than 3 m lower looked like a fall and was put back where it came from.
+        /// </summary>
+        public void TeleportedTo(Vector3 position)
+        {
+            _lastGround = position;
+            _haveGround = false;
+            _groundSince = -1f;
+        }
 
         /// <summary>Dev: sinks the body below where it stands, to test the rescue.</summary>
         public void DevSink(float depth)
@@ -292,13 +326,17 @@ namespace MistWorms.Mass
             if (!_haveGround) return;
 
             Vector3 pos = transform.position;
-            bool deep = pos.y < _lastGround.y - RescueDepth;
-            bool plunging = _body.linearVelocity.y < -RescueSpeed
-                            && !Physics.Raycast(pos, Vector3.down, RescueFloorProbe, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore);
-            if (!deep && !plunging) return;
+            float vy = _body.linearVelocity.y;
+            // Cheap filter first: only a mass that is clearly lower than its ground or falling fast is looked at (a ray every physics step per mass is not needed).
+            if (pos.y >= _lastGround.y - RescueLookDepth && vy >= -RescueLookSpeed) return;
+            bool floorBelow = Physics.Raycast(pos + Vector3.up * 0.5f, Vector3.down, MassRescue.FloorProbe, WormPhysics.CharacterSolidMask, QueryTriggerInteraction.Ignore);
+            bool outdoors = pos.y < OutdoorsHeight;
+            float terrain = 0f;
+            bool hasTerrain = outdoors && ZoneSystem.instance != null && ZoneSystem.instance.GetGroundHeight(pos, out terrain);
+            if (!MassRescue.Needed(floorBelow, outdoors, hasTerrain, pos.y, terrain, vy)) return;
 
             FallRescues++;
-            Plugin.Log.LogWarning($"[Mass] {ZdoId} fell out of the world (y {pos.y:0.0}, last ground {_lastGround}, speed {_body.linearVelocity.y:0.0} m/s): put back, rescue {FallRescues}");
+            Plugin.Log.LogWarning($"[Mass] {ZdoId} left the world (y {pos.y:0.0}, last ground {_lastGround}, speed {vy:0.0} m/s, floor below {floorBelow}, terrain {(hasTerrain ? terrain.ToString("0.0") : "n/a")}): put back, rescue {FallRescues}");
             _body.position = _lastGround + Vector3.up * SpawnLift;
             transform.position = _body.position;
             _body.linearVelocity = Vector3.zero;
@@ -456,6 +494,7 @@ namespace MistWorms.Mass
 
             if (health <= 0f)
             {
+                DestroyReason = $"killed: health {health:0.#} (vanilla death), last hit by {LastAttackerText()}";
                 // Vanilla CheckDeath follows; clients see the last worms go.
                 WriteCount(0, 0f);
                 return;
@@ -572,6 +611,7 @@ namespace MistWorms.Mass
             if (_dissolving) return;
             if (_merging) CancelMerge();
             _dissolving = true;
+            DestroyReason = $"dissolution (n={n} left, under Mass.DissolveThreshold)";
             WriteState(MassStateCodes.With(StateCode, MassStateCodes.Dissolving, true));
 
             Vector3 position = transform.position;
@@ -587,6 +627,15 @@ namespace MistWorms.Mass
                 colony.RequestDissolve(ZdoId, n, position, new ZPackage());
             }
             Invoke(nameof(DestroyMass), DissolveDestroyDelay);
+        }
+
+        private string LastAttackerText()
+        {
+#if MW_DEV
+            return LastAttacker ?? "nobody";
+#else
+            return "n/a";
+#endif
         }
 
         private void DestroyMass()

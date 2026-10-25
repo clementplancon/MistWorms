@@ -192,6 +192,9 @@ namespace MistWorms.Colony
 
         private void SetState(int i, WormState state, float now)
         {
+#if MW_DEV
+            RecordHistory(i, state, now);
+#endif
             WormStore s = Store;
             s.state[i] = (byte)state;
             s.stateTime[i] = 0f;
@@ -285,6 +288,12 @@ namespace MistWorms.Colony
             {
                 s.nextSenseTime[i] = now + SenseInterval;
                 if (!SenseTarget(i, now)) { LoseTarget(i, now); return; }
+                // A hunter that sees a mass of its colony with room within Mass.GatherRadius joins it instead (spec 3.3): the stragglers of a group that began to hunt alone.
+                if (GatheringEnabled && _actPos != null && FindGatherGoal(i, MWConfig.Mass.GatherRadius.Value, out Vector3 massGoal) == GatherMass)
+                {
+                    EnterGathering(i, now, GatherMass, massGoal);
+                    return;
+                }
             }
 
             Player target = FindPlayer(s.targetId[i]);
@@ -499,7 +508,7 @@ namespace MistWorms.Colony
         /// One crawl step toward <paramref name="goal"/>: steer (goal + obstacle avoidance + separation + wander noise), turn at
         /// Worm.TurnSpeed, then advance along the heading through <see cref="WormPhysics.TryStep"/>. Returns true if the worm moved.
         /// </summary>
-        private bool MoveWorm(int i, Vector3 goal, float speed, float now, float dt, float noiseWeight, bool stopAtGoal, bool separationFirst = false)
+        private bool MoveWorm(int i, Vector3 goal, float speed, float now, float dt, float noiseWeight, bool stopAtGoal, bool separationFirst = false, bool direct = false)
         {
             WormStore s = Store;
             Vector3 pos = s.pos[i];
@@ -510,13 +519,19 @@ namespace MistWorms.Colony
             float dist = toGoal.magnitude;
             Vector3 desired = dist > 1e-4f ? toGoal / dist : Vector3.zero;
 
-            if (now >= s.nextAvoidTime[i]) EvaluateAvoidance(i, now);
-            desired += s.avoidDir[i] * AvoidWeight;
-            Vector3 group = GroupSteer(i, pos, h, out float fileCap);
-            // Recovering from a strike: a push away from a neighbour comes before the way back to the place (the goal is dropped while it lasts).
-            bool pushed = separationFirst && group.sqrMagnitude > SeparationFirstMin * SeparationFirstMin;
-            if (pushed) desired = group + s.avoidDir[i] * AvoidWeight;
-            else desired += group;
+            float fileCap = float.MaxValue;
+            bool pushed = false;
+            if (!direct)
+            {
+                if (now >= s.nextAvoidTime[i]) EvaluateAvoidance(i, now);
+                desired += s.avoidDir[i] * AvoidWeight;
+                Vector3 group = GroupSteer(i, pos, h, out fileCap);
+                // Recovering from a strike: a push away from a neighbour comes before the way back to the place (the goal is dropped while it lasts).
+                pushed = separationFirst && group.sqrMagnitude > SeparationFirstMin * SeparationFirstMin;
+                if (pushed) desired = group + s.avoidDir[i] * AvoidWeight;
+                else desired += group;
+            }
+            // direct: only the goal steers (a worm that made no progress for 3 s on its way to a mass: avoidance and separation may be cancelling the goal).
             if (fileCap < speed) speed = fileCap;
             if (noiseWeight > 0f)
             {
@@ -539,11 +554,17 @@ namespace MistWorms.Colony
             if (stopAtGoal && !pushed && travel > dist) travel = dist;
             if (travel < 1e-4f)
             {
+#if MW_DEV
+                if (_dbgStep != null) { _dbgTravel[i] = travel; _dbgSteps[i]++; _dbgStep[i] = (StepResult)(-1); }   // -1: no travel at all (speed capped or turned away)
+#endif
                 GroundMaintain(i, now);
                 return false;
             }
 
             StepResult result = WormPhysics.TryStep(pos, new Vector3(fx, 0f, fz) * travel, out Vector3 newPos, out Vector3 newNormal);
+#if MW_DEV
+            if (_dbgStep != null) { _dbgStep[i] = result; _dbgTravel[i] = travel; _dbgSteps[i]++; }
+#endif
             if (result == StepResult.Moved && !InBox(newPos)) result = StepResult.Blocked; // clamp to the box (spec §8.4)
             if (result != StepResult.Moved)
             {

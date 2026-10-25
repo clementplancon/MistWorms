@@ -18,6 +18,9 @@ namespace MistWorms.Mass
         public const float MinDelay = 0.3f, MaxDelay = 1.2f;
         public const int Layers = 3;
 
+        /// <summary>Dev switch: no sound of the masses while false (P4 measures the render and the simulation without the allocations of the vanilla sound prefabs, and the sounds apart).</summary>
+        public static bool Enabled = true;
+
         private static readonly WritheMassVisual[] s_audible = new WritheMassVisual[MaxAudible];
         private static readonly float[] s_audibleDist = new float[MaxAudible];
         private static float s_nextScan;
@@ -62,6 +65,7 @@ namespace MistWorms.Mass
         /// <summary>Called by the visual every frame: plays the layers of this mass that are due when it is one of the closest.</summary>
         public static void Update(WritheMassVisual v, float now, int n, float[] next)
         {
+            if (!Enabled) return;
             if (now >= s_nextScan) Scan(now);
             bool audible = false;
             for (int i = 0; i < MaxAudible; i++) if (ReferenceEquals(s_audible[i], v)) { audible = true; break; }
@@ -81,8 +85,8 @@ namespace MistWorms.Mass
             }
         }
 
-        public static void PlayBirth(Vector3 where, float now) => WormEffects.PlayForm(ref s_eventLimit, where, now);
+        public static void PlayBirth(Vector3 where, float now) { if (Enabled) WormEffects.PlayForm(ref s_eventLimit, where, now); }
 
-        public static void PlayEngulfStart(Vector3 where, float now) => WormEffects.PlayAlert(ref s_eventLimit, where, now);
+        public static void PlayEngulfStart(Vector3 where, float now) { if (Enabled) WormEffects.PlayAlert(ref s_eventLimit, where, now); }
     }
 }

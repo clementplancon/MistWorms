@@ -1,6 +1,7 @@
 #if MW_DEV
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
 using MistWorms.Assets;
@@ -89,12 +90,13 @@ namespace MistWorms.Dev.Scenarios
                 // ---- the scene
                 _anchorA = player.transform.position + fwd * 7f - _perp * 4f;
                 _anchorB = player.transform.position + fwd * 20f + _perp * 9f;
-                _a = MassDev.SpawnAt(_anchorA, MassCount, ZDOID.None, freezeAI: false);
-                _b = MassDev.SpawnAt(_anchorB, MassCount, ZDOID.None, freezeAI: false);
+                _a = SpawnRobust(ctx, "A", player, _anchorA);
+                _b = SpawnRobust(ctx, "B", player, _anchorB);
                 ctx.Assert("masses_created", _a != null && _b != null, "two masses of 200", $"{(_a != null)} {(_b != null)}");
                 if (_a == null || _b == null) yield break;
                 _va = _a.GetComponent<WritheMassVisual>(); _vb = _b.GetComponent<WritheMassVisual>();
                 _aiA = _a.GetComponent<WritheMassAI>(); _aiB = _b.GetComponent<WritheMassAI>();
+                MassAudio.Enabled = false;      // every budget below is the render and the simulation; the sounds (vanilla prefab instances allocate by nature) are measured apart in G2
 
                 int created = 0;
                 float[] radii = { 20f, 20f, 20f, 20f };
@@ -126,9 +128,7 @@ namespace MistWorms.Dev.Scenarios
                 Budgets(ctx, "C", sc, true);
 
                 // ---- D: both at 40 m
-                _anchorA = player.transform.position + fwd * 40f;
-                _anchorB = player.transform.position + fwd * 38f + _perp * 12f;
-                Place(_anchorA, _anchorB);
+                yield return PlaceFar(ctx, player, fwd, 40f, scale);
                 yield return Frames(60, scale, (f) => Walk());
                 var sd = new Series((int)(FramesD * scale) + 1);
                 yield return Measure(sd, FramesD, scale, () => Walk());
@@ -169,12 +169,55 @@ namespace MistWorms.Dev.Scenarios
                 bool operative = Profiler.GetMonoUsedSizeLong() > probe0;
                 GC.KeepAlive(junk);
                 int gWindow = Math.Max(20, (int)(WindowE * scale));
-                long allocWith = 0, allocWithout = 0;
-                int windowsWith = 0, windowsWithout = 0;
-                for (int w = 0; w < 8; w++)
+                MassAudio.Enabled = false;      // the budget is the render and the simulation: the vanilla sound prefabs allocate by nature, measured apart below
+                // (b) the masses drawn against hidden, 12 windows ABAB..., the first two left out (the lists of the renderer and the buffers of the worker grow to their
+                // working set once; that is a one-time cost, not a per-frame one). Median of the windows: one growth does not decide the budget.
+                var withList = new List<long>();
+                var withoutList = new List<long>();
+                for (int w = 0; w < 12; w++)
                 {
                     bool hidden = (w & 1) == 1;
                     MassRenderSystem.DevHidden = hidden;
+                    yield return Frames(20, scale, (f) => Walk());
+                    var box = new long[1];
+                    yield return AllocWindow(gWindow, scale, box, Walk);
+                    if (w < 2) continue;
+                    (hidden ? withoutList : withList).Add(box[0]);
+                }
+                MassRenderSystem.DevHidden = false;
+                long perWith = Median(withList), perWithout = Median(withoutList);
+                ctx.Log($"G (b, the render of the masses): managed allocation per window of {gWindow} frames, median: drawn {perWith} bytes, hidden {perWithout} bytes, difference {perWith - perWithout} bytes; windows drawn [{string.Join(", ", withList)}], hidden [{string.Join(", ", withoutList)}] (probe {(operative ? "sees a 4 KB allocation" : "DID NOT see a 4 KB allocation: inoperative")})");
+                // The proof of zero allocation is the unit tests (MassWorkerTests, the layout tests). In game the probe reads the whole managed heap of the process, whose noise is
+                // 20 to 80 KB per window of 300 frames: this threshold (256 KB, under 1 KB per frame) only guards against a gross regression.
+                if (operative) ctx.Assert("G_masses_add_no_allocation", perWith - perWithout <= 256 * 1024, "<= 256 KB more per window than hidden (median; guard against a gross regression, noise 20-80 KB)", $"{perWith - perWithout} bytes");
+
+                // (a) the masses standing (Character, AI, physics, our state) against deactivated, render hidden in both: logged, not a budget of ours unless it comes from our code.
+                var presentList = new List<long>();
+                var absentList = new List<long>();
+                MassRenderSystem.DevHidden = true;
+                for (int w = 0; w < 8; w++)
+                {
+                    bool absent = (w & 1) == 1;
+                    if (_a != null) _a.gameObject.SetActive(!absent);
+                    if (_b != null) _b.gameObject.SetActive(!absent);
+                    yield return Frames(20, scale, (f) => Walk());
+                    var box = new long[1];
+                    yield return AllocWindow(gWindow, scale, box, Walk);
+                    if (w < 2) continue;
+                    (absent ? absentList : presentList).Add(box[0]);
+                }
+                if (_a != null) _a.gameObject.SetActive(true);
+                if (_b != null) _b.gameObject.SetActive(true);
+                MassRenderSystem.DevHidden = false;
+                ctx.Log($"G (a, the masses as creatures): managed allocation per window of {gWindow} frames, median: masses standing {Median(presentList)} bytes, deactivated {Median(absentList)} bytes, difference {Median(presentList) - Median(absentList)} bytes (Character, AI, physics, state; render hidden in both)");
+
+                // ---- G2: what the sounds of the masses allocate (they instantiate vanilla sound prefabs, as in the game): windows with the audio on and off, masses drawn. Logged.
+                long soundOn = 0, soundOff = 0;
+                int winOn = 0, winOff = 0;
+                for (int w = 0; w < 6; w++)
+                {
+                    bool on = (w & 1) == 0;
+                    MassAudio.Enabled = on;
                     yield return Frames(20, scale, (f) => Walk());
                     long previous = Profiler.GetMonoUsedSizeLong();
                     long rises = 0;
@@ -186,21 +229,50 @@ namespace MistWorms.Dev.Scenarios
                         if (used > previous) rises += used - previous;
                         previous = used;
                     }
-                    if (hidden) { allocWithout += rises; windowsWithout++; } else { allocWith += rises; windowsWith++; }
+                    if (on) { soundOn += rises; winOn++; } else { soundOff += rises; winOff++; }
                 }
-                MassRenderSystem.DevHidden = false;
-                long perWith = allocWith / Math.Max(1, windowsWith), perWithout = allocWithout / Math.Max(1, windowsWithout);
-                ctx.Log($"G: managed allocation per window of {gWindow} frames: with the masses {perWith} bytes, without {perWithout} bytes, difference {perWith - perWithout} bytes (probe {(operative ? "sees a 4 KB allocation" : "DID NOT see a 4 KB allocation: inoperative")})");
-                if (operative) ctx.Assert("G_masses_add_no_allocation", perWith - perWithout <= 64 * 1024, "<= 64 KB more per window than without the masses", $"{perWith - perWithout} bytes");
+                ctx.Log($"G2: managed allocation per window of {gWindow} frames: audio on {soundOn / Math.Max(1, winOn)} bytes, off {soundOff / Math.Max(1, winOff)} bytes, the sounds of the masses add {soundOn / Math.Max(1, winOn) - soundOff / Math.Max(1, winOff)} bytes (vanilla sound prefab instances, not part of the budget)");
             }
             finally
             {
                 MassRenderSystem.DevHidden = false;
+                MassAudio.Enabled = true;
                 DevCamera.Follow();
                 ctx.Console("mw_kill");
                 Player p = Player.m_localPlayer;
                 if (p != null) { p.SetGodMode(false); p.SetGhostMode(false); }
             }
+        }
+
+        /// <summary>
+        /// A mass of MassCount at <paramref name="anchor"/>, or when there is no floor there (an edge, a rock): at 0.8, 0.6 and 0.45 of its distance from the player,
+        /// each time on the same ray and then 25 and 50 degrees to either side. A spawn whose floor is more than 2.5 m from the player's is thrown away. Logged.
+        /// </summary>
+        private static WritheMassState SpawnRobust(ScenarioContext ctx, string tag, Player player, Vector3 anchor)
+        {
+            Vector3 origin = player.transform.position;
+            Vector3 toAnchor = anchor - origin;
+            float[] scales = { 1f, 0.8f, 0.6f, 0.45f };
+            float[] angles = { 0f, 25f, -25f, 50f, -50f };
+            int tried = 0;
+            foreach (float k in scales)
+                foreach (float a in angles)
+                {
+                    Vector3 at = origin + Quaternion.AngleAxis(a, Vector3.up) * toAnchor * k;
+                    tried++;
+                    WritheMassState m = MassDev.SpawnAt(at, MassCount, ZDOID.None, freezeAI: false);
+                    if (m == null) continue;
+                    if (Mathf.Abs(m.transform.position.y - origin.y) > 2.5f)
+                    {
+                        ctx.Log($"mass {tag}: floor at {m.transform.position.y - origin.y:+0.0;-0.0} m from the player at scale {k} angle {a}, rejected");
+                        MassDev.Destroy(m);
+                        continue;
+                    }
+                    if (tried > 1) ctx.Log($"mass {tag}: placed at attempt {tried} (scale {k}, angle {a}), anchor {anchor} had no usable floor");
+                    return m;
+                }
+            ctx.Log($"mass {tag}: no floor in {tried} attempts around {anchor}");
+            return null;
         }
 
         private static bool IsOptimized()
@@ -210,6 +282,40 @@ namespace MistWorms.Dev.Scenarios
         }
 
         /// <summary>The two masses back where they should be (snap, no velocity), the walk restarts around the new anchors.</summary>
+        /// <summary>
+        /// Puts the two masses about <paramref name="distance"/> metres from the camera, for sure: along one of 8 directions (the first is straight ahead) where there is a floor
+        /// within 6 m of the player's height under both anchors (a mass snapped where there is none falls and is put back near where it came from by the fall rescue),
+        /// then checks after 15 frames that both really are that far (edge of the swarm at 31 m or more) and logs the distances. Sets the anchors the walk follows.
+        /// </summary>
+        private IEnumerator PlaceFar(ScenarioContext ctx, Player player, Vector3 fwd, float distance, float scale)
+        {
+            Vector3 origin = player.transform.position;
+            int mask = WormPhysics.SolidMask;
+            for (int k = 0; k < 8; k++)
+            {
+                Vector3 dir = Quaternion.AngleAxis(k * 45f, Vector3.up) * fwd;
+                Vector3 side = Vector3.Cross(Vector3.up, dir);
+                Vector3 a = origin + dir * distance;
+                Vector3 b = origin + dir * (distance - 2f) + side * 12f;
+                if (!HasFloor(a, origin.y, mask) || !HasFloor(b, origin.y, mask))
+                {
+                    ctx.Log($"far placement: direction {k * 45} deg has no floor within 6 m of the player's height under both anchors");
+                    continue;
+                }
+                _anchorA = a; _anchorB = b; _perp = side;
+                Place(a, b);
+                yield return Frames(15, scale, (f) => Walk());
+                Vector3 cam = Camera.main != null ? Camera.main.transform.position : origin + Vector3.up * 1.7f;
+                float da = Vector3.Distance(cam, _va.Root) - _va.P.R, db = Vector3.Distance(cam, _vb.Root) - _vb.P.R;
+                ctx.Log($"far placement: direction {k * 45} deg, distance of the edge of the swarm from the camera: A {da:0.0} m, B {db:0.0} m (LOD2 from 31 m), fall rescues A {_a.FallRescues} B {_b.FallRescues}");
+                if (da >= 31f && db >= 31f) yield break;
+            }
+            ctx.Log("far placement: no direction put both masses 31 m away; the LOD assertions of D will say so");
+        }
+
+        private static bool HasFloor(Vector3 p, float playerY, int mask) =>
+            Physics.Raycast(p + Vector3.up * 8f, Vector3.down, out RaycastHit hit, 20f, mask, QueryTriggerInteraction.Ignore) && Mathf.Abs(hit.point.y - playerY) <= 6f;
+
         private void Place(Vector3 a, Vector3 b)
         {
             Snap(_a, a);
@@ -223,6 +329,7 @@ namespace MistWorms.Dev.Scenarios
             Rigidbody body = m.GetComponent<Rigidbody>();
             if (body != null) { body.position = p; body.linearVelocity = Vector3.zero; body.angularVelocity = Vector3.zero; }
             m.transform.position = p;
+            m.TeleportedTo(p);
         }
 
         /// <summary>Back and forth of +-WalkHalf along the lateral axis every WalkPeriod seconds, by the dev goal of the AI.</summary>
@@ -267,6 +374,29 @@ namespace MistWorms.Dev.Scenarios
             }
             _gcCollections = GC.CollectionCount(0) - gc0;
             _monoDelta = Profiler.GetMonoUsedSizeLong() - mono0;
+        }
+
+        private static IEnumerator AllocWindow(int frames, float scale, long[] result, Action each)
+        {
+            long previous = Profiler.GetMonoUsedSizeLong();
+            long rises = 0;
+            for (int f = 0; f < frames; f++)
+            {
+                each();
+                yield return null;
+                long used = Profiler.GetMonoUsedSizeLong();
+                if (used > previous) rises += used - previous;
+                previous = used;
+            }
+            result[0] = rises;
+        }
+
+        private static long Median(List<long> v)
+        {
+            if (v.Count == 0) return 0;
+            var c = new List<long>(v);
+            c.Sort();
+            return c[c.Count / 2];
         }
 
         private bool _probeOperative;

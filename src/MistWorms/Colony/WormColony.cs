@@ -223,6 +223,9 @@ namespace MistWorms.Colony
             float now = Time.time;
             int i = Store.Alloc(position, headingRad, state, MWConfig.Worm.Health.Value, now);
             if (i < 0) return -1;
+#if MW_DEV
+            if (_histCount != null) { _histCount[i] = 0; RecordHistory(i, state, now); }
+#endif
 
             WormStore s = Store;
             if (WormPhysics.ProbeGround(position, out RaycastHit hit))

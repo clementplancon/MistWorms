@@ -65,7 +65,7 @@ namespace MistWorms.Dev.Scenarios
                 if (where != "open")
                 {
                     player.SetGodMode(true);
-                    yield return ctx.TpMine();
+                    yield return ctx.TpMineRetry();
                     if (ctx.LastTpMine.Ok)
                     {
                         yield return ctx.Wait(1f);
@@ -78,9 +78,11 @@ namespace MistWorms.Dev.Scenarios
                         siteClearance = found.Clearance;
                     }
                     else ctx.Log($"mine not reachable ({ctx.LastTpMine.Error}): falling back to open ground");
+                    if (Player.m_localPlayer == null) { ctx.Assert("player_present_after_teleport", false, "a local player", "none"); yield break; }
                 }
                 if (!inMine)
                 {
+                    if (Player.m_localPlayer == null) { ctx.Assert("player_present", false, "a local player", "none"); yield break; }
                     Player.m_localPlayer.SetGhostMode(false);
                     yield return ctx.MoveToOpenGround(7f);
                     if (!ctx.LastOpenGround.Found) yield break;
@@ -88,6 +90,7 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Log(inMine ? "context: infested mine" : "context: open ground");
 
                 player = Player.m_localPlayer;
+                if (player == null) { ctx.Assert("player_present", false, "a local player", "none"); yield break; }
                 player.SetGodMode(true);
                 player.SetGhostMode(inMine);      // the mine teleport leaves the ghost mode on: nothing there hunts the player, and it keeps him out of the way
                 S18_GroupCoherence.ClearCreatures(ctx, player);

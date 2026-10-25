@@ -131,6 +131,7 @@ namespace MistWorms.Dev.Scenarios
 
         private IEnumerator Formation(ScenarioContext ctx, WormColony colony, Vector3 anchor)
         {
+            ClearMineCreatures(ctx);
             Frame(ctx, anchor, FormationRing + 0.5f + CameraEdgeGap, Vector3.forward);
             yield return ctx.WaitFrames(10);
             yield return ctx.Shot("formation_0_before");
@@ -173,12 +174,14 @@ namespace MistWorms.Dev.Scenarios
 
         private IEnumerator Absorption(ScenarioContext ctx, WormColony colony, Vector3 anchor)
         {
+            ClearMineCreatures(ctx);
             WritheMassState mass = MassDev.SpawnAt(anchor, 20, colony.ZdoId, freezeAI: true);
             ctx.Assert("absorption_mass_created", mass != null && mass.Valid, "a mass of 20", mass != null ? mass.ZdoId.ToString() : "none");
             if (mass == null) yield break;
             WritheMassVisual visual = mass.GetComponent<WritheMassVisual>();
             yield return ctx.WaitUntil(() => visual != null && visual.Active, 5f);
             yield return ctx.WaitFrames(20);
+            if (visual == null || !visual) { ctx.Assert("mass_alive_before_the_clip", false, "the mass still stands", "gone (see the mass death log)"); yield break; }
             // The action runs from the far side of the mass to where the worm starts (3 m past its edge): the camera looks at the middle of it, from the side.
             float ra = Mathf.Max(0.3f, visual.ShownRadius);
             Frame(ctx, visual.Root + visual.Left * 1.5f, ra + 1.5f + CameraEdgeGap, visual.Forward);
@@ -189,6 +192,7 @@ namespace MistWorms.Dev.Scenarios
             bool sawAbsorbing = false;
             DevBridge.Host.StartCoroutine(Later(TriggerDelay, () =>
             {
+                if (visual == null || !visual) { ctx.Log("absorption: the mass is gone before the worm is spawned"); return; }
                 Vector3 near = visual.Root + visual.Left * (visual.ShownRadius + 3f);
                 slot = ColonyDev.SpawnAt(near, WormState.Gathering, true, out _);
             }));
@@ -217,12 +221,22 @@ namespace MistWorms.Dev.Scenarios
 
         private IEnumerator Fusion(ScenarioContext ctx, WormColony colony, Vector3 anchor)
         {
+            ClearMineCreatures(ctx);
+            // Nothing else of the colony may stand near: a stray mass bigger than the 15 would swallow it. What is there is logged and removed.
+            foreach (WritheMassState stray in new List<WritheMassState>(WritheMassState.All))
+            {
+                if (stray == null || !stray.Valid) continue;
+                ctx.Log($"fusion: removing a mass left over from an earlier part: {stray.ZdoId} n={stray.N} at {stray.transform.position}");
+                MassDev.Destroy(stray);
+            }
+            yield return ctx.WaitFrames(3);
             WritheMassState big = MassDev.SpawnAt(anchor, BigCount, colony.ZdoId, freezeAI: true);
             ctx.Assert("fusion_mass_created", big != null && big.Valid, $"a mass of {BigCount}", big != null ? big.ZdoId.ToString() : "none");
             if (big == null) yield break;
             WritheMassVisual visual = big.GetComponent<WritheMassVisual>();
             yield return ctx.WaitUntil(() => visual != null && visual.Active, 5f);
             yield return ctx.WaitFrames(20);
+            if (visual == null || !visual) { ctx.Assert("mass_alive_before_the_clip", false, "the mass still stands", "gone (see the mass death log)"); yield break; }
             int merges0 = WritheMassState.MergesCompleted;
             WritheMassState small = null;
             float rBig = MassMath.Radius(BigCount), rSmall = MassMath.Radius(SmallCount);
@@ -232,6 +246,7 @@ namespace MistWorms.Dev.Scenarios
             yield return ctx.Shot("fusion_0_before");
             DevBridge.Host.StartCoroutine(Later(TriggerDelay, () =>
             {
+                if (visual == null || !visual) { ctx.Log("fusion: the big mass is gone before the small one is spawned"); return; }
                 Vector3 near = visual.Root - visual.Left * touching;
                 small = MassDev.SpawnAt(near, SmallCount, colony.ZdoId, freezeAI: true);
             }));
@@ -239,6 +254,8 @@ namespace MistWorms.Dev.Scenarios
             DevCamera.SetFillLight(false);
             yield return ctx.WaitUntil(() => small == null || !small.Valid, 4f);
 
+            foreach (WritheMassState m in WritheMassState.All)
+                if (m != null && m.Valid) ctx.Log($"fusion: after the clip mass {m.ZdoId} n={m.N} state {MassStateCodes.Describe(m.StateCode)} at {m.transform.position}");
             ctx.Assert("fusion_small_created", small != null || WritheMassState.MergesCompleted > merges0, "a mass of 12 touching the big one", small != null ? "yes" : "no");
             ctx.Assert("fusion_one_mass_left", big != null && big.N == BigCount + SmallCount && WritheMassState.MergesCompleted == merges0 + 1, $"the big mass counts {BigCount + SmallCount}, one merge",
                 big != null ? $"n={big.N}, merges {WritheMassState.MergesCompleted - merges0}" : "big mass gone");
@@ -255,19 +272,25 @@ namespace MistWorms.Dev.Scenarios
 
         private IEnumerator Dissolution(ScenarioContext ctx, WormColony colony, Vector3 anchor)
         {
+            ClearMineCreatures(ctx);
             WritheMassState mass = MassDev.SpawnAt(anchor, 8, colony.ZdoId, freezeAI: true);
             ctx.Assert("dissolution_mass_created", mass != null && mass.Valid, "a mass of 8", mass != null ? mass.ZdoId.ToString() : "none");
             if (mass == null) yield break;
             WritheMassVisual visual = mass.GetComponent<WritheMassVisual>();
             yield return ctx.WaitUntil(() => visual != null && visual.Active, 5f);
             yield return ctx.WaitFrames(30);
+            if (visual == null || !visual) { ctx.Assert("mass_alive_before_the_clip", false, "the mass still stands", "gone (see the mass death log)"); yield break; }
             // Framed before the hit: the heap and the 1.5 m the worms leap.
             Frame(ctx, visual.Root, Mathf.Max(0.3f, visual.ShownRadius) + 1.5f + CameraEdgeGap, visual.Forward);
             yield return ctx.Shot("dissolution_0_before");
 
             int dissolved0 = colony.DissolvedWorms;
             float perWorm = MWConfig.Worm.Health.Value;
-            DevBridge.Host.StartCoroutine(Later(TriggerDelay + 0.2f, () => mass.Character.Damage(NewHit(mass, 4f * perWorm))));
+            DevBridge.Host.StartCoroutine(Later(TriggerDelay + 0.2f, () =>
+            {
+                if (mass == null || !mass || mass.Character == null) { ctx.Log("dissolution: the mass is gone before the hit (see the mass death log)"); return; }
+                mass.Character.Damage(NewHit(mass, 4f * perWorm));
+            }));
             yield return ctx.Clip("dissolution", ClipSeconds);
             DevCamera.SetFillLight(false);
 
@@ -325,6 +348,12 @@ namespace MistWorms.Dev.Scenarios
                     if (Mathf.Abs(hit.point.y - g.y) > 0.3f) return false;
                 }
             return true;
+        }
+
+        /// <summary>The mine has creatures that kill a mass (it is hostile to every faction): the 40 m around the player are emptied before every part.</summary>
+        private static void ClearMineCreatures(ScenarioContext ctx)
+        {
+            if (Player.m_localPlayer != null) S18_GroupCoherence.ClearCreatures(ctx, Player.m_localPlayer);
         }
 
         private static int CountMasses(WormColony colony)

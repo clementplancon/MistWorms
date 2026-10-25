@@ -174,9 +174,15 @@ namespace MistWorms.Tests
             MassJob job = NewJob(9u, 200, 3f);
             for (int k = 0; k < 1200; k++) { job.FrameCounter = k; job.P.T = 3f + k * 0.016f; job.WriteIdx = k & 1; job.Run(); }
             AppDomain.MonitoringIsEnabled = true;
-            long before = AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize;
-            for (int k = 0; k < 500; k++) { job.FrameCounter = 1200 + k; job.P.T = 3f + (k + 1200) * 0.016f; job.WriteIdx = k & 1; job.Run(); }
-            long delta = AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize - before;
+            // The counter is process wide and xunit runs other tests at the same time: the least of three runs is the job's own allocation.
+            long delta = long.MaxValue;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                long before = AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize;
+                for (int k = 0; k < 500; k++) { job.FrameCounter = 1200 + attempt * 500 + k; job.P.T = 3f + (k + 1200) * 0.016f; job.WriteIdx = k & 1; job.Run(); }
+                long d = AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize - before;
+                if (d < delta) delta = d;
+            }
             _out.WriteLine($"500 jobs allocated {delta} bytes");
             Assert.True(delta < 64 * 1024, "allocated " + delta);
         }

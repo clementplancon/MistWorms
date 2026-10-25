@@ -143,6 +143,28 @@ namespace MistWorms.Dev.Scenarios
         }
 
         /// <summary>
+        /// <see cref="TpMine"/> tried up to <paramref name="attempts"/> times (a teleport that does not finish in time is not final: the player is waited for and the door tried again);
+        /// the single "tp_mine" assertion is recorded at the end.
+        /// </summary>
+        public IEnumerator TpMineRetry(int attempts = 3)
+        {
+            TpMineResult result = null;
+            for (int k = 1; k <= attempts; k++)
+            {
+                result = new TpMineResult();
+                yield return DevWorld.TpMine(result, Log);
+                if (result.Ok) break;
+                Log($"tp_mine attempt {k} of {attempts} failed: {result.Error}");
+                yield return WaitUntil(() => Player.m_localPlayer != null && DevBridge.IsReady(Player.m_localPlayer), 60f);
+                yield return Wait(1f);
+            }
+            LastTpMine = result;
+            Assert("tp_mine", result.Ok, $"inside a mine within 90 s (up to {attempts} attempts)", result.Ok
+                ? (object)$"{result.Location}, {result.RoomCount} rooms, {result.Seconds:0.0} s"
+                : result.Error);
+        }
+
+        /// <summary>
         /// Teleports the player onto flat open ground with <paramref name="clearRadius"/> metres of nothing around (see
         /// <see cref="DevWorld.MoveToOpenGround"/>) and records the "open_ground_found" assertion. <paramref name="accept"/> adds a
         /// scenario specific test on the candidate ground point.

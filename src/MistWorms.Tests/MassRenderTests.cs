@@ -29,6 +29,27 @@ namespace MistWorms.Tests
             Assert.True(worst < 0.01f, "lag " + worst);
         }
 
+        [Theory]
+        [InlineData(30f, 0f)]
+        [InlineData(5f, 0f)]
+        [InlineData(0f, 12f)]
+        public void AJumpOfTheBodyOverFourMetresPutsTheRootOnItInOneFrame(float dx, float dy)
+        {
+            var root = new MassRoot();
+            Vector3 body = new Vector3(10f, 5f, 3f);
+            root.Step(body, Dt, Speed, 0f, false);
+            for (int f = 0; f < 30; f++) { body.x += Speed * Dt; root.Step(body, Dt, Speed, 0f, false); }      // walking: the speed estimate is warm
+            body += new Vector3(dx, dy, 0f);
+            root.Step(body, Dt, Speed, body.y, true);
+            Assert.True(root.Snapped, "the step of the jump must be a snap (the ground is sampled again)");
+            Assert.Equal(body.x, root.Root.x, 3);
+            Assert.Equal(body.z, root.Root.z, 3);
+            Assert.Equal(0f, root.Offset.magnitude, 3);
+            // and it keeps up afterwards: no smoothed leftover of the old place
+            for (int f = 0; f < 10; f++) { body.x += Speed * Dt; root.Step(body, Dt, Speed, body.y, true); }
+            Assert.True(Math.Abs(root.Root.x - body.x) < 0.1f, "the root trails the body by " + Math.Abs(root.Root.x - body.x));
+        }
+
         [Fact]
         public void RootIsSmoothWhileTheBodyMovesInPhysicsSteps()
         {

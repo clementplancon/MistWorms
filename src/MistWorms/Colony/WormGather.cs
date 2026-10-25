@@ -16,6 +16,39 @@ namespace MistWorms.Colony
         private const int Refinements = 3;
 
         /// <summary>
+        /// A worm on its way to a mass is stalled when it is still outside the absorption reach and moved less than <paramref name="minMoved"/> metres over the window
+        /// (3 s): it waits for something that cannot happen. A worm gathering to a mass has no arrival radius of its own: it goes on until it is absorbed.
+        /// </summary>
+        public static bool IsStalled(float distanceToMassCentre, float massRadius, float movedOverWindow, float minMoved = 0.5f) =>
+            distanceToMassCentre > AbsorbReach(massRadius) && movedOverWindow < minMoved;
+
+        /// <summary>
+        /// Distance from the centre of a mass at which a worm touches it and starts to climb: the visible envelope is wider than r in places (lobes),
+        /// so r x 1.3 + 0.5 m (a worm used to be missed at 2.8 m from a mass of 39 that wanders).
+        /// </summary>
+        public static float AbsorbReach(float radius) => radius * 1.3f + 0.5f;
+
+        /// <summary>
+        /// The mass a gathering worm goes to: the nearest within <paramref name="radius"/> (xz) and <paramref name="maxDy"/> whose load (count plus worms
+        /// already climbing onto it) is under <paramref name="max"/>; -1 when there is none. A mass with room wins over any group of free worms.
+        /// </summary>
+        public static int NearestMass(Vector3 p, Vector3[] pos, int[] load, int count, int max, float radius, float maxDy)
+        {
+            float best = radius * radius;
+            int bi = -1;
+            for (int k = 0; k < count; k++)
+            {
+                if (load[k] >= max) continue;
+                float dx = pos[k].x - p.x, dz = pos[k].z - p.z;
+                float d2 = dx * dx + dz * dz;
+                if (d2 > best || Mathf.Abs(pos[k].y - p.y) > maxDy) continue;
+                best = d2;
+                bi = k;
+            }
+            return bi;
+        }
+
+        /// <summary>
         /// Looks for <paramref name="minCount"/> or more worms that lie within <paramref name="radius"/> (xz) of their own centroid.
         /// <paramref name="pts"/> are the first <paramref name="count"/> gatherers; the ones already <paramref name="taken"/> are skipped. A seed gives
         /// a first centroid, then the centroid is refined by re-selecting around it (three rounds). On success the members (at most

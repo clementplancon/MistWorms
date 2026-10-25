@@ -218,6 +218,7 @@ namespace MistWorms.Dev.Scenarios
                             yield return DevWorld.TeleportPlayer(site.Floor + Vector3.up * 0.3f, Player.m_localPlayer.transform.rotation, false, 30f, moved);
                             InMine = moved.Ok;
                             if (moved.Ok) DevPreview.Instance.ForcedOrigin = site.Floor;
+                            if (moved.Ok && Player.m_localPlayer != null) S18_GroupCoherence.ClearCreatures(ctx, Player.m_localPlayer);   // our masses are hostile to every faction: the creatures of the mine would kill them
                             else ctx.Log("could not move inside the mine: " + moved.Error);
                         }
                     }

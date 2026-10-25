@@ -33,6 +33,7 @@ namespace MistWorms.Dev.Scenarios
         private const float RunStep = 0.5f;
         private const float SteadyFraction = 0.9f;       // walking at this part of MoveSpeed counts as full speed
         private const float MeasureSeconds = 2.5f;
+        private const float ApproachAfterSeconds = 35f;
         private const float ClipSeconds = 5f;
         private const float FollowGap = 3f, FollowHeight = 1.4f;       // clips: 3 m from the edge, 1.4 m up, three quarters front
 
@@ -80,6 +81,7 @@ namespace MistWorms.Dev.Scenarios
                     yield return ctx.TpMine();
                     if (ctx.LastTpMine.Ok)
                     {
+                        if (Player.m_localPlayer != null) S18_GroupCoherence.ClearCreatures(ctx, Player.m_localPlayer);   // the creatures of the mine would kill the masses (hostile to every faction)
                         yield return ctx.Wait(1f);
                         var site = new MineSiteResult();
                         yield return MineSite.Find(Player.m_localPlayer.transform.position, rMax + 3f, MineSite.AbsoluteMinClearance, site);
@@ -205,9 +207,9 @@ namespace MistWorms.Dev.Scenarios
             // Back and forth until the treadmill and the poured worms are sampled, then straight to the player: the arm is measured on the approach.
             float armSeenAt = -1f, steadySpeedSum = 0f;
             bool approaching = false;
-            while (Time.time - tm < 60f && mass != null && !(approaching && armSeenAt >= 0f && Time.time - armSeenAt > 1f))
+            while (Time.time - tm < 100f && mass != null && !(approaching && armSeenAt >= 0f && Time.time - armSeenAt > 1f))
             {
-                bool enough = Time.time - tm >= MeasureSeconds && tread.Count >= 300 && poured.Count >= 30;
+                bool enough = (Time.time - tm >= MeasureSeconds && tread.Count >= 300 && poured.Count >= 30) || Time.time - tm >= ApproachAfterSeconds;   // the arm is measured with the player within r + 4 m: the approach starts at the latest after this long
                 if (enough && !approaching)
                 {
                     approaching = true;

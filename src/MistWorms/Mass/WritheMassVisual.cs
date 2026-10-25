@@ -72,6 +72,9 @@ namespace MistWorms.Mass
         private WormEffects.Limiter _detachLimit;
         private readonly float[] _soundNext = new float[MassAudio.Layers];
         private bool _birthSounded, _engulfSounded;
+        private const float YawRateTau = 0.15f, YawRateMax = 0.5f;
+        private float _yawRate, _prevFinalYaw;
+        private bool _yawRateInit;
 
         // Published to MassRenderSystem and to the dev tools.
         /// <summary>Per-frame inputs of the layout. Filled by Update, completed with the camera by <see cref="PrepareEmit"/>.</summary>
@@ -249,6 +252,14 @@ namespace MistWorms.Mass
                 float k = _streamK * _streamK * (3f - 2f * _streamK);
                 yaw = Mathf.LerpAngle(_yaw, transform.eulerAngles.y, k);
             }
+            // How fast the heap turns toward its left (turns per second, low-passed): the worms poured on the ground are turned back by it so they hold still.
+            if (_yawRateInit)
+            {
+                float rawRate = -Mathf.DeltaAngle(_prevFinalYaw, yaw) / dt / 360f;
+                _yawRate += (Mathf.Clamp(rawRate, -YawRateMax, YawRateMax) - _yawRate) * (1f - (float)Math.Exp(-dt / YawRateTau));
+            }
+            _prevFinalYaw = yaw;
+            _yawRateInit = true;
             float yr = yaw * Mathf.Deg2Rad;
             Vector3 flat = new Vector3(Mathf.Sin(yr), 0f, Mathf.Cos(yr));
 
@@ -308,6 +319,13 @@ namespace MistWorms.Mass
             P.R = r;
             P.N = n;
             P.Sigma = _sigma;
+            P.YawRate = _yawRate;
+            P.Speed = v;
+            // The world frame of the heap, so the worms poured on the ground can lie still in the world (MassLayout.AnchorPoured).
+            P.HasFrame = true;
+            P.RootX = root.x; P.RootZ = root.z;
+            P.FwdX = fwd.x; P.FwdZ = fwd.z; P.LeftX = left.x; P.LeftZ = left.z;
+            P.FrameYaw = (float)(Math.Atan2(fwd.z, fwd.x) / (2.0 * Math.PI));
             P.StreamK = _streamK;
             P.RibbonW = _streamK > 0f ? _ribbonWidth : 0f;
             P.RibbonL = _streamK > 0f ? _ribbonLength : 0f;

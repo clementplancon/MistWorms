@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using MistWorms.Mass;
 using UnityEngine;
@@ -313,7 +314,7 @@ namespace MistWorms.Tests
         }
 
         /// <summary>Runs the caller's integrators (tread, boil, odometers) the way WritheMassVisual will, and calls back every frame.</summary>
-        private static void Simulate(HeapSlots s, int n, float seconds, Func<float, float> sigmaOf, Func<float, float> radiusOf, Action<float, MassFrameParams, int> onFrame)
+        private static void Simulate(HeapSlots s, int n, float seconds, Func<float, float> sigmaOf, Func<float, float> radiusOf, Action<float, MassFrameParams, int> onFrame, float yawRate = 0f, Func<float, float[]> frameOf = null)
         {
             const float dt = 1f / 60f;
             float tread = 0.2f, boil = 0.3f, odoF = 0f, odoB = 0f;
@@ -331,6 +332,14 @@ namespace MistWorms.Tests
                 odoB += (v + MassLayoutConst.BorderSpeed * (1f - sigma)) * dt * MassLayoutConst.CrawlFramesPerM;
                 var P = MassFrameParams.Default(r, n);
                 P.Sigma = sigma; P.T = time % 120f; P.Tread = tread; P.Boil = boil; P.OdoFlux = odoF; P.OdoBorder = odoB;
+                P.YawRate = yawRate; P.Speed = v;
+                if (frameOf != null)
+                {
+                    float[] fr = frameOf(time);          // root x, root z, heading (radians; left of the forward is +90 degrees)
+                    P.HasFrame = true; P.RootX = fr[0]; P.RootZ = fr[1];
+                    P.FwdX = (float)Math.Cos(fr[2]); P.FwdZ = (float)Math.Sin(fr[2]); P.LeftX = -P.FwdZ; P.LeftZ = P.FwdX;
+                    P.FrameYaw = fr[2] / (2f * (float)Math.PI);
+                }
                 int count = MassLayout.Evaluate(P, s);
                 onFrame(time, P, count);
             }
@@ -394,6 +403,95 @@ namespace MistWorms.Tests
             });
             Assert.True(measured > 100, "poured worms measured: " + measured);
             _out.WriteLine("poured worms: " + measured + " samples, worst world speed " + worst.ToString("0.0000") + " m/s");
+        }
+
+        /// <summary>A heap that turns (0.15 turns/s, a turn of 54 degrees per second) with the poured worms turned back (YawRate given) or not: median world speed of the poured worms.</summary>
+        private float PouredWorldSpeedWhileTurning(float turnRate, float givenRate)
+        {
+            var s = new HeapSlots(8u);
+            var prevW = new V3[MassLayoutConst.SlotCount];
+            var streak = new int[MassLayoutConst.SlotCount];
+            var speeds = new List<float>();
+            float cx = 0f, cz = 0f;       // root in the world, moving at V along the heading
+            Simulate(s, 50, 6f, t => 1f, t => RadiusOf(50), (time, P, count) =>
+            {
+                float psi = turnRate * time * 2f * (float)Math.PI;
+                cx += V * (float)Math.Cos(psi) / 60f; cz += V * (float)Math.Sin(psi) / 60f;
+                float c = (float)Math.Cos(psi), sn = (float)Math.Sin(psi);
+                for (int i = 0; i < count; i++)
+                {
+                    SlotOut o = s.Out[i];
+                    bool pour = o.Role == MassLayout.RoleFlux && o.Visible && o.Anim == MassLayout.AnimIdle && Math.Abs(o.Pos.Y - MassLayoutConst.FluxLift) < 1e-4f;
+                    var w = new V3(cx + c * o.Pos.X - sn * o.Pos.Z, 0f, cz + sn * o.Pos.X + c * o.Pos.Z);
+                    if (time > 1f && pour && streak[i] >= 3)
+                    {
+                        float dx = w.X - prevW[i].X, dz = w.Z - prevW[i].Z;
+                        speeds.Add((float)Math.Sqrt(dx * dx + dz * dz) * 60f);
+                    }
+                    prevW[i] = w; streak[i] = pour ? streak[i] + 1 : 0;
+                }
+            }, givenRate);
+            Assert.True(speeds.Count > 50, "poured samples: " + speeds.Count);
+            speeds.Sort();
+            return speeds[speeds.Count / 2];
+        }
+
+        /// <summary>The poured worms anchored in the world (the world frame is given): median and 95th percentile of their world speed on a path that turns.</summary>
+        private void AnchoredPouredSpeeds(float turnRate, out float median, out float p95)
+        {
+            var s = new HeapSlots(8u);
+            var prevW = new V3[MassLayoutConst.SlotCount];
+            var streak = new int[MassLayoutConst.SlotCount];
+            var speeds = new List<float>();
+            float w = turnRate * 2f * (float)Math.PI;
+            Func<float, float[]> frameOf = time =>
+            {
+                float psi = w * time;
+                float x = w > 1e-5f ? V / w * (float)Math.Sin(psi) : V * time;
+                float z = w > 1e-5f ? V / w * (1f - (float)Math.Cos(psi)) : 0f;
+                return new[] { x, z, psi };
+            };
+            Simulate(s, 50, 6f, t => 1f, t => RadiusOf(50), (time, P, count) =>
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    SlotOut o = s.Out[i];
+                    bool pour = o.Role == MassLayout.RoleFlux && o.Visible && o.Anim == MassLayout.AnimIdle && Math.Abs(o.Pos.Y - MassLayoutConst.FluxLift) < 1e-4f;
+                    var wp = new V3(P.RootX + P.FwdX * o.Pos.X + P.LeftX * o.Pos.Z, 0f, P.RootZ + P.FwdZ * o.Pos.X + P.LeftZ * o.Pos.Z);
+                    if (time > 1f && pour && streak[i] >= 3)
+                    {
+                        float dx = wp.X - prevW[i].X, dz = wp.Z - prevW[i].Z;
+                        speeds.Add((float)Math.Sqrt(dx * dx + dz * dz) * 60f);
+                    }
+                    prevW[i] = wp; streak[i] = pour ? streak[i] + 1 : 0;
+                }
+            }, 0f, frameOf);
+            Assert.True(speeds.Count > 50, "poured samples: " + speeds.Count);
+            speeds.Sort();
+            median = speeds[speeds.Count / 2];
+            p95 = speeds[(int)(speeds.Count * 0.95f)];
+        }
+
+        [Theory]
+        [InlineData(0f)]
+        [InlineData(0.05f)]
+        [InlineData(0.15f)]
+        public void PouredWormsAnchoredInTheWorldLieStillStraightOrTurning(float turnRate)
+        {
+            AnchoredPouredSpeeds(turnRate, out float median, out float p95);
+            _out.WriteLine("turn " + turnRate + " turns/s: poured worms world speed median " + median.ToString("0.0000") + " m/s, 95th percentile " + p95.ToString("0.000") + " m/s");
+            Assert.True(median < 0.02f, "median " + median);
+            Assert.True(p95 < 0.15f, "95th percentile " + p95);
+        }
+
+        [Fact]
+        public void PouredWormsHoldStillWhileTheHeapTurns()
+        {
+            float without = PouredWorldSpeedWhileTurning(0.15f, 0f);
+            float with = PouredWorldSpeedWhileTurning(0.15f, 0.15f);
+            _out.WriteLine("median world speed of the poured worms while turning 54 deg/s: " + without.ToString("0.000") + " m/s without the correction, " + with.ToString("0.000") + " m/s with it");
+            Assert.True(with < 0.5f * without, "the correction must at least halve the drift: " + without + " -> " + with);
+            Assert.True(with < 0.3f, "median world speed with the correction: " + with);
         }
 
         [Fact]

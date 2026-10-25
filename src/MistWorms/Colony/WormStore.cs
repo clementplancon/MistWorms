@@ -60,6 +60,7 @@ namespace MistWorms.Colony
         public readonly ZDOID[] massRef;          // the mass an Absorbing worm climbs onto
         public readonly Vector3[] absorbFrom;     // where the absorption (or the leap of a dissolved worm) started
         public readonly float[] leapHeight;       // apex of the leap of a dissolved worm, metres (subPhase 1 while Fleeing)
+        public readonly float[] directUntil;      // until then the worm steers by its goal only (a gatherer that made no progress)
 
         // ---- scheduling and perception
         public readonly float[] nextSimTime;
@@ -123,6 +124,7 @@ namespace MistWorms.Colony
             massRef = new ZDOID[capacity];
             absorbFrom = new Vector3[capacity];
             leapHeight = new float[capacity];
+            directUntil = new float[capacity];
 
             nextSimTime = new float[capacity];
             lastSimTime = new float[capacity];
@@ -191,6 +193,7 @@ namespace MistWorms.Colony
             massRef[i] = ZDOID.None;
             absorbFrom[i] = position;
             leapHeight[i] = 0f;
+            directUntil[i] = 0f;
 
             lastSimTime[i] = now;
             nextSimTime[i] = now;

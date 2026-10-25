@@ -103,6 +103,9 @@ namespace MistWorms.Patches
                 try
                 {
                     if (hit == null || !WritheMassState.TryGet(__instance, out WritheMassState mass)) return;
+#if MW_DEV
+                    mass.NoteHit(hit);
+#endif
                     if (hit.HaveAttacker() && hit.GetAttacker() != Player.m_localPlayer) return;
                     if (hit.GetTotalDamage() <= 0.1f) return;
                     Vector3 where = hit.m_point == Vector3.zero ? mass.transform.position + Vector3.up * 0.4f : hit.m_point;
