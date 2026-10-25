@@ -28,6 +28,7 @@ namespace MistWorms.Dev.Scenarios
         private const uint FormationSteps = 150;           // 2.5 s
         private const double BudgetMs = 0.25;
         private const float WalkDistance = 6f;
+        private const float WaterClearance = 5f;           // no water (sea, lake, river) within this distance of a site
         private const float BuiltClearance = 15f;          // no built piece (WearNTear) this close to a site: the captures are not made through beams
 
         public string Name => "V14_GpuMassSandbox";
@@ -66,7 +67,7 @@ namespace MistWorms.Dev.Scenarios
                 player.SetGodMode(true);
                 yield return ctx.WaitFrames(3);
                 // flat, open ground, more than 1 m above the water, nothing but terrain within 25 m
-                yield return ctx.MoveToOpenGround(25f, p => !NearBuilt(p, BuiltClearance));
+                yield return ctx.MoveToOpenGround(25f, p => !NearBuilt(p, BuiltClearance) && !NearWater(p, WaterClearance));
                 if (!ctx.LastOpenGround.Found) yield break;
                 player = Player.m_localPlayer;
                 player.SetGodMode(true);
@@ -245,7 +246,7 @@ namespace MistWorms.Dev.Scenarios
                 // ---------------------------------------------------------------- GPU worms next to a flipbook worm, same light, same frame (white balance of the rope shader)
                 // The player has walked while wrapped (and may stand on a slope, in the water or against a tree): back to open ground first, then the first free direction.
                 DevCamera.Follow();
-                yield return ctx.MoveToOpenGround(25f, p => !NearBuilt(p, BuiltClearance));
+                yield return ctx.MoveToOpenGround(25f, p => !NearBuilt(p, BuiltClearance) && !NearWater(p, WaterClearance));
                 ctx.Log("compare site: " + (ctx.LastOpenGround.Found ? ctx.LastOpenGround.Spot.ToString() : "no open ground (" + ctx.LastOpenGround.Error + "), the player stays where he is"));
                 player = Player.m_localPlayer;
                 if (player == null) yield break;
@@ -296,7 +297,7 @@ namespace MistWorms.Dev.Scenarios
                 DevCamera.Follow();
                 bool onRockSite = false;
                 var rockSite = new OpenGroundResult();
-                yield return DevWorld.MoveToOpenGround(3f, p => !NearBuilt(p, BuiltClearance) && FindRock(p, 6f, 16f) != null, rockSite, ctx.Log);
+                yield return DevWorld.MoveToOpenGround(3f, p => !NearBuilt(p, BuiltClearance) && !NearWater(p, WaterClearance) && FindRock(p, 6f, 16f) != null, rockSite, ctx.Log);
                 ctx.Assert("rock_site_found", rockSite.Found, "flat ground with a vanilla rock 6 to 16 m away", rockSite.Found ? rockSite.Spot.ToString() : rockSite.Error);
                 onRockSite = rockSite.Found;
                 player = Player.m_localPlayer;
@@ -324,9 +325,9 @@ namespace MistWorms.Dev.Scenarios
                     string kind = rock != null ? "vanilla rock " + rock.transform.root.name : null;
                     if (rock == null)
                     {
-                        placed = PlaceBlock(player.transform.position + fwd * 8f, new Vector3(1.6f, 1.0f, 1.0f), "MW_V14_High");
+                        placed = PlaceBlock(player.transform.position + fwd * 8f, new Vector3(1.6f, 1.5f, 1.0f), "MW_V14_High");
                         rock = placed.GetComponent<Collider>();
-                        kind = "solid block 1.6 x 1 x 1 m";
+                        kind = "solid block 1.6 x 1.5 x 1 m";
                     }
                     ctx.Log($"{tag} high obstacle: {kind}, {rock.bounds.size.ToString("0.00")} m");
                     yield return CrossObstacle(ctx, player, fwd, tag + "_high", n, rock, rock.bounds.size.y, true, n == 200);
@@ -467,6 +468,24 @@ namespace MistWorms.Dev.Scenarios
             return side;
         }
 
+        /// <summary>Water within <paramref name="radius"/> of <paramref name="p"/>: the ground (centre, then two rings of eight points) lower than 0.5 m over the sea level, or a collider of the water layer.</summary>
+        private static bool NearWater(Vector3 p, float radius)
+        {
+            ZoneSystem zones = ZoneSystem.instance;
+            if (zones == null) return false;
+            float level = zones.m_waterLevel + 0.5f;
+            if (zones.GetGroundHeight(p) < level) return true;
+            for (int ring = 1; ring <= 2; ring++)
+                for (int k = 0; k < 8; k++)
+                {
+                    float a = k * Mathf.PI * 0.25f;
+                    Vector3 q = p + new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * (radius * ring * 0.5f);
+                    if (zones.GetGroundHeight(q) < level) return true;
+                }
+            int water = LayerMask.GetMask("water");
+            return water != 0 && Physics.CheckSphere(p, radius, water, QueryTriggerInteraction.Collide);
+        }
+
         private static bool NearBuilt(Vector3 p, float radius)
         {
             foreach (WearNTear w in WearNTear.s_allInstances)
@@ -586,6 +605,7 @@ namespace MistWorms.Dev.Scenarios
             cube.transform.position = pos + Vector3.up * (size.y * 0.5f);
             int layer = LayerMask.NameToLayer(VanillaNames.LayerStaticSolid);
             if (layer >= 0) cube.layer = layer;
+            Physics.SyncTransforms();           // a collider created this frame keeps the bounds of a unit cube at the origin until the physics see its transform
             return cube;
         }
 

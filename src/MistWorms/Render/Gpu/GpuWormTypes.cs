@@ -57,9 +57,10 @@ namespace MistWorms.Render.Gpu
         public const float ProjectRadius = 0.12f;         // a node is projected on the plane of its anchor within this distance
         public const float OrientK = 0.10f;               // pull of the nodes toward the line of the worm (tangent to the surface, up or diagonal)
         public const float LeashK = 0.07f;                // pull of the worm toward its place on the body
-        public const float TransitK = 0.5f;               // pull of the head toward the next anchor of its path
+        public const float TransitK = 0.7f;               // pull of the head toward the next anchor of its path
         public const float AdvanceRadius = 0.06f;         // the head is at the anchor of the path when it is this close
         public const float FallTime = 2.5f;               // a worm that lets go falls for this long at most
+        public const float SlideGain = 1.0f;              // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
         public const float HopTime = 0.5f;                // a head that has not reached the anchor of its path in this time goes on to the next one
         public const float PendantShare = 0.08f;          // share of the worms of the sleeve that hang by one end
     }

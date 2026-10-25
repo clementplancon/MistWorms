@@ -182,6 +182,53 @@ namespace MistWorms.Render.Gpu
             return slot;
         }
 
+        private const int MaxCandidates = 150000;
+        private readonly int[] _infId = new int[12];
+        private readonly float[] _infW = new float[12];
+
+        private static void AddInfluence(int[] ids, float[] ws, ref int n, BoneWeight bw, float f)
+        {
+            AddOne(ids, ws, ref n, bw.boneIndex0, bw.weight0 * f);
+            AddOne(ids, ws, ref n, bw.boneIndex1, bw.weight1 * f);
+            AddOne(ids, ws, ref n, bw.boneIndex2, bw.weight2 * f);
+            AddOne(ids, ws, ref n, bw.boneIndex3, bw.weight3 * f);
+        }
+
+        private static void AddOne(int[] ids, float[] ws, ref int n, int id, float w)
+        {
+            if (!(w > 0f)) return;
+            for (int i = 0; i < n; i++) if (ids[i] == id) { ws[i] += w; return; }
+            if (n < ids.Length) { ids[n] = id; ws[n] = w; n++; }
+        }
+
+        /// <summary>Lattice points (about 3 cm apart) on every triangle of a source, as candidate anchors (world position of the pose of now, the three vertices and the barycentric weights).</summary>
+        private static void AddTriangleSamples(int src, int[] tris, Vector3[] world, List<Vector3> all, List<int> srcOf, List<int> vtxOf, List<Vector3Int> triV, List<Vector3> triB)
+        {
+            const float spacing = 0.03f;
+            for (int k = 0; k + 2 < tris.Length; k += 3)
+            {
+                int i0 = tris[k], i1 = tris[k + 1], i2 = tris[k + 2];
+                Vector3 p0 = world[i0], p1 = world[i1], p2 = world[i2];
+                float longest = Mathf.Max((p1 - p0).magnitude, Mathf.Max((p2 - p1).magnitude, (p0 - p2).magnitude));
+                int m = Mathf.Min(24, Mathf.CeilToInt(longest / spacing));
+                if (m < 2) continue;                        // a small triangle: its vertices are enough
+                if (all.Count > MaxCandidates) return;
+                for (int a = 0; a <= m; a++)
+                    for (int b = 0; a + b <= m; b++)
+                    {
+                        int c = m - a - b;
+                        if ((a == m) || (b == m) || (c == m)) continue;          // the vertices are candidates already
+                        float fa = a / (float)m, fb = b / (float)m;
+                        Vector3 p = p0 * fa + p1 * fb + p2 * (1f - fa - fb);
+                        all.Add(p); srcOf.Add(src);
+                        int dominant = fa >= fb && fa >= 1f - fa - fb ? i0 : (fb >= 1f - fa - fb ? i1 : i2);
+                        vtxOf.Add(dominant);
+                        triV.Add(new Vector3Int(i0, i1, i2));
+                        triB.Add(new Vector3(fa, fb, 0f));
+                    }
+            }
+        }
+
         // The anchors are chosen among the vertices of the pose of now (all the sources together), once; the weights and the bind poses are read once.
         private void Select(float foot, float height)
         {
@@ -204,6 +251,10 @@ namespace MistWorms.Render.Gpu
             var all = new List<Vector3>(8192);
             var srcOf = new List<int>(8192);
             var vtxOf = new List<int>(8192);
+            // A candidate is a vertex or a point of a triangle (barycentric): the mesh of a character is dense where it is detailed (hands, face) and sparse elsewhere, so that the
+            // vertices alone leave holes of 15 cm and more on the torso and the thighs, where the worms would not be held by any anchor.
+            var triV = new List<Vector3Int>(8192);
+            var triB = new List<Vector3>(8192);
             MeshArea = 0f;
             for (int i = 0; i < _sources; i++)
             {
@@ -238,13 +289,14 @@ namespace MistWorms.Render.Gpu
                 {
                     Vector3 p = SkinVertex(i, v);
                     worldOf[i][v] = p;
-                    all.Add(p); srcOf.Add(i); vtxOf.Add(v);
+                    all.Add(p); srcOf.Add(i); vtxOf.Add(v); triV.Add(new Vector3Int(v, v, v)); triB.Add(new Vector3(1f, 0f, 0f));
                 }
                 Mesh mesh = _smr[i] != null ? _smr[i].sharedMesh : _mf[i].sharedMesh;
                 int[] tris = mesh.triangles;
                 float area = 0f;
                 Vector3 mn = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue), mx = -mn;
                 for (int k = 0; k + 2 < tris.Length; k += 3) area += Vector3.Cross(worldOf[i][tris[k + 1]] - worldOf[i][tris[k]], worldOf[i][tris[k + 2]] - worldOf[i][tris[k]]).magnitude * 0.5f;
+                AddTriangleSamples(i, tris, worldOf[i], all, srcOf, vtxOf, triV, triB);
                 foreach (Vector3 w in worldOf[i]) { mn = Vector3.Min(mn, w); mx = Vector3.Max(mx, w); }
                 MeshArea += area;
                 Plugin.Log.LogInfo($"[GpuSkin]   source {i} {(_smr[i] != null ? _smr[i].name : _mf[i].name)}: {n} vertices skinned, area {area:0.000} m2, world size {(mx - mn).ToString("0.00")}, " +
@@ -263,10 +315,17 @@ namespace MistWorms.Render.Gpu
             int dropped = 0;
             for (int a = 0; a < count; a++)
             {
-                int src = srcOf[picks[a]], v = vtxOf[picks[a]];
-                Vector3 wp = all[picks[a]];
+                int ci = picks[a];
+                int src = srcOf[ci];
+                Vector3Int tv = triV[ci];
+                Vector3 bc = triB[ci];
+                Vector3 wp = all[ci];
                 pose[a] = wp;
-                Vector3 rp = _rest[src][v], rn = _restN[src][v];
+                float b2 = 1f - bc.x - bc.y;
+                Vector3 rp = _rest[src][tv.x] * bc.x + _rest[src][tv.y] * bc.y + _rest[src][tv.z] * b2;
+                Vector3 rn = _restN[src][tv.x] * bc.x + _restN[src][tv.y] * bc.y + _restN[src][tv.z] * b2;
+                float rnl = rn.magnitude;
+                rn = rnl > 1e-6f ? rn / rnl : _restN[src][tv.x];
                 var sv = new GpuSkinVertex { PosRel = new Vector4(rp.x, rp.y, rp.z, Mathf.Clamp01((wp.y - foot) / height)), Normal = new Vector4(rn.x, rn.y, rn.z, 0f) };
                 if (_mf[src] != null)
                 {
@@ -275,9 +334,20 @@ namespace MistWorms.Render.Gpu
                 }
                 else
                 {
-                    BoneWeight bw = _weights[src][v];
-                    var ids = new[] { bw.boneIndex0, bw.boneIndex1, bw.boneIndex2, bw.boneIndex3 };
-                    var ws = new[] { bw.weight0, bw.weight1, bw.weight2, bw.weight3 };
+                    // the influences of the three vertices of the triangle, mixed by the barycentric weights, the four strongest kept
+                    int ni = 0;
+                    AddInfluence(_infId, _infW, ref ni, _weights[src][tv.x], bc.x);
+                    if (bc.y > 0f) AddInfluence(_infId, _infW, ref ni, _weights[src][tv.y], bc.y);
+                    if (b2 > 1e-6f) AddInfluence(_infId, _infW, ref ni, _weights[src][tv.z], b2);
+                    var ids = new int[4];
+                    var ws = new float[4];
+                    for (int k = 0; k < 4; k++)
+                    {
+                        int bi = -1;
+                        for (int q = 0; q < ni; q++) if (_infW[q] > 0f && (bi < 0 || _infW[q] > _infW[bi])) bi = q;
+                        if (bi < 0) break;
+                        ids[k] = _infId[bi]; ws[k] = _infW[bi]; _infW[bi] = 0f;
+                    }
                     var slots = new uint[4];
                     float sum = 0f;
                     for (int k = 0; k < 4; k++)

@@ -453,6 +453,17 @@ namespace MistWorms.Render.Gpu
             if (pe < best) { best = pe; dir = 1; }
             if (ps < best) { best = ps; dir = 2; }
             if (pn < best) { best = pn; dir = 3; }
+            float slide = (best + WormSimConst.Radius) * WormSimConst.SlideGain;
+            if (dir == 0 || dir == 1)
+            {
+                float hz = m.Heading.z, mid = 0.5f * (smin + nmax);
+                x.z += slide * (Math.Abs(hz) > 0.3f ? (hz > 0f ? 1f : -1f) : (x.z >= mid ? 1f : -1f));
+            }
+            else if (dir == 2 || dir == 3)
+            {
+                float hx = m.Heading.x, mid = 0.5f * (wmin + emax);
+                x.x += slide * (Math.Abs(hx) > 0.3f ? (hx > 0f ? 1f : -1f) : (x.x >= mid ? 1f : -1f));
+            }
             if (dir == 0) x.x = wmin - WormSimConst.Radius;
             else if (dir == 1) x.x = emax + WormSimConst.Radius;
             else if (dir == 2) x.z = smin - WormSimConst.Radius;
@@ -738,7 +749,7 @@ namespace MistWorms.Render.Gpu
                         Vector3 hrel = p[7] - V3(ha.A);
                         if (Dot(hrel, hrel) < WormSimConst.ProjectRadius * WormSimConst.ProjectRadius) hd -= Scale(V3(ha.B), Math.Min(Dot(hd, V3(ha.B)), 0f));
                         Vector3 hv = Scale(hd, WormSimConst.TransitK);
-                        float cap = (1.1f + 0.5f * Hash01(wd.Seed, 32)) * dt;
+                        float cap = (1.8f + 0.8f * Hash01(wd.Seed, 32)) * dt;
                         float hl2 = Dot(hv, hv);
                         if (hl2 > cap * cap) hv = Scale(Div(hv, (float)Math.Sqrt(hl2)), cap);
                         for (int j1 = 0; j1 < K; j1++)

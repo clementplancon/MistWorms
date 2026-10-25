@@ -58,6 +58,11 @@ public static class SimCheck
         Engulf(2000, 1.0f, "n200");
         EngulfBody(2000);
         Drape(2000);
+        foreach (int w in new[] { 500, 2000 })
+        {
+            Cross(w, false);
+            Cross(w, true);
+        }
         SkinSimParity();
         SkinCpuCost();
         SkinBody(2000);
@@ -529,7 +534,7 @@ public static class SimCheck
         if (limbChecks)
         {
             Check("skin_sleeve_size", plan.Count >= 0.4f * worms && plan.Count <= 0.6f * worms + 1e-3f, $"S = {100f * plan.Count / worms:0}% of the worms (surface {set.Area:0.00} m2: 2 layers of 30 x 1.8 cm worms)");
-            Check("skin_sleeve_formed_in_2.5s", formed >= 0.8f * r.Settled, $"{formed} worms settled 2.5 s after the start of the engulf, {r.Settled} at the steady state (>= 80%)");
+            Check("skin_sleeve_formed_in_2.5s", formed >= 0.9f * r.Settled, $"{formed} worms settled 2.5 s after the start of the engulf, {r.Settled} at the steady state (>= 90%: the game is slower than the editor)");
             Check("skin_sleeve_filled", r.Settled + r.Transit >= 0.5f * plan.Count, $"{r.Settled + r.Transit} worms on the body for S = {plan.Count:0}");
             Check("skin_every_leg", r.NearRegion[0] >= 0.03f * r.Near && r.NearRegion[1] >= 0.03f * r.Near, "a worm on each leg (>= 3%)");
             Check("skin_every_arm", r.NearRegion[2] >= 0.02f * r.Near && r.NearRegion[3] >= 0.02f * r.Near, "a worm on each arm (>= 2%: an arm is 3 to 6% of the surface of a body)");
@@ -643,6 +648,91 @@ public static class SimCheck
         Picture("drape", m, 3.2f, 1.2f, 0.4f);
         Picture("drape_close", m, 1.8f, 0.9f, 0.5f);
         GpuWormHost.RemoveMass(m);
+    }
+
+    // The scenario V14 on a block: a mass of n units walks toward a block 1.6 x h x 1.0 m, the environment re-captured every 8 steps as the game does (a height grid that holds a low
+    // block as ground, depth maps for a high one), stops when its centre is within 0.2 m of the middle of the block, and 4 s later the nodes are counted (V14 CrossObstacle).
+    private static void Cross(int worms, bool high)
+    {
+        string tag = (worms == 500 ? "n50" : "n200") + (high ? "_high" : "_low");
+        float r = 0.26f * Mathf.Pow(worms / 100f, 0.36f);
+        float h = high ? 2.0f : 0.5f * 0.45f * r;
+        Vector3 bmin = new Vector3(-0.8f, 0f, -0.5f), bmax = new Vector3(0.8f, h, 0.5f);
+        GpuMass m = Spawn(worms, r, 55u, new Vector3(-(0.8f + r + 2.5f), 0f, 0f));
+        m.Heading = new Vector3(1f, 0f, 0f);
+        m.ForceSimulated = true;
+        CaptureBlock(m, bmin, bmax);
+        GpuWormHost.InitNow(m);
+        GpuWormHost.StepNow(120);
+        float speed = 0f;
+        bool stopped = false;
+        int after = 0;
+        for (int frame = 0; frame < 2400 && after < 30; frame++)
+        {
+            if (!stopped)
+            {
+                speed = Mathf.MoveTowards(speed, 1.2f, 2f * 8f / 60f);
+                m.Center += new Vector3(speed * 8f / 60f, 0f, 0f);
+                if (Mathf.Abs(m.Center.x) < 0.4f) { stopped = true; speed = 0f; }
+            }
+            else after++;
+            m.Speed = speed;
+            if (frame % 1 == 0) CaptureBlock(m, bmin, bmax);
+            GpuWormHost.Tick(0f);
+            GpuWormHost.StepNow(8);
+        }
+        Vector4[] pos = Read(worms);
+        int total = pos.Length, onTop = 0, flank = 0, foot = 0, near = 0, nearSide = 0, farSide = 0, inside = 0;
+        float upOn = Mathf.Min(0.3f, 0.5f * h), upFlank = Mathf.Min(0.1f, 0.25f * h);
+        foreach (Vector4 p in pos)
+        {
+            float e = Mathf.Max(Mathf.Abs(p.x) / 0.8f, Mathf.Abs(p.z) / 0.5f);
+            if (e < 1f && p.y > upOn) onTop++;
+            if (e >= 0.6f && e < 1.2f && p.y > upFlank) flank++;
+            if (e >= 1f && e < 1.8f && p.y < 0.15f) foot++;
+            Vector3 d = new Vector3(Mathf.Max(Mathf.Abs(p.x) - 0.8f, 0f), Mathf.Max(p.y - h, Mathf.Max(-p.y, 0f)), Mathf.Max(Mathf.Abs(p.z) - 0.5f, 0f));
+            float dist = d.magnitude;
+            if (Mathf.Abs(p.x) < 0.8f - 0.004f && Mathf.Abs(p.z) < 0.5f - 0.004f && p.y < h - 0.004f) inside++;
+            if (dist <= 0.05f) { near++; if (p.x < 0f) nearSide++; else farSide++; }
+        }
+        float pTop = 100f * onTop / total, pFlank = 100f * flank / total, pFoot = 100f * foot / total;
+        Debug.Log($"SimCheck: cross {tag}: centre at x {m.Center.x:0.00}, {pTop:0.0}% over the block, {pFlank:0.0}% on the flanks, {pFoot:0.0}% at the foot, near {near} (near side {nearSide}, far side {farSide}), inside {inside}");
+        if (!high)
+        {
+            Check($"cross_{tag}_on_the_block", pTop >= 25f, $"{pTop:0.0}% of the nodes over the block (>= 25%)");
+            Check($"cross_{tag}_flanks", pFlank >= 15f, $"{pFlank:0.0}% (>= 15%)");
+        }
+        else
+        {
+            Check($"cross_{tag}_both_sides", nearSide >= 0.02f * total && farSide >= 0.02f * total, $"near side {nearSide}, far side {farSide} of {total} nodes (>= 2% each)");
+        }
+        Check($"cross_{tag}_not_inside", inside <= 0.02f * total, $"{inside} nodes inside the block");
+        Picture("cross_" + tag, m, 3.2f, 1.2f, 0.4f);
+        GpuWormHost.RemoveMass(m);
+    }
+
+    private static void CaptureBlock(GpuMass m, Vector3 bmin, Vector3 bmax)
+    {
+        int hn = WormSimConst.HeightN;
+        float ext = m.GridExtent, sp = ext / (hn - 1);
+        Vector2 min = new Vector2(m.Center.x - ext * 0.5f, m.Center.z - ext * 0.5f);
+        bool low = bmax.y < 1.0f;                // CoverableHeight: a low block is part of the ground
+        for (int a = 0; a < hn; a++)
+            for (int b = 0; b < hn; b++)
+            {
+                float x = min.x + b * sp, z = min.y + a * sp;
+                bool on = x >= bmin.x && x <= bmax.x && z >= bmin.z && z <= bmax.z;
+                m.Heights[a * hn + b] = low && on ? bmax.y : 0f;
+            }
+        m.SideYMin = m.Center.y - 0.5f;
+        m.SideYStep = (4f + 0.8f) / (hn - 1);
+        m.SideEnabled = true;
+        GpuMassParams pp = GpuWormHost.BuildParams(m, true);
+        pp.GridRect = new Vector4(min.x - m.Origin.x, min.y - m.Origin.z, sp, 1f / sp);
+        var floats = new float[WormSimConst.SideMaps * WormSimConst.SideMapSize];
+        GpuSolidMaps.FillBox(floats, 0, pp, bmin, bmax);
+        for (int i = 0; i < floats.Length; i++) m.Sides[i] = floats[i];
+        GpuWormHost.UploadEnvironment(m, 0, min, sp);
     }
 
     private static int CountNan(Vector4[] pos)

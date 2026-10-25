@@ -57,10 +57,11 @@ static const float LAYER_GAP = 0.016;         // the worms of the second layer l
 static const float PROJ_R = 0.12;             // a node is projected on the plane of its anchor within this distance
 static const float ORIENT_K = 0.10;           // pull of the nodes toward the line of the worm (tangent to the surface, up or diagonal)
 static const float LEASH_K = 0.07;            // pull of the worm toward its place on the body
-static const float TRANSIT_K = 0.5;           // pull of the head toward the next anchor of its path
+static const float TRANSIT_K = 0.7;           // pull of the head toward the next anchor of its path
 static const float ADV_R = 0.06;              // the head is at the anchor of the path when it is this close
 static const float FALL_TIME = 2.5;           // a worm that lets go falls for this long at most
 static const float HOP_TIME = 0.5;            // a head that has not reached the anchor of its path in this time goes on to the next one
+static const float SLIDE_GAIN = 1.0;           // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
 static const float PEND_SHARE = 0.08;         // share of the worms of the sleeve that hang by one end
 #define ITERATIONS 4
 
@@ -496,6 +497,19 @@ float3 SolidPush(uint mi, MassParams m, float3 x)
     if (pe < best) { best = pe; dir = 1; }
     if (ps < best) { best = ps; dir = 2; }
     if (pn < best) { best = pn; dir = 3; }
+    // Pushed out of a vertical face, the node also slides along it, toward the direction of the walk (on a face that is hit square, toward the nearer end of the face): the mass
+    // flows round the obstacle instead of piling up against the face it arrived at.
+    float slide = (best + RAD) * SLIDE_GAIN;
+    if (dir == 0 || dir == 1)
+    {
+        float hz = m.heading.z, mid = 0.5 * (smin + nmax);
+        x.z += slide * (abs(hz) > 0.3 ? (hz > 0.0 ? 1.0 : -1.0) : (x.z >= mid ? 1.0 : -1.0));
+    }
+    else if (dir == 2 || dir == 3)
+    {
+        float hx = m.heading.x, mid = 0.5 * (wmin + emax);
+        x.x += slide * (abs(hx) > 0.3 ? (hx > 0.0 ? 1.0 : -1.0) : (x.x >= mid ? 1.0 : -1.0));
+    }
     if (dir == 0) x.x = wmin - RAD;
     else if (dir == 1) x.x = emax + RAD;
     else if (dir == 2) x.z = smin - RAD;
@@ -765,7 +779,7 @@ void KPredict(uint3 id : SV_DispatchThreadID)
                 float3 hrel = p[7] - ha.a.xyz;
                 if (dot(hrel, hrel) < PROJ_R * PROJ_R) hd -= ha.b.xyz * min(dot(hd, ha.b.xyz), 0.0);
                 float3 hv = hd * TRANSIT_K;
-                float cap = (1.1 + 0.5 * Hash01(wd.seed, 32)) * DT;
+                float cap = (1.8 + 0.8 * Hash01(wd.seed, 32)) * DT;
                 float hl2 = dot(hv, hv);
                 if (hl2 > cap * cap) hv = hv / sqrt(hl2) * cap;
                 [unroll] for (int j1 = 0; j1 < K; j1++)
