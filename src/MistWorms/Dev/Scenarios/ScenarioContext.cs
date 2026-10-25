@@ -162,6 +162,7 @@ namespace MistWorms.Dev.Scenarios
         {
             var result = new TpMineResult();
             LastTpMine = result;
+            MistWorms.Dev.DevSpawnBlock.Active = false;       // the mines keep their own creatures
             yield return DevWorld.TpMine(result, Log);
             Assert("tp_mine", result.Ok, $"inside a mine within 90 s", result.Ok
                 ? (object)$"{result.Location}, {result.RoomCount} rooms, {result.Seconds:0.0} s"
@@ -195,13 +196,40 @@ namespace MistWorms.Dev.Scenarios
         /// <see cref="DevWorld.MoveToOpenGround"/>) and records the "open_ground_found" assertion. <paramref name="accept"/> adds a
         /// scenario specific test on the candidate ground point.
         /// </summary>
+        private static bool CalmBiome(Vector3 p)
+        {
+            WorldGenerator wg = WorldGenerator.instance;
+            if (wg == null) return true;
+            Heightmap.Biome b = wg.GetBiome(p);
+            return b == Heightmap.Biome.Meadows;
+        }
+
         public IEnumerator MoveToOpenGround(float clearRadius = 5f, Func<Vector3, bool> accept = null)
         {
             var result = new OpenGroundResult();
             LastOpenGround = result;
-            yield return DevWorld.MoveToOpenGround(clearRadius, accept, result, Log);
+            // Hardening of the open ground scenarios: never a site in or beside water (the rings of water on the captures, the sea level under the masses), and once there the vanilla
+            // creatures within 40 m are removed and the player is protected (a P3_Cobra was spoiled once by the death of the player in the Plains).
+            Func<Vector3, bool> dry = p => !V14_GpuMassSandbox.NearWater(p, V14_GpuMassSandbox.WaterClearance) && (accept == null || accept(p));
+            // Meadows first: the Plains have tar blobs and fulings that kill the worms of a test (S18 a: 24 of 30 dead), the Black Forest has trees that block a fleeing mass (S06) and greydwarves
+            // that eat the pool (S13). Any biome only when the Meadows have no flat clear spot within reach (logged).
+            Func<Vector3, bool> calm = p => dry(p) && CalmBiome(p);
+            yield return DevWorld.MoveToOpenGround(clearRadius, calm, result, Log);
+            if (!result.Found)
+            {
+                Log("no calm biome (Meadows, Black Forest) found: any biome");
+                result = new OpenGroundResult();
+                LastOpenGround = result;
+                yield return DevWorld.MoveToOpenGround(clearRadius, dry, result, Log);
+            }
             Assert("open_ground_found", result.Found, true,
                 result.Found ? (object)$"{result.Spot} after {result.Tested} candidates, {result.Hops} hops" : result.Error);
+            if (result.Found && Player.m_localPlayer != null)
+            {
+                Player.m_localPlayer.SetGodMode(true);
+                MistWorms.Dev.DevSpawnBlock.Active = true;        // the vanilla spawners are silent until the end of the scenario
+                S18_GroupCoherence.ClearCreatures(this, Player.m_localPlayer);
+            }
         }
 
         // ---------------------------------------------------------------- player setup

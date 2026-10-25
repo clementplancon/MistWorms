@@ -59,6 +59,7 @@ namespace MistWorms.Dev.Scenarios
         public IEnumerator Run(ScenarioContext ctx)
         {
             int n = ctx.ParamInt("n", 200);
+            _wallInner = 2f * MassMath.Radius(n) + 0.1f;
             float seconds = ctx.ParamFloat("seconds", 20f);
             if (!ctx.Params.ContainsKey("timeout")) ctx.TimeoutSeconds = 420f;
 
@@ -255,7 +256,7 @@ namespace MistWorms.Dev.Scenarios
 
         // ------------------------------------------------------------------ the built corridor
 
-        private const float WallInner = 2f;            // inner width of the corridor
+        private float _wallInner = 2f;                 // inner width of the corridor: 2 r(n) + 0.1 m of the mass under test (set in Run), narrower than the passage a mass of that size needs (2 r + 0.2)
         private const float WallSink = 0.1f;
         private const float CorridorLength = 18f;      // at least; a whole number of wall pieces
         private const float FlatTolerance = 0.5f;
@@ -404,7 +405,7 @@ namespace MistWorms.Dev.Scenarios
             Vector3 off = rot * off0;
             int segments = Mathf.Max(1, Mathf.CeilToInt(CorridorLength / length));
             float total = segments * length;
-            ctx.Log($"wall piece size {size0.x:0.00} x {size0.y:0.00} x {size0.z:0.00} m, rotated={turn}: {segments} pieces per side, corridor {WallInner:0.0} m wide and {total:0.0} m long");
+            ctx.Log($"wall piece size {size0.x:0.00} x {size0.y:0.00} x {size0.z:0.00} m, rotated={turn}: {segments} pieces per side, corridor {_wallInner:0.0} m wide and {total:0.0} m long");
 
             ctx.Assert("wall_size_sane", length >= 1f && length <= 8f && thickness > 0.05f && thickness <= 1.5f && size0.y >= 1f && size0.y <= 4f,
                 "length 1-8 m, thickness under 1.5 m, height 1-4 m", $"{size0.x:0.00} x {size0.y:0.00} x {size0.z:0.00}");
@@ -414,7 +415,7 @@ namespace MistWorms.Dev.Scenarios
             {
                 for (int j = 0; j < segments; j++)
                 {
-                    float cx = start.x + side * (WallInner * 0.5f + thickness * 0.5f);
+                    float cx = start.x + side * (_wallInner * 0.5f + thickness * 0.5f);
                     float cz = start.z + length * (j + 0.5f);
                     // The foot of a piece is the lowest ground under it (5 points), so no gap is left under the wall on a slope.
                     float groundY = float.MaxValue;
@@ -448,7 +449,7 @@ namespace MistWorms.Dev.Scenarios
             ctx.Assert("walls_aligned", aligned == _walls.Count, $"{_walls.Count} walls parallel to the corridor, at 1.0 m + half thickness from the axis",
                 $"{aligned}/{_walls.Count} ({turned} had to be turned){(notes.Count > 0 ? "; " + string.Join("; ", notes) : string.Empty)}");
 
-            var corridor = new Corridor { A = start, B = start + Vector3.forward * total, Dir = Vector3.forward, Length = total, Width = WallInner };
+            var corridor = new Corridor { A = start, B = start + Vector3.forward * total, Dir = Vector3.forward, Length = total, Width = _wallInner };
             yield return ctx.Wait(1f);   // a wall that is going to be destroyed or to fall must have done so before the measure
             Physics.SyncTransforms();
             int alive = 0;
@@ -461,7 +462,7 @@ namespace MistWorms.Dev.Scenarios
             if (footY < float.MaxValue) mid.y = Mathf.Max(mid.y, footY);
             float measured = CrossWidth(mid, Vector3.forward);
             string detail = string.Empty;
-            if (Mathf.Abs(measured - WallInner) > 0.15f)
+            if (Mathf.Abs(measured - _wallInner) > 0.15f)
             {
                 // Which side is missing, and what the rays see: the terrain and the pieces at this spot.
                 Vector3 o = mid + Vector3.up * 0.6f;
@@ -472,8 +473,8 @@ namespace MistWorms.Dev.Scenarios
                 for (int w = 0; w < _walls.Count && w < 4; w++)
                     detail += _walls[w] != null && Extent(_walls[w], out Bounds wb) ? $"; wall {w} centre {wb.center} size {wb.size}" : $"; wall {w} gone";
             }
-            ctx.Assert("corridor_built", alive == 2 * segments && Mathf.Abs(measured - WallInner) <= 0.15f,
-                $"{2 * segments} pieces, inner width {WallInner:0.0} m", $"{alive}/{2 * segments} pieces alive, measured width {measured:0.00} m{detail}");
+            ctx.Assert("corridor_built", alive == 2 * segments && Mathf.Abs(measured - _wallInner) <= 0.15f,
+                $"{2 * segments} pieces, inner width {_wallInner:0.0} m", $"{alive}/{2 * segments} pieces alive, measured width {measured:0.00} m{detail}");
 
             // The path through the corridor (lazy navmesh, pieces included once the tile is rebuilt).
             var path = new List<Vector3>(32);
@@ -486,7 +487,7 @@ namespace MistWorms.Dev.Scenarios
                     Vector3 end = path[path.Count - 1];
                     float maxSide = 0f;
                     foreach (Vector3 p in path) maxSide = Mathf.Max(maxSide, Mathf.Abs(p.x - start.x));
-                    pathOk = Utils.DistanceXZ(end, to) <= 1.5f && maxSide <= WallInner * 0.5f + 0.1f;
+                    pathOk = Utils.DistanceXZ(end, to) <= 1.5f && maxSide <= _wallInner * 0.5f + 0.1f;
                 }
                 if (!pathOk) yield return ctx.Wait(1f);
             }
@@ -809,11 +810,12 @@ namespace MistWorms.Dev.Scenarios
             Stair stair = default;
             bool have = false;
             // The navmesh of a zone is built lazily: the first requests may fail, so the search is repeated a few times.
-            for (int attempt = 0; attempt < 3 && !have; attempt++)
+            yield return ctx.Wait(4f);          // the rooms of the mine are still spawning asynchronously when the player arrives, and their navmesh comes after
+            for (int attempt = 0; attempt < 5 && !have; attempt++)
             {
                 // Attempts after the first widen the search: more pairs, more candidates, a rise from 1.2 m.
                 yield return FindStairs(ctx, (s, ok) => { stair = s; have = ok; }, wide: attempt > 0);
-                if (!have) yield return ctx.Wait(2f);
+                if (!have) yield return ctx.Wait(4f);
             }
             ctx.Assert("stairs_found", have, $"a rise of {StairMinRise}-{StairMaxRise} m within {StairMaxRun} m with a vanilla path",
                 have ? $"{stair.Low} -> {stair.High}: rise {stair.High.y - stair.Low.y:0.00} m, path {stair.Path:0.0} m, start {stair.Start} ({stair.Offset} m outward)" : "none");

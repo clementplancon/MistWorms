@@ -35,9 +35,12 @@ namespace MistWorms.Render.Gpu
         private readonly int _groundMask, _solidMask, _decorMask, _terrainMask;
 
         /// <summary>Surface of the engulfed target (baked meshes), the preferred model; the capsules of the bones or the single capsule are the fallback.</summary>
-        public readonly GpuSkinSampler Skin = new GpuSkinSampler();
-        private Collider _skinTarget;
-        private Transform _skinRoot;
+        private readonly GpuSkinSampler[] _skins = new GpuSkinSampler[WormSimConst.MaxMasses];
+        private readonly Collider[] _skinTargets = new Collider[WormSimConst.MaxMasses];
+        private readonly Transform[] _skinRoots = new Transform[WormSimConst.MaxMasses];
+        private int _lastSkinSlot;
+        /// <summary>The skin sampler of the mass that was sampled last (every mass has its own: they can wrap different targets).</summary>
+        public GpuSkinSampler Skin => _skins[_lastSkinSlot] ?? (_skins[_lastSkinSlot] = new GpuSkinSampler());
 
         public int LastPrimCount { get; private set; }
         public int Captures { get; private set; }
@@ -54,6 +57,15 @@ namespace MistWorms.Render.Gpu
                 VanillaNames.LayerCharacter, VanillaNames.LayerVehicle);
         }
 
+        /// <summary>A mass of this slot is gone: its pending rays are finished and dropped, its skin target forgotten.</summary>
+        public void Forget(int slot)
+        {
+            if (slot < 0 || slot >= _pending.Length) return;
+            if (_hasPending[slot]) { _pending[slot].Complete(); _hasPending[slot] = false; }
+            _skinTargets[slot] = null;
+            _skinRoots[slot] = null;
+        }
+
         public void Dispose()
         {
             for (int i = 0; i < _pending.Length; i++) if (_hasPending[i]) { _pending[i].Complete(); _hasPending[i] = false; }
@@ -64,17 +76,20 @@ namespace MistWorms.Render.Gpu
         /// <summary>The skin of the engulfed target, every frame: the matrices of the bones are uploaded and the anchors are skinned on the GPU. Without a usable mesh the anchors are off (capsules take over).</summary>
         private void SkinFrame(GpuMass m)
         {
+            int slot = m.Slot;
             Collider target = m.AdhesiveCollider;
             if (target == null || !target.enabled || !target.gameObject.activeInHierarchy) { m.AnchorCount = 0; return; }
-            if (_skinTarget != target)
+            if (_skinTargets[slot] != target)
             {
-                _skinTarget = target;
+                _skinTargets[slot] = target;
                 Character character = target.GetComponentInParent<Character>();
                 ZNetView view = target.GetComponentInParent<ZNetView>();
-                _skinRoot = character != null ? character.transform : view != null ? view.transform : target.transform.root;
+                _skinRoots[slot] = character != null ? character.transform : view != null ? view.transform : target.transform.root;
             }
             Bounds tb = target.bounds;
-            if (!Skin.Sample(m, _skinRoot, tb.min.y, tb.size.y)) m.AnchorCount = 0;
+            _lastSkinSlot = slot;
+            GpuSkinSampler skin = _skins[slot] ?? (_skins[slot] = new GpuSkinSampler());
+            if (!skin.Sample(m, _skinRoots[slot], tb.min.y, tb.size.y)) m.AnchorCount = 0;
         }
 
         public void Tick(GpuMass m, float now, bool force)
@@ -241,6 +256,7 @@ namespace MistWorms.Render.Gpu
             {
                 Collider col = _overlap[i];
                 if (col == null || col == target) continue;
+                if (m.Owner != null && col.transform.IsChildOf(m.Owner)) continue;        // the body of the mass itself
                 // Only real boxes, capsules and spheres (pieces, characters, creatures) become primitives. The bounds of a MeshCollider (a rock, the terrain, the scenery)
                 // are not an obstacle: a box would give the worms a flat top to slide on. Those are in the height grid (rays from above).
                 if (!ToPrim(col, m, out GpuPrim p)) continue;

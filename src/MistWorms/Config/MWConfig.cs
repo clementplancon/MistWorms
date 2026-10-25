@@ -79,7 +79,7 @@ namespace MistWorms.Config
         /// migrations below, in order, then is stamped. A migration only touches a value that still equals the OLD default: a value the user
         /// chose is never overwritten. Each one is logged.
         /// </summary>
-        public const int CurrentConfigVersion = 2;
+        public const int CurrentConfigVersion = 4;
 
         private static void Migrate()
         {
@@ -91,8 +91,27 @@ namespace MistWorms.Config
             if (from < 1) MigrateInt(Performance.MaxVisibleSurfaceWorms, 40, cap, 1);
             if (from < 2) MigrateInt(Performance.MaxVisibleSurfaceWorms, 400, cap, 2);
 
+            // v3 (visual v2, GPU ropes of 30 cm): a mass is smaller for the same count (R10 0.83 -> 0.26, 200 worms 0.77 m) and its collider bound follows (0.6 -> 0.5).
+            if (from < 3)
+            {
+                MigrateFloat(Mass.BaseRadius, 0.83f, 0.26f, 3);
+                MigrateFloat(Mass.MaxColliderRadius, 0.6f, 0.5f, 3);
+            }
+
+            // v4: a mass is smaller (r(40) 1.36 -> 0.43 m): the limit r + DetachDistance past which a target breaks free went from 2.9 to 1.9 m, which a roll beats; 2.5 gives back about the old limit.
+            if (from < 4) MigrateFloat(Mass.DetachDistance, 1.5f, 2.5f, 4);
+
             Plugin.Log?.LogInfo($"[Config] ConfigVersion {from} -> {CurrentConfigVersion}");
             General.ConfigVersion.Value = CurrentConfigVersion;
+        }
+
+        private static void MigrateFloat(ConfigEntry<float> entry, float oldDefault, float newDefault, int toVersion)
+        {
+            if (ConfigMigrations.ShouldReplace(entry.Value, oldDefault))
+            {
+                Plugin.Log?.LogInfo($"[Config] migration to v{toVersion}: {entry.Definition.Section}.{entry.Definition.Key} {entry.Value} (old default) -> {newDefault}");
+                entry.Value = newDefault;
+            }
         }
 
         private static void MigrateInt(ConfigEntry<int> entry, int oldDefault, int newDefault, int toVersion)
@@ -296,11 +315,11 @@ namespace MistWorms.Config
                     "Maximum worms in one mass; the surplus forms or keeps a separate mass.", I(10, 1000));
                 DissolveThreshold = Synced(S, nameof(DissolveThreshold), 5,
                     "A mass whose count drops below this dissolves into fleeing worms.", I(1, 50));
-                BaseRadius = Synced(S, nameof(BaseRadius), 0.83f,
-                    "Visual radius in metres of a 10-worm mass (R10 in r(n) = R10 * (n / 10)^e). Calibrated in game (spec §4.5): 10 worms ≈ a tick, 200 ≈ 0.9 × a seeker soldier.", F(0.1f, 2f));
+                BaseRadius = Synced(S, nameof(BaseRadius), 0.26f,
+                    "Visual radius in metres of a 10-worm mass (R10 in r(n) = R10 * (n / 10)^e). Worms are 30 cm ropes, 10 per game unit: 10 units 0.26 m, 50 units 0.46 m, 200 units 0.77 m.", F(0.1f, 2f));
                 RadiusExponent = Synced(S, nameof(RadiusExponent), 0.36f,
                     "Exponent e of the mass radius curve r(n) = R10 * (n / 10)^e.", F(0.2f, 1f));
-                MaxColliderRadius = Synced(S, nameof(MaxColliderRadius), 0.6f,
+                MaxColliderRadius = Synced(S, nameof(MaxColliderRadius), 0.5f,
                     "Upper bound in metres of the physical collider; the visual dome may be larger.", F(0.2f, 2f));
 
                 // range chosen: same bounds as Worm.MoveSpeed.
@@ -313,7 +332,7 @@ namespace MistWorms.Config
                 EngulfRange = Synced(S, nameof(EngulfRange), 0.6f,
                     "Extra distance in metres beyond the mass radius at which it engulfs its target.", F(0.1f, 5f));
                 // range chosen
-                DetachDistance = Synced(S, nameof(DetachDistance), 1.5f,
+                DetachDistance = Synced(S, nameof(DetachDistance), 2.5f,
                     "Extra distance in metres beyond the mass radius past which an engulfed target starts breaking free.", F(0.2f, 10f));
                 // range chosen
                 DetachDelay = Synced(S, nameof(DetachDelay), 0.75f,
@@ -551,9 +570,12 @@ namespace MistWorms.Config
             public static ConfigEntry<float> SimRateFar;
             public static ConfigEntry<bool> FlipbookBlend;
             public static ConfigEntry<string> ShaderCandidates;
+            public static ConfigEntry<MistWorms.Render.Gpu.GpuWormsMode> GpuWorms;
 
             internal static void Bind()
             {
+                GpuWorms = Local(S, nameof(GpuWorms), MistWorms.Render.Gpu.GpuWormsMode.Auto,
+                    "Auto: the worms of a mass are ropes simulated and drawn on the GPU (needs compute shaders and the shader bundle; otherwise the CPU flipbooks are kept, with one warning). Off: always the CPU flipbooks.");
                 // range chosen
                 RenderDistance = Local(S, nameof(RenderDistance), 60f,
                     "Worms farther than this many metres from the camera are not drawn.", F(10f, 300f));
@@ -617,5 +639,8 @@ namespace MistWorms.Config
     {
         /// <summary>A value is replaced only when it still equals the old default.</summary>
         public static bool ShouldReplace(int current, int oldDefault) => current == oldDefault;
+
+        /// <summary>Same rule for a float: it still equals the old default (to the precision a config file keeps).</summary>
+        public static bool ShouldReplace(float current, float oldDefault) => System.Math.Abs(current - oldDefault) < 1e-4f;
     }
 }

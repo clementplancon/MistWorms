@@ -62,6 +62,7 @@ static const float ADV_R = 0.06;              // the head is at the anchor of th
 static const float FALL_TIME = 2.5;           // a worm that lets go falls for this long at most
 static const float HOP_TIME = 0.5;            // a head that has not reached the anchor of its path in this time goes on to the next one
 static const float SLIDE_GAIN = 1.0;           // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
+static const float BIRTH_TIME = 0.5;           // a newborn worm grows from nothing in this time, a dying one shrinks to nothing in it
 static const float PEND_SHARE = 0.08;         // share of the worms of the sleeve that hang by one end
 #define ITERATIONS 4
 
@@ -79,7 +80,7 @@ struct MassParams
     float4 skin;        // x anchors (0 = none), y engulf, z height of the target, w area of its surface
     float4 side;        // x lowest height of the side maps (local), y spacing, z 1 / spacing, w valid
     float4 plan;        // skin sleeve: x worms of the sleeve S, y worms per anchor, z height (rel) of the top of the covered surface, w anchors covered
-    float4 plan2;       // x anchors of the base (where a worm enters the body)
+    float4 plan2;       // x anchors of the base (where a worm enters the body), y worms alive (0 = all): the others shrink to nothing
 };
 struct Prim { float4 a; float4 b; float4 c; float4 d; };
 struct Anchor { float4 a; float4 b; };     // a: xyz position; b: xyz normal, w height over the height of the target (0 foot, 1 top, fixed at the selection)
@@ -110,6 +111,7 @@ uint _StepIndex;
 uint _InitFirst;
 uint _InitCount;
 float3 _Shift;
+float _InitScale = 1.0;     // radius scale a worm starts with (0 for a newborn, which grows to 1 in BIRTH_TIME)
 
 // ---------------------------------------------------------------- helpers (mirrored in WormSimRef)
 
@@ -470,7 +472,7 @@ float3 SkinPush(uint mi, MassParams m, float3 x)
 // The obstacles (rocks, pieces, the scenery) as the visual hull of six depth maps seen from the sides and from above (the ground itself is the height grid). A node is inside
 // when it is behind the first surface for every direction that sees it: between the west and the east surface, between the south and the north one, and under the top. The
 // maps are read dilated (the 2 x 2 cells around, so that an edge is not missed) and the node leaves by the axis of the smallest penetration.
-float3 SolidPush(uint mi, MassParams m, float3 x)
+float3 SolidPush(uint mi, MassParams m, float3 x, bool glide)
 {
     if (m.side.w < 0.5) return x;
     float fx = (x.x - m.gridRect.x) * m.gridRect.w;
@@ -499,7 +501,7 @@ float3 SolidPush(uint mi, MassParams m, float3 x)
     if (pn < best) { best = pn; dir = 3; }
     // Pushed out of a vertical face, the node also slides along it, toward the direction of the walk (on a face that is hit square, toward the nearer end of the face): the mass
     // flows round the obstacle instead of piling up against the face it arrived at.
-    float slide = (best + RAD) * SLIDE_GAIN;
+    float slide = glide ? (best + RAD) * SLIDE_GAIN : 0.0;
     if (dir == 0 || dir == 1)
     {
         float hz = m.heading.z, mid = 0.5 * (smin + nmax);
@@ -621,9 +623,9 @@ void KInit(uint3 id : SV_DispatchThreadID)
     {
         float3 p = hp + dir * (((float)i - 3.5) * SEG);
         p.y = max(p.y, Ground(wd.mass, m, p.x, p.z) + RAD);
-        _Pos[w * K + i] = float4(p, 1.0);
-        _Prev[w * K + i] = float4(p, 1.0);
-        _Pred[w * K + i] = float4(p, 1.0);
+        _Pos[w * K + i] = float4(p, _InitScale);
+        _Prev[w * K + i] = float4(p, _InitScale);
+        _Pred[w * K + i] = float4(p, _InitScale);
         _NodeAnchor[w * K + i] = 0u;
     }
     _SkinState[w] = float4(0, 0, 0, 0);
@@ -988,7 +990,7 @@ void KSolve(uint3 id : SV_DispatchThreadID)
             if (onBody) x[n] = SkinSurface(mi, nodeA[n], x[n], !pend || n == 0, off, att);
             else if (m.skin.x > 0.5 && it == ITERATIONS - 1) x[n] = SkinPush(mi, m, x[n]);
             attached[n] = max(ResolvePrims(mi, m, x[n]), att);
-            x[n] = SolidPush(mi, m, x[n]);
+            x[n] = SolidPush(mi, m, x[n], true);
             float g = Ground(mi, m, x[n].x, x[n].z) + RAD;
             if (x[n].y < g) x[n].y = g;
         }
@@ -1013,6 +1015,7 @@ void KSolve(uint3 id : SV_DispatchThreadID)
             float att2 = 0.0;
             x[e] = SkinSurface(mi, nodeA[e], x[e], !pend || e == 0, off, att2);
         }
+        x[e] = SolidPush(mi, m, x[e], false);       // the nodes end the step outside the obstacles (the slide of the iterations can leave one a few millimetres in)
         float g = Ground(mi, m, x[e].x, x[e].z) + RAD;
         if (x[e].y < g) x[e].y = g;
         float3 vel = x[e] - o[e];
@@ -1020,8 +1023,10 @@ void KSolve(uint3 id : SV_DispatchThreadID)
         vel.x *= 1.0 - m.sleeve.w * tg;
         vel.z *= 1.0 - m.sleeve.w * tg;
         vel *= 1.0 + (BODY_DAMP - 1.0) * attached[e];
-        _Pos[w * K + e] = float4(x[e], rs[e]);
-        _Prev[w * K + e] = float4(x[e] - vel, rs[e]);
+        float rsn = rs[e];
+        if (m.plan2.y > 0.5) rsn = (w - m.ranges.x) < (uint)(m.plan2.y + 0.5) ? min(1.0, rsn + DT / BIRTH_TIME) : max(0.0, rsn - DT / BIRTH_TIME);
+        _Pos[w * K + e] = float4(x[e], rsn);
+        _Prev[w * K + e] = float4(x[e] - vel, rsn);
     }
 }
 

@@ -92,7 +92,9 @@ namespace MistWorms.Dev.Scenarios
                     if (Time.time >= nextLog)
                     {
                         nextLog = Time.time + 1f;
-                        ctx.Log($"torch: edge {Edge(mass, player, r):0.00} m, {MassStateCodes.Describe(mass.StateCode)}, fleeing {ai.Fleeing}, flights {ai.FireFlights}");
+                        Rigidbody mb = mass.GetComponent<Rigidbody>();
+                        ctx.Log($"torch: edge {Edge(mass, player, r):0.00} m, {MassStateCodes.Describe(mass.StateCode)}, fleeing {ai.Fleeing}, flights {ai.FireFlights}; mass speed {(mb != null ? Utils.LengthXZ(mb.linearVelocity) : -1f):0.00} m/s, pos {mass.transform.position.ToString("0.00")}, player {player.transform.position.ToString("0.00")}, " +
+                                $"flees from {ai.FleeFrom.ToString("0.00")} ({(ai.FleeFrom - player.transform.position).magnitude:0.00} m from the player): {ai.FleeSource}, stalled checks {ai.StalledChecks}, assists {ai.StepAssists}");
                     }
                     yield return null;
                 }

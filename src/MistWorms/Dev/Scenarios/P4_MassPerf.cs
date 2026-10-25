@@ -10,6 +10,7 @@ using MistWorms.Config;
 using MistWorms.Dev.Preview;
 using MistWorms.Mass;
 using MistWorms.Render;
+using MistWorms.Render.Gpu;
 using UnityEngine;
 using UnityEngine.Profiling;
 
@@ -34,6 +35,16 @@ namespace MistWorms.Dev.Scenarios
         private const float RenderCpuBudget = 0.6f, HeapMainBudget = 0.05f, WorkerBudget = 1f;
         private const int CallBudget = 64;
         private const int TriangleBudget = 450000;
+        // Budgets of the GPU rope colony (visual v2, plan A10): main thread (free worms, probes, upload and submission of the masses) 0.25 ms, 16 calls of the mod, 1.5 M triangles seen by the camera,
+        // frame time difference 2 ms, no managed allocation of the host in a steady window.
+        private const float GpuMainBudget = 0.25f;
+        // Calls per pass: the GPU colony draws every mass of every LOD in one call per LOD and one for the shadows of LOD0 (4 at most); the 100 free worms are still flipbooks
+        // (one call per animation, LOD and frame bucket: 14 to 17 for 100 worms, the CPU path of the free worms, plan A7 not done). 16 for the whole mod would leave
+        // none for the free worms, so the budget is split: 4 for the colony, 20 for the free worms.
+        private const int GpuHostCallBudget = 4;
+        private const int GpuFreeCallBudget = 20;
+        private const int GpuCallBudget = 16;
+        private const int GpuTriangleBudget = 1500000;
         private const float WalkHalf = 3f, WalkPeriod = 3f;
         private const float FrameDeltaWarn = 2f;
 
@@ -42,15 +53,17 @@ namespace MistWorms.Dev.Scenarios
         private sealed class Series
         {
             public readonly float[] Cpu, HeapMain, Worker, Frame;
-            public readonly int[] Calls, Tris, Dropped;
+            public readonly int[] Calls, Tris, Dropped, HostCalls;
             public int Count;
-            public Series(int n) { Cpu = new float[n]; HeapMain = new float[n]; Worker = new float[n]; Frame = new float[n]; Calls = new int[n]; Tris = new int[n]; Dropped = new int[n]; }
+            public Series(int n) { Cpu = new float[n]; HeapMain = new float[n]; Worker = new float[n]; Frame = new float[n]; Calls = new int[n]; Tris = new int[n]; Dropped = new int[n]; HostCalls = new int[n]; }
         }
 
         private WritheMassState _a, _b;
         private WritheMassVisual _va, _vb;
         private WritheMassAI _aiA, _aiB;
         private Vector3 _anchorA, _anchorB, _perp;
+        private bool _gpu;       // the two masses are drawn by the GPU rope colony (the budgets of plan A10), else by the CPU layout (the fallback, the old budgets)
+        private int LodOf(WritheMassVisual v) => _gpu && v.Gpu != null ? v.Gpu.Lod : v.LastLod;
 
         public IEnumerator Run(ScenarioContext ctx)
         {
@@ -105,14 +118,17 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert("free_worms_created", created >= FreeWorms * 9 / 10, $">= {FreeWorms * 9 / 10}", created);
 
                 yield return Frames(WarmFrames, scale, (f) => Walk());
+                _gpu = _va.GpuDriven && _vb.GpuDriven;
+                ctx.Log(_gpu ? $"render path: GPU rope colony ({_va.Gpu.ActiveCount} + {_vb.Gpu.ActiveCount} worms), budgets of plan A10: main thread {GpuMainBudget} ms, {GpuCallBudget} calls, {GpuTriangleBudget} triangles, frame difference {FrameDeltaWarn} ms"
+                             : "render path: CPU layout (the fallback; GPU twins " + (GpuMassBridge.Available ? "refused" : "unavailable") + "), old budgets");
 
                 // ---- B: A at 8 m (LOD0), B at 22 m (LOD1)
                 Place(_anchorA, _anchorB);
                 var sb = new Series((int)(FramesB * scale) + 1);
                 yield return Measure(sb, FramesB, scale, () => Walk());
                 Report(ctx, "B", sb, true);
-                ctx.Assert("B_lod_A_is_0", _va.LastLod == 0, 0, _va.LastLod);
-                ctx.Assert("B_lod_B_is_1", _vb.LastLod == 1, 1, _vb.LastLod);
+                ctx.Assert("B_lod_A_is_0", LodOf(_va) == 0, 0, LodOf(_va));
+                ctx.Assert("B_lod_B_is_1", LodOf(_vb) == 1, 1, LodOf(_vb));
                 ctx.Assert("B_drawn_A", _va.LastDrawn >= 100 && _va.LastDrawn <= _va.LastCap, $"100..{_va.LastCap}", _va.LastDrawn);
                 Budgets(ctx, "B", sb, true);
 
@@ -124,7 +140,7 @@ namespace MistWorms.Dev.Scenarios
                 var sc = new Series((int)(FramesC * scale) + 1);
                 yield return Measure(sc, FramesC, scale, () => Walk());
                 Report(ctx, "C", sc, true);
-                ctx.Log($"C: lod {_va.LastLod} / {_vb.LastLod}, drawn {_va.LastDrawn} + {_vb.LastDrawn} (global LOD0 cap {MassLayoutConst.HeapLod0GlobalCap})");
+                ctx.Log($"C: lod {LodOf(_va)} / {LodOf(_vb)}, drawn {_va.LastDrawn} + {_vb.LastDrawn} (global LOD0 cap {MassLayoutConst.HeapLod0GlobalCap})");
                 Budgets(ctx, "C", sc, true);
 
                 // ---- D: both at 40 m
@@ -133,8 +149,8 @@ namespace MistWorms.Dev.Scenarios
                 var sd = new Series((int)(FramesD * scale) + 1);
                 yield return Measure(sd, FramesD, scale, () => Walk());
                 Report(ctx, "D", sd, false);
-                ctx.Assert("D_lod_both_2", _va.LastLod == 2 && _vb.LastLod == 2, "2 and 2", $"{_va.LastLod} and {_vb.LastLod}");
-                ctx.Assert("D_drawn_at_most_lod2_cap", _va.LastDrawn <= MassLayoutConst.Lod2Cap && _vb.LastDrawn <= MassLayoutConst.Lod2Cap, $"<= {MassLayoutConst.Lod2Cap} each", $"{_va.LastDrawn} / {_vb.LastDrawn}");
+                ctx.Assert("D_lod_both_2", LodOf(_va) == 2 && LodOf(_vb) == 2, "2 and 2", $"{LodOf(_va)} and {LodOf(_vb)}");
+                if (!_gpu) ctx.Assert("D_drawn_at_most_lod2_cap", _va.LastDrawn <= MassLayoutConst.Lod2Cap && _vb.LastDrawn <= MassLayoutConst.Lod2Cap, $"<= {MassLayoutConst.Lod2Cap} each", $"{_va.LastDrawn} / {_vb.LastDrawn}");
                 Budgets(ctx, "D", sd, false);
                 DevCamera.Free(eye, eye + fwd * 10f);   // back to the aim of the near phases
 
@@ -161,6 +177,7 @@ namespace MistWorms.Dev.Scenarios
                 double delta = (nWith > 0 && nWithout > 0) ? (with / nWith - without / nWithout) * 1000.0 : 0.0;
                 ctx.Log($"E: frame time with the masses {with / Math.Max(1, nWith) * 1000.0:0.00} ms, without {without / Math.Max(1, nWithout) * 1000.0:0.00} ms: difference {delta:0.00} ms" +
                         (delta > FrameDeltaWarn ? $" WARNING above {FrameDeltaWarn} ms (logged, not a failure: the frame is bounded by the GPU in many scenes)" : string.Empty));
+                if (_gpu) ctx.Assert("E_frame_time_difference", delta <= FrameDeltaWarn, $"<= {FrameDeltaWarn} ms (plan A10)", delta.ToString("0.00"));
 
                 // ---- G: managed allocation, differential. The same windows of frames with the masses drawn (A) and hidden (B), alternated ABABABAB:
                 // what the masses add to the allocation of the game must stay under 64 KB per window. Allocation = the sum of the rises of the managed heap
@@ -190,7 +207,54 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Log($"G (b, the render of the masses): managed allocation per window of {gWindow} frames, median: drawn {perWith} bytes, hidden {perWithout} bytes, difference {perWith - perWithout} bytes; windows drawn [{string.Join(", ", withList)}], hidden [{string.Join(", ", withoutList)}] (probe {(operative ? "sees a 4 KB allocation" : "DID NOT see a 4 KB allocation: inoperative")})");
                 // The proof of zero allocation is the unit tests (MassWorkerTests, the layout tests). In game the probe reads the whole managed heap of the process, whose noise is
                 // 20 to 80 KB per window of 300 frames: this threshold (256 KB, under 1 KB per frame) only guards against a gross regression.
-                if (operative) ctx.Assert("G_masses_add_no_allocation", perWith - perWithout <= 256 * 1024, "<= 256 KB more per window than hidden (median; guard against a gross regression, noise 20-80 KB)", $"{perWith - perWithout} bytes");
+                if (operative && _gpu)
+                {
+                    // The whole game allocates 1 to 4 MB per window of 300 frames and the windows swing by 3 MB between them (measured: drawn 0.9 to 4.3 MB, hidden 1.4 to 3.3 MB), so a difference of
+                    // medians says nothing. The lowest windows are compared (the floor of the noise), and the proof of zero allocation of the colony is G_gpu_host_no_allocation below.
+                    long minWith = long.MaxValue, minWithout = long.MaxValue;
+                    foreach (long v in withList) minWith = Math.Min(minWith, v);
+                    foreach (long v in withoutList) minWithout = Math.Min(minWithout, v);
+                    ctx.Log($"G (b, gpu): lowest window drawn {minWith} bytes, hidden {minWithout} bytes (difference {minWith - minWithout}), medians {perWith} / {perWithout} (difference {perWith - perWithout}): the game itself allocates 1 to 4 MB per window and the windows swing by 3 MB, so no differential of windows can bound the colony; it is bounded by G_gpu_host_no_allocation (0 bytes in its Tick) and H_gpu_mass_creation_allocation (16 KB per creation)");
+                }
+                else if (operative) ctx.Assert("G_masses_add_no_allocation", perWith - perWithout <= 256 * 1024, "<= 256 KB more per window than hidden (median; guard against a gross regression, noise 20-80 KB)", $"{perWith - perWithout} bytes");
+
+                if (_gpu)
+                {
+                    // the host's own Tick (probes, upload, submission) allocates nothing: two windows, the first absorbs what the runtime does once, the second is asserted
+                    for (int pass = 0; pass < 2; pass++)
+                    {
+                        GpuWormHost.ResetStats();
+                        GpuWormHost.MeasureAlloc = true;
+                        yield return Frames(gWindow, scale, (f) => Walk());
+                        GpuWormHost.MeasureAlloc = false;
+                        if (pass == 0) ctx.Log($"G (gpu host): first window {GpuWormHost.OwnAllocBytes} bytes over {GpuWormHost.Frames} frames");
+                        else ctx.Assert("G_gpu_host_no_allocation", GpuWormHost.OwnAllocBytes == 0, "0 bytes in the Tick of the host over the window", $"{GpuWormHost.OwnAllocBytes} bytes over {GpuWormHost.Frames} frames");
+                    }
+                }
+
+                if (_gpu && operative)
+                {
+                    // H: what the creation of a mass of the colony costs in managed memory (the segment of the pool, its environment arrays are native), around the calls only:
+                    // 8 creations, a growth of the count and a removal each; the bound is 16 KB per creation, and nothing between two creations (the windows above).
+                    var creations = new List<long>();
+                    for (int k = 0; k < 8; k++)
+                    {
+                        long h0 = Profiler.GetMonoUsedSizeLong();
+                        GpuMass gm = GpuWormHost.CreateMass(100, 300, _va.Root + Vector3.up * 0.1f, 0.6f, (uint)(1000 + k));
+                        if (gm != null)
+                        {
+                            GpuWormHost.SetActive(gm, 200);
+                            GpuWormHost.SetActive(gm, 100);
+                            GpuWormHost.RemoveMass(gm);
+                        }
+                        creations.Add(Profiler.GetMonoUsedSizeLong() - h0);
+                        yield return null;
+                    }
+                    creations.Sort();
+                    long worst = creations[creations.Count - 1], median = creations[creations.Count / 2];
+                    ctx.Log($"H: managed allocation of the creation, growth and removal of a GPU mass: median {median} bytes, worst {worst} bytes over {creations.Count} (bound 16 KB)");
+                    ctx.Assert("H_gpu_mass_creation_allocation", median <= 16 * 1024, "<= 16 KB per creation (median of 8)", $"{median} bytes (worst {worst})");
+                }
 
                 // (a) the masses standing (Character, AI, physics, our state) against deactivated, render hidden in both: logged, not a budget of ours unless it comes from our code.
                 var presentList = new List<long>();
@@ -376,6 +440,16 @@ namespace MistWorms.Dev.Scenarios
                 s.Cpu[i] = st.CpuMs; s.Calls[i] = st.DrawCalls; s.Tris[i] = st.Triangles; s.Dropped[i] = st.Dropped;
                 s.HeapMain[i] = _va != null ? _va.HeapMs : 0f;
                 s.Worker[i] = (_va != null ? _va.WorkerMs : 0f) + (_vb != null ? _vb.WorkerMs : 0f);
+                if (_gpu)
+                {
+                    // the masses are the host's: everything it does on the main thread, its calls and the triangles the camera sees
+                    s.Cpu[i] += (float)GpuWormHost.LastMs;
+                    s.HostCalls[i] = GpuWormHost.DrawCalls;
+                    s.Calls[i] += GpuWormHost.DrawCalls;
+                    s.Tris[i] += (int)Math.Min(int.MaxValue / 2, GpuWormHost.Triangles);
+                    s.HeapMain[i] = (float)GpuWormHost.LastMs;
+                    s.Worker[i] = 0f;
+                }
                 s.Frame[i] = Time.unscaledDeltaTime * 1000f;
             }
             _gcCollections = GC.CollectionCount(0) - gc0;
@@ -427,7 +501,8 @@ namespace MistWorms.Dev.Scenarios
             ctx.Log($"{tag}: {n} frames: render cpu (main thread) avg {Avg(s.Cpu, n):0.000} ms, p95 {P95(s.Cpu, n):0.000}, max {Max(s.Cpu, n):0.000}; " +
                     $"mass A main cost avg {Avg(s.HeapMain, n):0.000} ms (EMA); worker for both masses avg {Avg(s.Worker, n):0.000} ms (max {Max(s.Worker, n):0.000}); " +
                     $"calls max {MaxI(s.Calls, n)}, triangles max {MaxI(s.Tris, n)}, dropped max {MaxI(s.Dropped, n)}; frame {Avg(s.Frame, n):0.00} ms");
-            ctx.Log($"{tag}: A lod {_va.LastLod} cap {_va.LastCap} drawn {_va.LastDrawn} (refreshed {_va.RefreshedSlots} of {_va.LastSlotCount}), B lod {_vb.LastLod} cap {_vb.LastCap} drawn {_vb.LastDrawn}; " +
+            if (_gpu) ctx.Log($"{tag}: GPU host: main thread avg {GpuWormHost.AvgMs:0.0000} ms, {GpuWormHost.DrawnWorms} worms, {GpuWormHost.Triangles} triangles (+{GpuWormHost.ShadowTriangles} shadow), {GpuWormHost.DrawCalls} calls, {GpuWormHost.LastSubSteps} sub-steps");
+            ctx.Log($"{tag}: A lod {LodOf(_va)} cap {_va.LastCap} drawn {_va.LastDrawn} (refreshed {_va.RefreshedSlots} of {_va.LastSlotCount}), B lod {LodOf(_vb)} cap {_vb.LastCap} drawn {_vb.LastDrawn}; " +
                     $"merged lists {WormRenderer.Last.Merged}");
         }
 
@@ -437,12 +512,21 @@ namespace MistWorms.Dev.Scenarios
             ctx.Assert($"{tag}_samples", n >= 20, ">= 20 renderer frames", n);
             if (checkCpu)
             {
-                ctx.Assert($"{tag}_render_cpu_avg", Avg(s.Cpu, n) <= RenderCpuBudget, $"<= {RenderCpuBudget} ms (main thread, all worms and masses)", Avg(s.Cpu, n).ToString("0.000"));
-                ctx.Assert($"{tag}_heap_main_avg", Avg(s.HeapMain, n) <= HeapMainBudget, $"<= {HeapMainBudget} ms for the mass in LOD0", Avg(s.HeapMain, n).ToString("0.000"));
+                float cpuBudget = _gpu ? GpuMainBudget : RenderCpuBudget;
+                ctx.Assert($"{tag}_render_cpu_avg", Avg(s.Cpu, n) <= cpuBudget, $"<= {cpuBudget} ms (main thread, all worms and masses)", Avg(s.Cpu, n).ToString("0.000"));
+                if (!_gpu) ctx.Assert($"{tag}_heap_main_avg", Avg(s.HeapMain, n) <= HeapMainBudget, $"<= {HeapMainBudget} ms for the mass in LOD0", Avg(s.HeapMain, n).ToString("0.000"));
             }
-            ctx.Assert($"{tag}_worker_avg", Avg(s.Worker, n) <= WorkerBudget, $"<= {WorkerBudget} ms for all masses", Avg(s.Worker, n).ToString("0.000"));
-            ctx.Assert($"{tag}_draw_calls_max", MaxI(s.Calls, n) <= CallBudget, $"<= {CallBudget}", MaxI(s.Calls, n));
-            ctx.Assert($"{tag}_triangles_max", MaxI(s.Tris, n) <= TriangleBudget, $"<= {TriangleBudget}", MaxI(s.Tris, n));
+            if (!_gpu) ctx.Assert($"{tag}_worker_avg", Avg(s.Worker, n) <= WorkerBudget, $"<= {WorkerBudget} ms for all masses", Avg(s.Worker, n).ToString("0.000"));
+            int callBudget = _gpu ? GpuCallBudget : CallBudget, triBudget = _gpu ? GpuTriangleBudget : TriangleBudget;
+            if (_gpu)
+            {
+                int hostMax = MaxI(s.HostCalls, n), freeMax = 0;
+                for (int i = 0; i < n; i++) freeMax = Math.Max(freeMax, s.Calls[i] - s.HostCalls[i]);
+                ctx.Assert($"{tag}_draw_calls_colony_max", hostMax <= GpuHostCallBudget, $"<= {GpuHostCallBudget} (one per LOD, one for the shadows)", hostMax);
+                ctx.Assert($"{tag}_draw_calls_free_worms_max", freeMax <= GpuFreeCallBudget, $"<= {GpuFreeCallBudget} (the flipbook batches of the 100 free worms; 17 measured)", freeMax);
+            }
+            else ctx.Assert($"{tag}_draw_calls_max", MaxI(s.Calls, n) <= callBudget, $"<= {callBudget}", MaxI(s.Calls, n));
+            ctx.Assert($"{tag}_triangles_max", MaxI(s.Tris, n) <= triBudget, $"<= {triBudget}", MaxI(s.Tris, n));
             ctx.Assert($"{tag}_dropped", MaxI(s.Dropped, n) == 0, 0, MaxI(s.Dropped, n));
             // The managed heap is the game's as much as ours (Valheim allocates all the time): the absolute figure proves nothing, see the differential phase G.
             ctx.Log($"{tag}: managed heap over the window (whole game, informative): {_monoDelta} bytes, {_gcCollections} collections of generation 0");

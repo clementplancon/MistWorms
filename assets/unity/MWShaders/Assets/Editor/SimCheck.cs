@@ -54,6 +54,7 @@ public static class SimCheck
 
         Parity();
         Rest();
+        BirthAndDeath();
         Engulf(500, 1.0f, "n50");
         Engulf(2000, 1.0f, "n200");
         EngulfBody(2000);
@@ -65,6 +66,7 @@ public static class SimCheck
         }
         SkinSimParity();
         SkinCpuCost();
+        SkinBody(500);
         SkinBody(2000);
         Pictures();
         GpuWormHost.Shutdown();
@@ -170,6 +172,34 @@ public static class SimCheck
         }
         Debug.Log($"SimCheck: worst node worm {at / 8} node {at % 8}: gpu ({gpu[at].x:0.000000},{gpu[at].y:0.000000},{gpu[at].z:0.000000}) ref ({r.Pos[at].x:0.000000},{r.Pos[at].y:0.000000},{r.Pos[at].z:0.000000}) diff {max * 1000f:0.0000} mm");
         return max;
+    }
+
+    // The count of the game follows on the GPU: a segment of 300 worms with 100 alive, then 250 (the newborn grow from nothing in 0.5 s), then 100 again (they shrink to nothing).
+    private static void BirthAndDeath()
+    {
+        const int cap = 300;
+        GpuMass m = GpuWormHost.CreateMass(100, cap, Vector3.zero, 0.5f, 3u);
+        m.Origin = Vector3.zero;
+        GpuWormHost.SetFlatEnvironment(m, 0f);
+        GpuWormHost.InitNow(m);
+        GpuWormHost.Tick(0f);
+        GpuWormHost.StepNow(30);
+        Vector4[] pos = Read(cap);
+        Check("birth_spare_worms_have_no_size", pos[150 * 8 + 3].w == 0f && pos[10 * 8 + 3].w == 1f, $"spare {pos[150 * 8 + 3].w}, alive {pos[10 * 8 + 3].w}");
+        GpuWormHost.SetActive(m, 250);
+        GpuWormHost.Tick(0f);
+        GpuWormHost.StepNow(10);
+        pos = Read(cap);
+        float mid = pos[200 * 8 + 3].w;
+        GpuWormHost.StepNow(40);
+        pos = Read(cap);
+        Check("birth_grows_in_half_a_second", mid > 0.1f && mid < 0.9f && pos[200 * 8 + 3].w == 1f && pos[280 * 8 + 3].w == 0f, $"newborn after 10 steps {mid:0.00}, after 50 {pos[200 * 8 + 3].w:0.00}; beyond the count {pos[280 * 8 + 3].w:0.00}");
+        GpuWormHost.SetActive(m, 100);
+        GpuWormHost.Tick(0f);
+        GpuWormHost.StepNow(40);
+        pos = Read(cap);
+        Check("death_shrinks_to_nothing", pos[200 * 8 + 3].w == 0f && pos[50 * 8 + 3].w == 1f && CountNan(pos) == 0, $"absorbed {pos[200 * 8 + 3].w:0.00}, alive {pos[50 * 8 + 3].w:0.00}");
+        GpuWormHost.RemoveMass(m);
     }
 
     // ------------------------------------------------------------------ 2. rest
@@ -325,7 +355,7 @@ public static class SimCheck
                 timeline.Append($" t={step / 60f:0.0}s engulf {m.Engulf:0.00}: S {m.SleevePlan.Count:0}, transit {q.Transit}, settled {q.Settled};");
             }
         }
-        Debug.Log("SimCheck: skin timeline:" + timeline);
+        Debug.Log($"SimCheck: skin timeline ({worms} worms):" + timeline);
         m.Engulf = 1f;
         for (int step = 0; step < 480; step += 8)
         {
@@ -537,7 +567,7 @@ public static class SimCheck
             Check("skin_sleeve_formed_in_2.5s", formed >= 0.9f * r.Settled, $"{formed} worms settled 2.5 s after the start of the engulf, {r.Settled} at the steady state (>= 90%: the game is slower than the editor)");
             Check("skin_sleeve_filled", r.Settled + r.Transit >= 0.5f * plan.Count, $"{r.Settled + r.Transit} worms on the body for S = {plan.Count:0}");
             Check("skin_every_leg", r.NearRegion[0] >= 0.03f * r.Near && r.NearRegion[1] >= 0.03f * r.Near, "a worm on each leg (>= 3%)");
-            Check("skin_every_arm", r.NearRegion[2] >= 0.02f * r.Near && r.NearRegion[3] >= 0.02f * r.Near, "a worm on each arm (>= 2%: an arm is 3 to 6% of the surface of a body)");
+            if (worms >= 2000) Check("skin_every_arm", r.NearRegion[2] >= 0.02f * r.Near && r.NearRegion[3] >= 0.02f * r.Near, "a worm on each arm (>= 2%: an arm is 3 to 6% of the surface of a body)");
         }
     }
 
@@ -771,11 +801,39 @@ public static class SimCheck
         GpuMass m = Spawn(worms, r, 21u, Vector3.zero);
         GpuWormHost.InitNow(m);
         GpuWormHost.StepNow(240);
+        TickAllocation(m);
         Picture("lod0_1m", m, 1.0f, 0.35f, 0.15f);
         Picture("lod0_3m", m, 3.0f, 1.0f, 0.2f);
         Picture("lod1_12m", m, 12f, 3f, 0.2f);
         Picture("lod2_30m", m, 30f, 6f, 0.2f);
         GpuWormHost.RemoveMass(m);
+    }
+
+    // The Tick of the host with the draws on (a camera that sees the mass, the simulation running, the lists drawn): nothing allocated in a steady window, the second of two
+    // (the first absorbs what the runtime does once). Also the cost of the Tick with the draw submission, with and without the draws.
+    private static void TickAllocation(GpuMass m)
+    {
+        var camGo = new GameObject("AllocCam");
+        Camera cam = camGo.AddComponent<Camera>();
+        camGo.transform.position = m.Center + new Vector3(2.4f, 1.0f, -1.8f);
+        camGo.transform.LookAt(m.Center + Vector3.up * 0.2f);
+        GpuWormHost.CameraProvider = () => cam;
+        GpuWormHost.AutoStep = true;
+        GpuWormHost.DrawEnabled = true;
+        long[] rises = new long[2];
+        for (int pass = 0; pass < 2; pass++)
+        {
+            for (int f = 0; f < 60; f++) GpuWormHost.Tick(1f / 60f);
+            GpuWormHost.ResetStats();
+            GpuWormHost.MeasureAlloc = true;
+            for (int f = 0; f < 400; f++) GpuWormHost.Tick(1f / 60f);
+            GpuWormHost.MeasureAlloc = false;
+            rises[pass] = GpuWormHost.OwnAllocBytes;
+        }
+        Debug.Log($"SimCheck: host tick with the draws on: {GpuWormHost.AvgMs:0.0000} ms per frame, {GpuWormHost.DrawCalls} draw calls, allocation first window {rises[0]} bytes, second {rises[1]} bytes over 400 frames");
+        Check("host_tick_no_allocation_with_draws", rises[1] == 0, $"{rises[1]} bytes over 400 frames of Tick with the camera on the mass and the draws submitted");
+        GpuWormHost.AutoStep = false;
+        UnityEngine.Object.DestroyImmediate(camGo);
     }
 
     private static GameObject s_ground, s_light;

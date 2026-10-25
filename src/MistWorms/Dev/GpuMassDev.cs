@@ -43,7 +43,7 @@ namespace MistWorms.Dev
         {
             error = null;
             if (!GpuWormBundle.InitHost()) { error = GpuWormHost.Error ?? GpuWormBundle.Error ?? "GPU worms unavailable"; return false; }
-            if (s_env == null) s_env = new GpuEnvCapture();
+            if (s_env == null) s_env = GpuWormHost.Environment as GpuEnvCapture ?? new GpuEnvCapture();
             GpuWormHost.Environment = s_env;
             GpuWormHost.PreTick = Drive;
             return true;
@@ -370,7 +370,7 @@ namespace MistWorms.Dev
             int hn = WormSimConst.HeightN * WormSimConst.HeightN;
             var snap = new NodeSnapshot
             {
-                Nodes = new Vector4[m.WormCount * WormSimConst.Nodes], Heights = new float[hn], GridMin = m.GridMin, Spacing = m.GridSpacing, Origin = m.Origin, Worms = m.WormCount,
+                Nodes = new Vector4[m.WormCount * WormSimConst.Nodes], Heights = new float[hn], GridMin = m.GridMin, Spacing = m.GridSpacing, Origin = m.Origin, Worms = m.ActiveCount,
                 Prims = new GpuPrim[m.PrimCount], BodyCount = m.AdhesivePrim >= 0 ? m.AdhesiveCount : 0,
             };
             for (int i = 0; i < m.PrimCount; i++) snap.Prims[i] = m.Prims[i];
@@ -383,7 +383,28 @@ namespace MistWorms.Dev
             snap.MassSeed = m.Seed;
             if (Target != null) { snap.Right = Target.transform.right; snap.BodyCenter = Target.bounds.center; }
             for (int i = 0; i < hn; i++) snap.Heights[i] = m.Heights[i];
-            snap.Pending = m.AnchorCount > 0 ? 3 : 2;
+            snap.Pending = m.AnchorCount > 0 ? 5 : 4;
+            // The ground the simulation used, as the GPU holds it when the nodes are read (the grid is recaptured 8 times a second, and the readbacks come a few frames after the request):
+            // the height grid and the parameters of the mass (grid rectangle, origin) are read in the same batch as the nodes, so that a node is compared with the ground it was solved against.
+            AsyncGPUReadback.Request(GpuWormHost.HeightBuffer, hn * 4, m.Slot * hn * 4, req =>
+            {
+                if (req.hasError) snap.Error = true;
+                else req.GetData<float>().CopyTo(snap.Heights);
+                snap.Complete();
+            });
+            AsyncGPUReadback.Request(GpuWormHost.MassesBuffer, WormSimConst.MassStride, m.Slot * WormSimConst.MassStride, req =>
+            {
+                if (req.hasError) snap.Error = true;
+                else
+                {
+                    GpuMassParams pr = req.GetData<GpuMassParams>()[0];
+                    snap.Params = pr;
+                    snap.GridMin = new Vector2(pr.GridRect.x + pr.Origin.x, pr.GridRect.y + pr.Origin.z);
+                    snap.Spacing = pr.GridRect.z;
+                    snap.Origin = new Vector3(pr.Origin.x, pr.Origin.y, pr.Origin.z);
+                }
+                snap.Complete();
+            });
             AsyncGPUReadback.Request(GpuWormHost.PosBuffer, m.WormCount * WormSimConst.Nodes * 16, m.FirstWorm * WormSimConst.Nodes * 16, req =>
             {
                 if (req.hasError) snap.Error = true;

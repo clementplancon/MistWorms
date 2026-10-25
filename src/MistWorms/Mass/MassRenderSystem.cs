@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using MistWorms.Config;
 using MistWorms.Render;
+using MistWorms.Render.Gpu;
 using UnityEngine;
 using C = MistWorms.Mass.MassLayoutConst;
 
@@ -59,6 +60,7 @@ namespace MistWorms.Mass
 
         public static void Remove(WritheMassVisual v)
         {
+            GpuMassBridge.Release(v);
             s_masses.Remove(v);
         }
 
@@ -138,6 +140,7 @@ namespace MistWorms.Mass
             CameraPosition = cam;
             HaveCamera = true;
             RenderDistanceHint = rd;
+            if (GpuWormHost.Ready) GpuWormHost.DrawEnabled = !DevHidden;
             if (DevHidden) return;
 
             int count = s_masses.Count;
@@ -149,7 +152,10 @@ namespace MistWorms.Mass
             for (int i = 0; i < count; i++)
             {
                 WritheMassVisual v = s_masses[i];
-                if (v == null || !v.Active) continue;
+                if (v == null) continue;
+                // the GPU rope colony draws the masses it has a twin for; the CPU layout below is the fallback (and the path of the masses beyond the pool)
+                if (GpuMassBridge.Drive(v, cam, true)) { v.CulledLastFrame = false; v.LastDrawn = v.Gpu.Visible ? v.Gpu.DrawEnd : 0; v.LastCap = v.Gpu.DrawEnd; continue; }
+                if (!v.Active) continue;
                 SphereVis vis = sink.ClassifySphere(v.Center, v.BoundRadius);
                 if (vis == SphereVis.Outside) { v.CulledLastFrame = true; v.LastDrawn = 0; v.LastCap = 0; continue; }
                 v.CulledLastFrame = false;

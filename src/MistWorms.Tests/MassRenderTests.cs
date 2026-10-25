@@ -320,6 +320,31 @@ namespace MistWorms.Tests
             Assert.False(MistWorms.Config.ConfigMigrations.ShouldReplace(120, 40));
         }
 
+        [Fact]
+        public void FloatMigrationOnlyReplacesTheOldDefault()
+        {
+            Assert.True(MistWorms.Config.ConfigMigrations.ShouldReplace(0.83f, 0.83f));
+            Assert.True(MistWorms.Config.ConfigMigrations.ShouldReplace(0.8300001f, 0.83f));
+            Assert.False(MistWorms.Config.ConfigMigrations.ShouldReplace(0.6f, 0.83f));
+            Assert.False(MistWorms.Config.ConfigMigrations.ShouldReplace(0.26f, 0.83f));
+        }
+
+        [Fact]
+        public void GpuMassSizesAndCountsFollowThePlan()
+        {
+            // r(n) = 0.26 (n / 10)^0.36: 10 units 0.26 m, 50 units 0.46 m, 200 units 0.77 m
+            Assert.Equal(0.26f, MistWorms.Render.MassMath.Radius(10, 0.26f, 0.36f), 2);
+            Assert.InRange(MistWorms.Render.MassMath.Radius(50, 0.26f, 0.36f), 0.45f, 0.47f);
+            Assert.InRange(MistWorms.Render.MassMath.Radius(200, 0.26f, 0.36f), 0.76f, 0.78f);
+            Assert.Equal(100, MistWorms.Mass.GpuMassBridge.WormsFor(10));
+            Assert.Equal(2000, MistWorms.Mass.GpuMassBridge.WormsFor(200));
+            Assert.Equal(2400, MistWorms.Mass.GpuMassBridge.WormsFor(1000));          // the cap of a mass
+            Assert.Equal(300, MistWorms.Mass.GpuMassBridge.CapacityFor(100));
+            Assert.Equal(2400, MistWorms.Mass.GpuMassBridge.CapacityFor(2000));
+            Assert.True(MistWorms.Mass.GpuMassBridge.CapacityFor(1) >= 1);
+            Assert.True(MistWorms.Mass.MassMergeMath.MinContactDistance > 2f * 0.5f);      // two capsules of the bound radius cannot come closer than 1 m
+        }
+
         /// <summary>Informational: highest visible place at engulf 1 (target 0.6 m past the edge), over all places and under the draw threshold, n = 50 and 200.</summary>
         [Fact]
         public void EngulfColumnHeightByCount()

@@ -9,10 +9,10 @@ namespace MistWorms.Mass
     public static class MassMergeMath
     {
         /// <summary>
-        /// Two bodies cannot stand closer than the two physical capsules allow (0.6 m each), and the visual radius of a small mass is under 0.6 m:
+        /// Two bodies cannot stand closer than the two physical capsules allow (Mass.MaxColliderRadius, 0.5 m each: 1.0 m) and the visual radius of a small mass is under that (r(40) = 0.43 m):
         /// without a floor on the contact distance two small masses would never "touch".
         /// </summary>
-        public const float MinContactDistance = 1.35f;
+        public const float MinContactDistance = 1.3f;
 
         /// <summary>Highest height difference (metres) at which two masses can touch: another floor of the mine is another place.</summary>
         public const float MaxContactDy = 2f;

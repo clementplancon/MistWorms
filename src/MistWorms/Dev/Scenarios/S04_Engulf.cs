@@ -212,7 +212,7 @@ namespace MistWorms.Dev.Scenarios
                     DevInput.Release();
                     int recv = MassEngulf.TicksReceived - recv0, inv = MassEngulf.TicksInvincible - inv0;
                     float rl = r0 - Durability(player, false);
-                    ctx.Log($"roll attempt {attempt + 1}: {recv} ticks received, {inv} in the invincibility frames, {rl:0.#} points lost");
+                    ctx.Log($"roll attempt {attempt + 1}: {recv} ticks received, {inv} in the invincibility frames, {rl:0.#} points lost; detach limit {EngulfMath.DetachLimit(MassMath.Radius(Mathf.Max(1, mass.N)), MWConfig.Mass.DetachDistance.Value):0.00} m from the centre (r {MassMath.Radius(Mathf.Max(1, mass.N)):0.00} + DetachDistance {MWConfig.Mass.DetachDistance.Value:0.00}), player at {Utils.DistanceXZ(player.transform.position, mass.transform.position):0.00} m");
                     if (inv < 1) continue;
                     rolled = true;
                     float most = (recv - inv) * perTick * 1.25f + 1f;

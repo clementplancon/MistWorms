@@ -36,6 +36,13 @@ namespace MistWorms.Colony
         /// <summary>Sources farther than this from the asker are not looked at.</summary>
         public const float ScanRange = 15f;
 
+        private static string Path(Transform t)
+        {
+            string path = t.name;
+            for (Transform up = t.parent; up != null && path.Length < 120; up = up.parent) path = up.name + "/" + path;
+            return path;
+        }
+
         /// <summary>True when <paramref name="h"/> is alive and holds a lit torch in either hand.</summary>
         public static bool HoldsTorch(Humanoid h)
         {
@@ -50,10 +57,18 @@ namespace MistWorms.Colony
         /// Looks for a source that frightens a mass of radius <paramref name="massRadius"/> centred at <paramref name="center"/>; returns the closest one
         /// (<paramref name="point"/> is where it is: the closest point of the fire collider, or the position of the torch holder).
         /// </summary>
-        public static bool Nearest(Vector3 center, float massRadius, float fearRadius, float margin, out Vector3 point, out bool torch)
+        public static bool Nearest(Vector3 center, float massRadius, float fearRadius, float margin, out Vector3 point, out bool torch) =>
+            Nearest(center, massRadius, fearRadius, margin, null, out point, out torch, out _);
+
+        /// <summary>
+        /// As above, ignoring every source that belongs to <paramref name="owner"/> (the mass that asks: its own colliders, effects and children are never a fire to it) and telling which
+        /// source it found (<paramref name="who"/>: kind, hierarchy path, distance to its collider).
+        /// </summary>
+        public static bool Nearest(Vector3 center, float massRadius, float fearRadius, float margin, Transform owner, out Vector3 point, out bool torch, out string who)
         {
             point = default;
             torch = false;
+            who = null;
             float best = float.MaxValue;
             bool found = false;
 
@@ -62,6 +77,7 @@ namespace MistWorms.Colony
             {
                 EffectArea area = areas[k];
                 if (area == null || !area.isActiveAndEnabled || (area.m_type & EffectArea.Type.Fire) == 0) continue;
+                if (owner != null && area.transform.IsChildOf(owner)) continue;
                 Collider c = area.m_collider;
                 if (c == null || !c.enabled) continue;
                 Vector3 closest = c is MeshCollider mc && !mc.convex ? c.bounds.ClosestPoint(center) : c.ClosestPoint(center);
@@ -71,12 +87,14 @@ namespace MistWorms.Colony
                 point = closest;
                 torch = false;
                 found = true;
+                who = $"fire area {Path(area.transform)} (type {area.m_type}, collider {c.GetType().Name} bounds {c.bounds.size.ToString("0.0")}), {d:0.00} m";
             }
 
             List<Character> all = Character.GetAllCharacters();
             for (int k = 0; k < all.Count; k++)
             {
                 if (!(all[k] is Humanoid h) || !HoldsTorch(h)) continue;
+                if (owner != null && h.transform.IsChildOf(owner)) continue;
                 Vector3 p = h.transform.position;
                 float d = (p - center).magnitude;
                 if (d > ScanRange || d >= best || !FireMath.MassAfraid(d, massRadius, fearRadius, margin)) continue;
@@ -84,6 +102,7 @@ namespace MistWorms.Colony
                 point = p;
                 torch = true;
                 found = true;
+                who = $"torch held by {Path(h.transform)} ({(h.IsPlayer() ? "player" : "creature")}), {d:0.00} m";
             }
             return found;
         }

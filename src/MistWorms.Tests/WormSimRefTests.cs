@@ -59,6 +59,36 @@ namespace MistWorms.Tests
         private static Vector3 P(WormSimRef sim, int w, int i) => new Vector3(sim.Pos[w * K + i].x, sim.Pos[w * K + i].y, sim.Pos[w * K + i].z);
 
         [Fact]
+        public void WormsBeyondTheAliveCountShrinkAndNewbornsGrow()
+        {
+            const int n = 40, alive = 30;
+            WormSimRef sim = Build(n, RadiusOf(n));
+            GpuMassParams m = sim.Masses[0];
+            m.Plan2 = new Vector4(0f, alive, 0f, 0f);
+            sim.Masses[0] = m;
+            sim.Init(0, alive);
+            sim.Init(alive, n - alive, 0f);          // the spare worms wait with no size
+            sim.Step(15);
+            // the alive ones keep their size, the spare ones are growing nowhere: they stay at nothing
+            for (int w = 0; w < alive; w++) Assert.Equal(1f, sim.Pos[w * K + 3].w, 4);
+            for (int w = alive; w < n; w++) Assert.Equal(0f, sim.Pos[w * K + 3].w, 4);
+            // the game count goes up to 40: they are born, growing to full size in BirthTime
+            m.Plan2 = new Vector4(0f, n, 0f, 0f);
+            sim.Masses[0] = m;
+            sim.Step(15);
+            float half = sim.Pos[(n - 1) * K + 3].w;
+            Assert.Equal(15f * WormSimConst.Dt / WormSimConst.BirthTime, half, 3);
+            sim.Step(40);
+            Assert.Equal(1f, sim.Pos[(n - 1) * K + 3].w, 4);
+            // and down to 30 again: they shrink to nothing in BirthTime
+            m.Plan2 = new Vector4(0f, alive, 0f, 0f);
+            sim.Masses[0] = m;
+            sim.Step(40);
+            Assert.Equal(0f, sim.Pos[(n - 1) * K + 3].w, 4);
+            Assert.Equal(1f, sim.Pos[0 * K + 3].w, 4);
+        }
+
+        [Fact]
         public void LengthsAreConservedOnOpenGround()
         {
             const int n = 300;

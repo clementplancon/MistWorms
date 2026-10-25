@@ -138,6 +138,9 @@ namespace MistWorms.Dev.Scenarios
             catch (Exception e) { Plugin.Log.LogWarning("[Scenario] WaitPlayerSane: " + e.Message); }
             if (ready != null) yield return ready;
 
+            // The scenarios of the CPU layout of the masses (previews, lobes, flipbook instances) look at the fallback path: the GPU twin is off for them.
+            MistWorms.Dev.DevSpawnBlock.Active = false;
+            MistWorms.Mass.GpuMassBridge.ForceCpu = scenario is VisualScenario || scenario is V09_MassTransitions || scenario is V10_MassMoving || scenario is V11_MassEngulf || scenario is S08_MassStream;
             IEnumerator body = null;
             try { body = scenario.Run(ctx); }
             catch (Exception e) { error = e; }
@@ -152,6 +155,8 @@ namespace MistWorms.Dev.Scenarios
                 });
             }
 
+            MistWorms.Mass.GpuMassBridge.ForceCpu = false;
+            MistWorms.Dev.DevSpawnBlock.Active = false;
             List<string> logErrors = s_errors.End();
             result.DurationSeconds = Time.realtimeSinceStartup - start;
 

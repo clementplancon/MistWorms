@@ -28,7 +28,12 @@ namespace MistWorms.Render.Gpu
     internal sealed class GpuMass
     {
         internal int Slot;
-        public int FirstWorm, WormCount;
+        public int FirstWorm, WormCount;            // the segment of the pool the mass owns (its capacity)
+        /// <summary>Worms alive (visual worms of the mass, 10 per game unit): the others of the segment shrink to nothing in 0.5 s and are not drawn. Set with <see cref="GpuWormHost.SetActive"/>.</summary>
+        public int ActiveCount;
+        /// <summary>Worms in the draw lists: the alive ones, and the dying ones until they are gone.</summary>
+        public int DrawEnd;
+        public float ShrinkUntil;
         public uint Seed;
         public bool Active;
         public bool NeedsInit;
@@ -42,6 +47,8 @@ namespace MistWorms.Render.Gpu
         public float Speed;
         public float Radius = 0.5f;
         public float DomeHeight = 0.45f;       // height of the dome over its radius (the plan: 0.45)
+        public float ShapeAlong, ShapeAcross;  // half axes of the footprint along the heading and across it (0 = the dome of radius r): a mass that flows through a passage is a ribbon
+        public float Stream;                   // 0 dome .. 1 ribbon (the footprint is the lerp, set by the owner)
         public float Height;                   // height of what the mass wraps (0 = nothing): part of the volume used for the LOD and the culling
         public float Engulf;                   // 0..1, covered fraction of the height of the adhesive capsule
         public GpuMassMode Mode;
@@ -54,6 +61,7 @@ namespace MistWorms.Render.Gpu
         public float GroundFriction = 0.6f;
         public bool ForceSimulated;            // simulated whatever the distance to the camera (the parity check)
         public bool Frozen;                    // not simulated (the host also freezes the masses beyond FreezeDistance)
+        public Transform Owner;                // the game object of the mass: its own colliders are not obstacles of its worms
         public Collider AdhesiveCollider;      // the engulfed being: its capsule becomes the adhesive primitive (covered fraction = Engulf)
 
         // host side
@@ -101,7 +109,7 @@ namespace MistWorms.Render.Gpu
             DeltaId = Shader.PropertyToID("_Delta"), GridId = Shader.PropertyToID("_Grid"), WormsId = Shader.PropertyToID("_Worms"),
             MassesId = Shader.PropertyToID("_Masses"), HeightId = Shader.PropertyToID("_Height"), PrimsId = Shader.PropertyToID("_Prims"), AnchorsId = Shader.PropertyToID("_Anchors"), SidesId = Shader.PropertyToID("_Sides"),
             WormCountId = Shader.PropertyToID("_WormCount"), StepIndexId = Shader.PropertyToID("_StepIndex"), InitFirstId = Shader.PropertyToID("_InitFirst"),
-            InitCountId = Shader.PropertyToID("_InitCount"), ShiftId = Shader.PropertyToID("_Shift"),
+            InitCountId = Shader.PropertyToID("_InitCount"), InitScaleId = Shader.PropertyToID("_InitScale"), ShiftId = Shader.PropertyToID("_Shift"),
             AnchorsOutId = Shader.PropertyToID("_AnchorsOut"), SkinVertsId = Shader.PropertyToID("_SkinVerts"), BonesId = Shader.PropertyToID("_Bones"), KnnId = Shader.PropertyToID("_Knn"),
             OrderId = Shader.PropertyToID("_Order"), HopId = Shader.PropertyToID("_Hop"), SkinStateId = Shader.PropertyToID("_SkinState"), NodeAnchorId = Shader.PropertyToID("_NodeAnchor"),
             NodesId = Shader.PropertyToID("_Nodes"), DrawListId = Shader.PropertyToID("_DrawList"), WormDataId = Shader.PropertyToID("_WormData"), MassDataId = Shader.PropertyToID("_MassData");
@@ -169,9 +177,9 @@ namespace MistWorms.Render.Gpu
         internal static GraphicsBuffer PrevBuffer => s_prev;
         internal static GraphicsBuffer NodeAnchorBuffer => s_nodeAnchor;
         internal static GraphicsBuffer SidesBuffer => s_sides;
-        internal static GraphicsBuffer MassesBuffer => s_masses;
-        internal static GraphicsBuffer HeightBuffer => s_height;
         internal static GraphicsBuffer PrimsBuffer => s_prims;
+        internal static GraphicsBuffer HeightBuffer => s_height;
+        internal static GraphicsBuffer MassesBuffer => s_masses;
 
         public static void ResetStats()
         {
@@ -321,10 +329,17 @@ namespace MistWorms.Render.Gpu
         /// Registers a mass of <paramref name="wormCount"/> worms (visual: 10 per game unit, at most 2400) in the shared buffers; null when the pool is full.
         /// The worms are placed by the first <see cref="Tick"/> (or by <see cref="InitNow"/>) once the environment is known.
         /// </summary>
-        public static GpuMass CreateMass(int wormCount, Vector3 center, float radius, uint seed)
+        public static GpuMass CreateMass(int wormCount, Vector3 center, float radius, uint seed) => CreateMass(wormCount, wormCount, center, radius, seed);
+
+        /// <summary>
+        /// A mass with <paramref name="active"/> worms alive in a segment of <paramref name="capacity"/>: the count can follow the game count afterwards (<see cref="SetActive"/>)
+        /// up to the capacity, a worm born or dying growing or shrinking in 0.5 s.
+        /// </summary>
+        public static GpuMass CreateMass(int active, int capacity, Vector3 center, float radius, uint seed)
         {
             if (!Ready) return null;
-            wormCount = Mathf.Clamp(wormCount, 1, 2400);
+            int wormCount = Mathf.Clamp(capacity, 1, 2400);
+            active = Mathf.Clamp(active, 1, wormCount);
             int slot = -1;
             for (int i = 0; i < s_slots.Length; i++) if (s_slots[i] == null) { slot = i; break; }
             if (slot < 0) return null;
@@ -333,7 +348,7 @@ namespace MistWorms.Render.Gpu
 
             var m = new GpuMass
             {
-                Slot = slot, FirstWorm = first, WormCount = wormCount, Seed = seed, Active = true, NeedsInit = true, EnvForce = true,
+                Slot = slot, FirstWorm = first, WormCount = wormCount, ActiveCount = active, DrawEnd = active, Seed = seed, Active = true, NeedsInit = true, EnvForce = true,
                 Center = center, Radius = radius, Origin = new Vector3(Mathf.Round(center.x), Mathf.Round(center.y), Mathf.Round(center.z)),
                 Heights = new NativeArray<float>(WormSimConst.HeightN * WormSimConst.HeightN, Allocator.Persistent),
                 Prims = new NativeArray<GpuPrim>(WormSimConst.MaxPrims, Allocator.Persistent),
@@ -367,6 +382,32 @@ namespace MistWorms.Render.Gpu
             if (m.Sides.IsCreated) m.Sides.Dispose();
             UpdateHigh();
             s_signature = 0;
+        }
+
+        /// <summary>
+        /// Follows the count of the game: more worms are born inside the mass (placed at their home point, radius scale 0, growing to 1 in 0.5 s), fewer are absorbed (shrinking to
+        /// nothing in 0.5 s). Within the capacity of the segment; true when the count could be set as asked (false: capped at the capacity).
+        /// </summary>
+        public static bool SetActive(GpuMass m, int active)
+        {
+            int cap = m.WormCount;
+            bool fits = active <= cap;
+            active = Mathf.Clamp(active, 1, cap);
+            if (active == m.ActiveCount) return fits;
+            if (active > m.ActiveCount && Ready && !m.NeedsInit)
+            {
+                s_cs.SetInt(InitFirstId, m.FirstWorm + m.ActiveCount);
+                s_cs.SetInt(InitCountId, active - m.ActiveCount);
+                s_cs.SetFloat(InitScaleId, 0f);
+                s_cs.SetInt(StepIndexId, (int)StepIndex);
+                s_cs.Dispatch(kInit, (active - m.ActiveCount + 63) / 64, 1, 1);
+                s_cs.SetFloat(InitScaleId, 1f);
+            }
+            if (active < m.ActiveCount) m.ShrinkUntil = Time.realtimeSinceStartup + WormSimConst.BirthTime + 0.1f;
+            else m.DrawEnd = active;
+            m.ActiveCount = active;
+            s_signature = 0;
+            return fits;
         }
 
         private static int AllocWorms(int count)
@@ -458,7 +499,10 @@ namespace MistWorms.Render.Gpu
             float stretch = Mathf.Clamp01(m.Speed / 1.5f);
             float r = m.Radius;
             bool skin = m.Mode == GpuMassMode.Engulf && m.AnchorCount > 0 && m.SkinSet != null;
-            GpuSleevePlan plan = skin ? m.SkinSet.Plan(m.WormCount, Mathf.Clamp01(m.Engulf)) : default;
+            GpuSleevePlan plan = skin ? m.SkinSet.Plan(m.ActiveCount, Mathf.Clamp01(m.Engulf)) : default;
+            // the ranks of the worms are taken modulo the whole segment: with fewer worms alive the plan is scaled up so that the alive ones fill the sleeve as planned
+            float rankScale = (float)m.WormCount / Mathf.Max(m.ActiveCount, 1);
+            plan.Count *= rankScale; plan.PerAnchor *= rankScale;
             m.SleevePlan = plan;
             bool engulf = !skin && m.Mode == GpuMassMode.Engulf && m.AdhesivePrim >= 0;
             Vector3 c = m.Center - m.Origin;
@@ -467,14 +511,14 @@ namespace MistWorms.Render.Gpu
                 Origin = new Vector4(m.Origin.x, m.Origin.y, m.Origin.z, simulated ? 1f : 0f),
                 Center = new Vector4(c.x, c.y, c.z, r),
                 Heading = new Vector4(h.x, 0f, h.z, m.Speed),
-                Shape = new Vector4(r * (1f + 0.3f * stretch), Mathf.Max(m.DomeHeight * r, 0.05f), r * (1f - 0.1f * stretch), 0.2f * r * stretch),
+                Shape = new Vector4(m.ShapeAlong > 0f ? m.ShapeAlong : r * (1f + 0.3f * stretch), Mathf.Max(m.DomeHeight * r, 0.05f), m.ShapeAcross > 0f ? m.ShapeAcross : r * (1f - 0.1f * stretch), m.ShapeAlong > 0f ? 0f : 0.2f * r * stretch),
                 Motion = new Vector4(m.Conveyor, m.CreepScale, m.HomePull, m.Engulf),
                 Sleeve = new Vector4(engulf ? (float)Mathf.Max(m.AdhesiveCount, 1) : 0f, m.ShellThickness, Mathf.Max(m.AdhesivePrim, 0), m.GroundFriction),
                 FirstWorm = (uint)m.FirstWorm, WormCount = (uint)m.WormCount, PrimCount = (uint)m.PrimCount, MassIndex = (uint)m.Slot,
                 GridRect = new Vector4(m.GridMin.x - m.Origin.x, m.GridMin.y - m.Origin.z, m.GridSpacing, 1f / m.GridSpacing),
                 Skin = skin ? new Vector4(m.AnchorCount, Mathf.Clamp01(m.Engulf), m.TargetHeight, m.SurfaceArea) : Vector4.zero,
                 Side = new Vector4(m.SideYMin - m.Origin.y, m.SideYStep, 1f / m.SideYStep, m.SideEnabled ? 1f : 0f),
-                Plan = new Vector4(plan.Count, plan.PerAnchor, plan.TopRel, plan.Cover), Plan2 = new Vector4(plan.Base, 0f, 0f, 0f),
+                Plan = new Vector4(plan.Count, plan.PerAnchor, plan.TopRel, plan.Cover), Plan2 = new Vector4(plan.Base, m.ActiveCount, 0f, 0f),
             };
         }
 
@@ -491,9 +535,19 @@ namespace MistWorms.Render.Gpu
             s_masses.SetData(s_massParams, m.Slot, m.Slot, 1);
             DispatchSkin();
             s_cs.SetInt(StepIndexId, (int)StepIndex);
+            s_cs.SetFloat(InitScaleId, 1f);
             s_cs.SetInt(InitFirstId, m.FirstWorm);
-            s_cs.SetInt(InitCountId, m.WormCount);
-            s_cs.Dispatch(kInit, (m.WormCount + 63) / 64, 1, 1);
+            s_cs.SetInt(InitCountId, m.ActiveCount);
+            s_cs.Dispatch(kInit, (m.ActiveCount + 63) / 64, 1, 1);
+            if (m.ActiveCount < m.WormCount)
+            {
+                // the spare worms of the segment wait inside the mass with no size, ready to be born
+                s_cs.SetInt(InitFirstId, m.FirstWorm + m.ActiveCount);
+                s_cs.SetInt(InitCountId, m.WormCount - m.ActiveCount);
+                s_cs.SetFloat(InitScaleId, 0f);
+                s_cs.Dispatch(kInit, (m.WormCount - m.ActiveCount + 63) / 64, 1, 1);
+                s_cs.SetFloat(InitScaleId, 1f);
+            }
             m.NeedsInit = false;
             m.Simulated = true;
         }
@@ -556,6 +610,7 @@ namespace MistWorms.Render.Gpu
                 float dist = (m.Center - camPos).magnitude;
                 m.Simulated = m.ForceSimulated || (!m.Frozen && dist < FreezeDistance);
                 if (m.Simulated) simulatedMasses++;
+                if (m.DrawEnd > m.ActiveCount && now > m.ShrinkUntil) { m.DrawEnd = m.ActiveCount; s_signature = 0; }
                 FillParams(m, m.Simulated);
             }
             s_masses.SetData(s_massParams);
@@ -617,7 +672,7 @@ namespace MistWorms.Render.Gpu
                 int lod = dist < LodDistances[0] ? 0 : dist < LodDistances[1] ? 1 : 2;
                 m.Visible = vis;
                 m.Lod = lod;
-                sig = sig * 31 + (vis ? 1 + lod : 0) + m.WormCount * 7 + m.FirstWorm * 13;
+                sig = sig * 31 + (vis ? 1 + lod : 0) + m.DrawEnd * 7 + m.FirstWorm * 13;
                 if (!vis) continue;
                 visible++;
                 Bounds b = new Bounds(m.Center, new Vector3(ext * 2f + 4f, ext * 2f + 4f, ext * 2f + 4f));
@@ -641,14 +696,14 @@ namespace MistWorms.Render.Gpu
                     if (m == null || !m.Visible) continue;
                     NativeArray<uint> list = s_listData[m.Lod];
                     int c = s_listCount[m.Lod];
-                    for (int w = 0; w < m.WormCount; w++) list[c + w] = (uint)(m.FirstWorm + w);
-                    s_listCount[m.Lod] = c + m.WormCount;
+                    for (int w = 0; w < m.DrawEnd; w++) list[c + w] = (uint)(m.FirstWorm + w);
+                    s_listCount[m.Lod] = c + m.DrawEnd;
                     if (m.Lod == 0)
                     {
                         // shadows of LOD0 only, and for one worm in two (the simulation does not flag the outer layer yet)
                         NativeArray<uint> sh = s_listData[3];
                         int sc = s_listCount[3];
-                        for (int w = 0; w < m.WormCount; w += 2) sh[sc++] = (uint)(m.FirstWorm + w);
+                        for (int w = 0; w < m.DrawEnd; w += 2) sh[sc++] = (uint)(m.FirstWorm + w);
                         s_listCount[3] = sc;
                     }
                 }

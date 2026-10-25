@@ -426,7 +426,7 @@ namespace MistWorms.Render.Gpu
         }
 
         /// <summary>Port of SolidPush in WormSim.compute: a node inside the visual hull of the obstacles leaves by the axis of the smallest penetration.</summary>
-        public Vector3 SolidPush(int mi, in GpuMassParams m, Vector3 x)
+        public Vector3 SolidPush(int mi, in GpuMassParams m, Vector3 x, bool glide = true)
         {
             if (m.Side.w < 0.5f) return x;
             float fx = (x.x - m.GridRect.x) * m.GridRect.w;
@@ -453,7 +453,7 @@ namespace MistWorms.Render.Gpu
             if (pe < best) { best = pe; dir = 1; }
             if (ps < best) { best = ps; dir = 2; }
             if (pn < best) { best = pn; dir = 3; }
-            float slide = (best + WormSimConst.Radius) * WormSimConst.SlideGain;
+            float slide = glide ? (best + WormSimConst.Radius) * WormSimConst.SlideGain : 0f;
             if (dir == 0 || dir == 1)
             {
                 float hz = m.Heading.z, mid = 0.5f * (smin + nmax);
@@ -577,7 +577,7 @@ namespace MistWorms.Render.Gpu
         // ---------------------------------------------------------------- kernels
 
         /// <summary>KInit: puts the worms [first, first + count) straight at their home point, at rest.</summary>
-        public void Init(int first, int count)
+        public void Init(int first, int count, float scale = 1f)
         {
             for (int w = first; w < first + count; w++)
             {
@@ -592,7 +592,7 @@ namespace MistWorms.Render.Gpu
                 {
                     Vector3 p = hp + Scale(dir, (i - 3.5f) * WormSimConst.SegLen);
                     p.y = Math.Max(p.y, Ground((int)wd.Mass, m, p.x, p.z) + WormSimConst.Radius);
-                    Pos[w * K + i] = new Vector4(p.x, p.y, p.z, 1f);
+                    Pos[w * K + i] = new Vector4(p.x, p.y, p.z, scale);
                     Prev[w * K + i] = Pos[w * K + i];
                     Pred[w * K + i] = Pos[w * K + i];
                     NodeAnchor[w * K + i] = 0u;
@@ -968,6 +968,7 @@ namespace MistWorms.Render.Gpu
                     float att2 = 0f;
                     x[e] = SkinSurface(mi, nodeA[e], x[e], !pend || e == 0, off, ref att2);
                 }
+                x[e] = SolidPush(mi, m, x[e], false);
                 float g = Ground(mi, m, x[e].x, x[e].z) + WormSimConst.Radius;
                 if (x[e].y < g) x[e].y = g;
                 Vector3 vel = x[e] - o[e];
@@ -975,8 +976,10 @@ namespace MistWorms.Render.Gpu
                 vel.x *= 1f - m.Sleeve.w * tg;
                 vel.z *= 1f - m.Sleeve.w * tg;
                 vel = Scale(vel, 1f + (WormSimConst.BodyDamp - 1f) * _attached[e]);
-                Pos[w * K + e] = new Vector4(x[e].x, x[e].y, x[e].z, rs[e]);
-                Prev[w * K + e] = new Vector4(x[e].x - vel.x, x[e].y - vel.y, x[e].z - vel.z, rs[e]);
+                float rsn = rs[e];
+                if (m.Plan2.y > 0.5f) rsn = (uint)(w - (int)m.FirstWorm) < (uint)(m.Plan2.y + 0.5f) ? Math.Min(1f, rsn + WormSimConst.Dt / WormSimConst.BirthTime) : Math.Max(0f, rsn - WormSimConst.Dt / WormSimConst.BirthTime);
+                Pos[w * K + e] = new Vector4(x[e].x, x[e].y, x[e].z, rsn);
+                Prev[w * K + e] = new Vector4(x[e].x - vel.x, x[e].y - vel.y, x[e].z - vel.z, rsn);
             }
         }
     }

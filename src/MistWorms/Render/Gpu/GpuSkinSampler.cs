@@ -28,9 +28,6 @@ namespace MistWorms.Render.Gpu
         private readonly BoneWeight[][] _weights = new BoneWeight[MaxSources][];
         private readonly Matrix4x4[][] _bindposes = new Matrix4x4[MaxSources][];
         private readonly Transform[][] _bones = new Transform[MaxSources][];
-        private readonly Matrix4x4[][] _boneM = new Matrix4x4[MaxSources][];
-        private readonly int[][] _boneStamp = new int[MaxSources][];
-        private int _stamp;
         // the bones the anchors use (indices of the vertices of the set), and the matrices uploaded each frame
         private readonly Transform[] _usedT = new Transform[WormSimConst.MaxBones];
         private readonly Matrix4x4[] _usedBind = new Matrix4x4[WormSimConst.MaxBones];
@@ -55,6 +52,15 @@ namespace MistWorms.Render.Gpu
         public double TotalMs { get; private set; }
         public double MaxMs { get; private set; }
         public double LastSelectMs { get; private set; }
+        /// <summary>The longest call of <see cref="Sample"/> that started a selection or took its result (main thread): the spike at the start of an engulf.</summary>
+        public double SpikeMs { get; private set; }
+        /// <summary>The same, for a selection that read the meshes and chose the anchors (first engulf of a mesh), and for one that took them from the cache.</summary>
+        public double SpikeUncachedMs { get; private set; }
+        public double SpikeCachedMs { get; private set; }
+        /// <summary>Where the time of the last selection went, main thread (ms): reading and skinning, mapping the bones and logging, uploading the static data to the GPU.</summary>
+        public string SpikeBreakdown { get; private set; } = "none";
+        private double _applyMs, _uploadMs;
+        public void ResetSpike() { SpikeMs = 0; SpikeUncachedMs = 0; SpikeCachedMs = 0; }
         public string Description { get; private set; } = "none";
         /// <summary>The Animator of the target, looked up once per selection, here and nowhere else: found or not, humanoid avatar or not.</summary>
         public string AnimatorInfo { get; private set; } = "not looked up";
@@ -102,31 +108,6 @@ namespace MistWorms.Render.Gpu
             return sig;
         }
 
-        private Matrix4x4 BoneMatrix(int src, int bone)
-        {
-            if (_boneStamp[src][bone] != _stamp)
-            {
-                Transform t = _bones[src][bone];
-                _boneM[src][bone] = t != null ? t.localToWorldMatrix * _bindposes[src][bone] : Matrix4x4.identity;
-                _boneStamp[src][bone] = _stamp;
-            }
-            return _boneM[src][bone];
-        }
-
-        /// <summary>World position of a vertex of a source in the pose of now (skinned by the weights, or transformed for a mesh filter): only for the selection.</summary>
-        private Vector3 SkinVertex(int src, int v)
-        {
-            Vector3 p = _rest[src][v];
-            if (_mf[src] != null) return _mf[src].transform.TransformPoint(p);
-            BoneWeight bw = _weights[src][v];
-            Vector3 sp = Vector3.zero;
-            if (bw.weight0 > 0f) sp += BoneMatrix(src, bw.boneIndex0).MultiplyPoint3x4(p) * bw.weight0;
-            if (bw.weight1 > 0f) sp += BoneMatrix(src, bw.boneIndex1).MultiplyPoint3x4(p) * bw.weight1;
-            if (bw.weight2 > 0f) sp += BoneMatrix(src, bw.boneIndex2).MultiplyPoint3x4(p) * bw.weight2;
-            if (bw.weight3 > 0f) sp += BoneMatrix(src, bw.boneIndex3).MultiplyPoint3x4(p) * bw.weight3;
-            return sp;
-        }
-
         /// <summary>
         /// Uploads the matrices of the bones of the anchors of <paramref name="m"/> for this frame (and, the first time or after a new selection, everything static). Selects the anchors
         /// on the skin of <paramref name="root"/> when needed (<paramref name="foot"/> and <paramref name="height"/>: the target, for the height of an anchor over the height of the
@@ -135,10 +116,14 @@ namespace MistWorms.Render.Gpu
         public bool Sample(GpuMass m, Transform root, float foot, float height)
         {
             long t0 = Stopwatch.GetTimestamp();
-            bool ok = false;
+            bool ok = false, spike = false;
             if (root != null && height > 0.05f)
             {
-                if (root != _root || _set == null || SourceLost())
+                if (_pendingTask != null && root == _root)
+                {
+                    spike = TakePending();           // the worker is still choosing the anchors (the capsules draw the target meanwhile), or has just finished
+                }
+                else if (root != _root || _set == null || SourceLost())
                 {
                     Collect(root);
                     int sig = Signature();
@@ -147,11 +132,19 @@ namespace MistWorms.Render.Gpu
                         _root = root;
                         _signature = sig;
                         Select(foot, height);
+                        spike = true;
                     }
                 }
                 ok = _set != null && _set.Count > 0 && Update(m, height);
             }
             double ms = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
+            if (spike)
+            {
+                if (ms > SpikeMs) SpikeMs = ms;
+                if (LastFromCache) { if (ms > SpikeCachedMs) SpikeCachedMs = ms; }
+                else if (ms > SpikeUncachedMs) SpikeUncachedMs = ms;
+                SpikeBreakdown = $"call {ms:0.00} ms = selection {LastSelectMs:0.00} + bones, cache and log {_applyMs:0.00} + upload to the GPU {_uploadMs:0.00} (+ rest {ms - LastSelectMs - _applyMs - _uploadMs:0.00})";
+            }
             Samples++;
             TotalMs += ms;
             if (ms > MaxMs) MaxMs = ms;
@@ -167,19 +160,6 @@ namespace MistWorms.Render.Gpu
                 else if (_mf[i] == null) return true;
             }
             return false;
-        }
-
-        // The slot of a bone among the bones of the anchors (added when new); -1 when the table is full.
-        private int BoneSlot(Dictionary<int, int> map, int src, int bone)
-        {
-            int key = src * 4096 + bone;
-            if (map.TryGetValue(key, out int slot)) return slot;
-            if (_usedCount >= WormSimConst.MaxBones) return -1;
-            slot = _usedCount++;
-            map[key] = slot;
-            if (_mf[src] != null) { _usedT[slot] = _mf[src].transform; _usedBind[slot] = Matrix4x4.identity; }
-            else { _usedT[slot] = _bones[src][bone]; _usedBind[slot] = _bindposes[src][bone]; }
-            return slot;
         }
 
         private const int MaxCandidates = 150000;
@@ -229,148 +209,320 @@ namespace MistWorms.Render.Gpu
             }
         }
 
-        // The anchors are chosen among the vertices of the pose of now (all the sources together), once; the weights and the bind poses are read once.
+        // ------------------------------------------------------------------ caches
+
+        /// <summary>What is read from a mesh asset, once per mesh whatever the number of targets that wear it (a player mesh is read once, not at every engulf).</summary>
+        private sealed class MeshData
+        {
+            public Vector3[] Rest, RestN;
+            public BoneWeight[] Weights;
+            public Matrix4x4[] Bindposes;
+            public int[] Tris;
+        }
+
+        private static readonly Dictionary<int, MeshData> s_meshData = new Dictionary<int, MeshData>();
+
+        /// <summary>The anchors chosen for a set of skinned meshes, shared by every target that wears them: the choice is made on the first, the rest only maps the bones to its own transforms.</summary>
+        private sealed class CachedSet
+        {
+            public GpuSkinSet Set;
+            public List<int> BoneKeys;
+            public float Area, MeshArea, Thinned;
+            public int Candidates;
+        }
+
+        private static readonly Dictionary<long, CachedSet> s_sets = new Dictionary<long, CachedSet>();
+
+        /// <summary>Number of meshes and of sets in the caches (dev checks).</summary>
+        public static int CachedMeshes => s_meshData.Count;
+        public static int CachedSets => s_sets.Count;
+        /// <summary>True when the last selection came from the cache.</summary>
+        public bool LastFromCache { get; private set; }
+
+        private static MeshData DataOf(Mesh mesh)
+        {
+            int id = mesh.GetInstanceID();
+            if (s_meshData.TryGetValue(id, out MeshData d)) return d;
+            d = new MeshData { Rest = mesh.vertices, RestN = mesh.normals, Weights = mesh.boneWeights, Bindposes = mesh.bindposes, Tris = mesh.triangles };
+            if (d.RestN.Length != d.Rest.Length) d.RestN = new Vector3[d.Rest.Length];
+            if (d.Weights.Length != d.Rest.Length) { d.Weights = new BoneWeight[d.Rest.Length]; for (int v = 0; v < d.Weights.Length; v++) d.Weights[v].weight0 = 1f; }
+            s_meshData[id] = d;
+            return d;
+        }
+
+        private long SetKey()
+        {
+            if (_structure) return 0;       // a structure is read in its own scale and rotation: never shared
+            long key = 17;
+            for (int i = 0; i < _sources; i++) key = key * 1000003L + _smr[i].sharedMesh.GetInstanceID() * 31L + _smr[i].bones.Length;
+            return key;
+        }
+
+        // The anchors are chosen among the vertices of the pose of now (all the sources together), once per set of meshes; the weights and the bind poses are read once per mesh.
+        // The main thread only reads the meshes it has not seen and the 50 or so matrices of the bones; the vertices are skinned and the anchors chosen on a worker thread.
         private void Select(float foot, float height)
         {
             long t0 = Stopwatch.GetTimestamp();
             _set = null;
             _uploadedTo = null;
-            _root.GetComponentsInChildren(true, _smrAll);
             Animator anim = _root.GetComponentInChildren<Animator>(true);
             AnimatorInfo = $"Animator {(anim != null ? anim.name + " (" + (anim.isHuman ? "humanoid avatar" : "NOT humanoid") + ")" : "none")}";
-            Plugin.Log.LogInfo($"[GpuSkin] root {_root.name}: {_smrAll.Count} skinned mesh renderer(s) including the inactive ones, {_sources} used; {AnimatorInfo}");
-            foreach (SkinnedMeshRenderer r in _smrAll)
-            {
-                bool used = false;
-                for (int i = 0; i < _sources; i++) if (_smr[i] == r) used = true;
-                Mesh sm = r.sharedMesh;
-                Plugin.Log.LogInfo($"[GpuSkin]   {r.name}: {(used ? "used" : "NOT used")}, enabled {r.enabled}, active {r.gameObject.activeInHierarchy}, vertices {(sm != null ? sm.vertexCount : 0)}, " +
-                                   $"readable {(sm != null && sm.isReadable)}, bones {r.bones.Length}, bounds {r.bounds.size.ToString("0.00")}");
-            }
 
-            var all = new List<Vector3>(8192);
-            var srcOf = new List<int>(8192);
-            var vtxOf = new List<int>(8192);
-            // A candidate is a vertex or a point of a triangle (barycentric): the mesh of a character is dense where it is detailed (hands, face) and sparse elsewhere, so that the
-            // vertices alone leave holes of 15 cm and more on the torso and the thighs, where the worms would not be held by any anchor.
-            var triV = new List<Vector3Int>(8192);
-            var triB = new List<Vector3>(8192);
-            MeshArea = 0f;
+            var job = new SelectJob { Foot = foot, Height = height, Sources = _sources, Id = ++_selectId };
             for (int i = 0; i < _sources; i++)
             {
                 Mesh mesh = _smr[i] != null ? _smr[i].sharedMesh : _mf[i].sharedMesh;
-                _rest[i] = mesh.vertices;
-                _restN[i] = mesh.normals.Length == mesh.vertexCount ? mesh.normals : new Vector3[mesh.vertexCount];
+                MeshData d = DataOf(mesh);
+                _bindposes[i] = d.Bindposes;
                 if (_smr[i] != null)
                 {
-                    _weights[i] = mesh.boneWeights;
-                    _bindposes[i] = mesh.bindposes;
                     _bones[i] = _smr[i].bones;
-                    if (_bones[i].Length == 0 || _bones[i].Length != _bindposes[i].Length)
+                    if (_bones[i].Length == 0 || _bones[i].Length != d.Bindposes.Length)
                     {
-                        Plugin.Log.LogWarning($"[GpuSkin]   {_smr[i].name}: {_bones[i].Length} bones for {_bindposes[i].Length} bind poses, skipped");
-                        _rest[i] = new Vector3[0]; _restN[i] = new Vector3[0]; _weights[i] = new BoneWeight[0]; _boneM[i] = new Matrix4x4[0]; _boneStamp[i] = new int[0];
+                        Plugin.Log.LogWarning($"[GpuSkin]   {_smr[i].name}: {_bones[i].Length} bones for {d.Bindposes.Length} bind poses, skipped");
+                        job.Skip[i] = true;
                         continue;
                     }
-                    _boneM[i] = new Matrix4x4[_bones[i].Length];
-                    _boneStamp[i] = new int[_bones[i].Length];
-                    for (int b = 0; b < _boneStamp[i].Length; b++) _boneStamp[i][b] = -1;
-                    if (_weights[i].Length != mesh.vertexCount) { _weights[i] = new BoneWeight[mesh.vertexCount]; for (int v = 0; v < mesh.vertexCount; v++) _weights[i][v].weight0 = 1f; }
+                    var bm = new Matrix4x4[_bones[i].Length];
+                    for (int b = 0; b < bm.Length; b++) bm[b] = _bones[i][b] != null ? _bones[i][b].localToWorldMatrix * d.Bindposes[b] : Matrix4x4.identity;
+                    job.BoneM[i] = bm;
+                    job.Weights[i] = d.Weights;
                 }
+                else job.Local2World[i] = _mf[i].transform.localToWorldMatrix;
+                job.IsFilter[i] = _mf[i] != null;
+                job.Rest[i] = d.Rest;
+                job.RestN[i] = d.RestN;
+                job.Tris[i] = d.Tris;
             }
-            _stamp++;
-            var worldOf = new Vector3[_sources][];
-            for (int i = 0; i < _sources; i++)
-            {
-                int n = _rest[i].Length;
-                worldOf[i] = new Vector3[n];
-                if (n == 0) continue;
-                for (int v = 0; v < n; v++)
-                {
-                    Vector3 p = SkinVertex(i, v);
-                    worldOf[i][v] = p;
-                    all.Add(p); srcOf.Add(i); vtxOf.Add(v); triV.Add(new Vector3Int(v, v, v)); triB.Add(new Vector3(1f, 0f, 0f));
-                }
-                Mesh mesh = _smr[i] != null ? _smr[i].sharedMesh : _mf[i].sharedMesh;
-                int[] tris = mesh.triangles;
-                float area = 0f;
-                Vector3 mn = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue), mx = -mn;
-                for (int k = 0; k + 2 < tris.Length; k += 3) area += Vector3.Cross(worldOf[i][tris[k + 1]] - worldOf[i][tris[k]], worldOf[i][tris[k + 2]] - worldOf[i][tris[k]]).magnitude * 0.5f;
-                AddTriangleSamples(i, tris, worldOf[i], all, srcOf, vtxOf, triV, triB);
-                foreach (Vector3 w in worldOf[i]) { mn = Vector3.Min(mn, w); mx = Vector3.Max(mx, w); }
-                MeshArea += area;
-                Plugin.Log.LogInfo($"[GpuSkin]   source {i} {(_smr[i] != null ? _smr[i].name : _mf[i].name)}: {n} vertices skinned, area {area:0.000} m2, world size {(mx - mn).ToString("0.00")}, " +
-                                   $"bounds of the renderer {(_smr[i] != null ? _smr[i].bounds.size.ToString("0.00") : "-")}");
-            }
-            var picks = new int[WormSimConst.MaxAnchors];
-            int count = GpuSkinAnchors.Select(all, all.Count, WormSimConst.MaxAnchors, picks, out _area);
-            float thinned = _area;
-            if (MeshArea > _area) _area = MeshArea;      // the surface the worms can cover is the real one (the thinning of the anchors counts only the area it samples)
+            MeshArea = 0f;
 
-            // the static data of the anchors: rest vertex, bones (renumbered among the bones the anchors use), weights, height over the target
-            var set = new GpuSkinSet { Count = count, Area = _area };
-            var pose = new Vector3[count];
-            var map = new Dictionary<int, int>(128);
-            _usedCount = 0;
-            int dropped = 0;
-            for (int a = 0; a < count; a++)
+            long key = SetKey();
+            if (key != 0 && s_sets.TryGetValue(key, out CachedSet cached))
             {
-                int ci = picks[a];
-                int src = srcOf[ci];
-                Vector3Int tv = triV[ci];
-                Vector3 bc = triB[ci];
-                Vector3 wp = all[ci];
-                pose[a] = wp;
-                float b2 = 1f - bc.x - bc.y;
-                Vector3 rp = _rest[src][tv.x] * bc.x + _rest[src][tv.y] * bc.y + _rest[src][tv.z] * b2;
-                Vector3 rn = _restN[src][tv.x] * bc.x + _restN[src][tv.y] * bc.y + _restN[src][tv.z] * b2;
-                float rnl = rn.magnitude;
-                rn = rnl > 1e-6f ? rn / rnl : _restN[src][tv.x];
-                var sv = new GpuSkinVertex { PosRel = new Vector4(rp.x, rp.y, rp.z, Mathf.Clamp01((wp.y - foot) / height)), Normal = new Vector4(rn.x, rn.y, rn.z, 0f) };
-                if (_mf[src] != null)
-                {
-                    sv.Bone0 = (uint)BoneSlot(map, src, 0);
-                    sv.Weights = new Vector4(1f, 0f, 0f, 0f);
-                }
-                else
-                {
-                    // the influences of the three vertices of the triangle, mixed by the barycentric weights, the four strongest kept
-                    int ni = 0;
-                    AddInfluence(_infId, _infW, ref ni, _weights[src][tv.x], bc.x);
-                    if (bc.y > 0f) AddInfluence(_infId, _infW, ref ni, _weights[src][tv.y], bc.y);
-                    if (b2 > 1e-6f) AddInfluence(_infId, _infW, ref ni, _weights[src][tv.z], b2);
-                    var ids = new int[4];
-                    var ws = new float[4];
-                    for (int k = 0; k < 4; k++)
-                    {
-                        int bi = -1;
-                        for (int q = 0; q < ni; q++) if (_infW[q] > 0f && (bi < 0 || _infW[q] > _infW[bi])) bi = q;
-                        if (bi < 0) break;
-                        ids[k] = _infId[bi]; ws[k] = _infW[bi]; _infW[bi] = 0f;
-                    }
-                    var slots = new uint[4];
-                    float sum = 0f;
-                    for (int k = 0; k < 4; k++)
-                    {
-                        if (!(ws[k] > 0f)) { ws[k] = 0f; continue; }
-                        int slot = BoneSlot(map, src, ids[k]);
-                        if (slot < 0) { ws[k] = 0f; dropped++; continue; }
-                        slots[k] = (uint)slot;
-                        sum += ws[k];
-                    }
-                    if (sum <= 0f) { ws[0] = 1f; sum = 1f; slots[0] = 0u; }
-                    sv.Bone0 = slots[0]; sv.Bone1 = slots[1]; sv.Bone2 = slots[2]; sv.Bone3 = slots[3];
-                    sv.Weights = new Vector4(ws[0] / sum, ws[1] / sum, ws[2] / sum, ws[3] / sum);
-                }
-                set.Verts[a] = sv;
+                ApplySet(cached.Set, cached.BoneKeys, cached.Area, cached.MeshArea, cached.Thinned, cached.Candidates, 0.0, 0);
+                LastFromCache = true;
+                LastSelectMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
+                return;
             }
-            set.BoneCount = _usedCount;
-            set.Finish(pose);
-            _set = set;
+            LastFromCache = false;
             LastSelectMs = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
-            Description = $"{(_structure ? "structure mesh filters" : "skinned meshes (GPU skinning of the anchors)")}: {_sources} source(s), {all.Count} vertices, mesh area {MeshArea:0.00} m2, {count} anchors (thinning estimate {thinned:0.00} m2), surface used {_area:0.00} m2, " +
-                          $"{_usedCount} bones, selected in {LastSelectMs:0.0} ms; {AnimatorInfo}";
+            job.CacheKey = key;
+            _pendingJob = job;
+            _pendingTask = System.Threading.Tasks.Task.Run(() => Compute(job));
+        }
+
+        /// <summary>The bones of the anchors of a set, mapped to the transforms of this target.</summary>
+        private void ApplySet(GpuSkinSet set, List<int> boneKeys, float area, float meshArea, float thinned, int candidates, double workerMs, int dropped)
+        {
+            long a0 = Stopwatch.GetTimestamp();
+            _usedCount = boneKeys.Count;
+            for (int slot = 0; slot < _usedCount; slot++)
+            {
+                int src = boneKeys[slot] / 4096, bone = boneKeys[slot] % 4096;
+                if (_mf[src] != null) { _usedT[slot] = _mf[src].transform; _usedBind[slot] = Matrix4x4.identity; }
+                else { _usedT[slot] = _bones[src][bone]; _usedBind[slot] = _bindposes[src][bone]; }
+            }
+            _area = area;
+            MeshArea = meshArea;
+            _set = set;
+            Description = $"{(_structure ? "structure mesh filters" : "skinned meshes (GPU skinning of the anchors)")}: {_sources} source(s), {candidates} candidates, mesh area {meshArea:0.00} m2, {set.Count} anchors (thinning estimate {thinned:0.00} m2), surface used {area:0.00} m2, " +
+                          $"{_usedCount} bones, {(workerMs > 0.0 ? $"{LastSelectMs:0.0} ms on the main thread + {workerMs:0.0} ms on a worker" : "from the cache")}; {AnimatorInfo}";
             Plugin.Log.LogInfo($"[GpuSkin] target {_root.name}: {Description}{(dropped > 0 ? $"; WARNING {dropped} bone influences dropped (more than {WormSimConst.MaxBones} bones)" : string.Empty)}");
+            _applyMs = (Stopwatch.GetTimestamp() - a0) * 1000.0 / Stopwatch.Frequency;
+        }
+
+        private int _selectId;
+        private SelectJob _pendingJob;
+        private System.Threading.Tasks.Task _pendingTask;
+
+        /// <summary>Everything the worker thread needs and returns: plain arrays, no Unity object.</summary>
+        private sealed class SelectJob
+        {
+            public int Id, Sources;
+            public float Foot, Height;
+            public long CacheKey;
+            public readonly bool[] Skip = new bool[MaxSources];
+            public readonly Matrix4x4[][] BoneM = new Matrix4x4[MaxSources][];
+            public readonly Matrix4x4[] Local2World = new Matrix4x4[MaxSources];
+            public readonly Vector3[][] World = new Vector3[MaxSources][];
+            public readonly int[][] Tris = new int[MaxSources][];
+            public readonly Vector3[][] Rest = new Vector3[MaxSources][];
+            public readonly Vector3[][] RestN = new Vector3[MaxSources][];
+            public readonly BoneWeight[][] Weights = new BoneWeight[MaxSources][];
+            public readonly bool[] IsFilter = new bool[MaxSources];
+            // result
+            public GpuSkinSet Set;
+            public readonly List<int> BoneKeys = new List<int>(64);       // src * 4096 + bone, by slot
+            public int Dropped, Candidates;
+            public float MeshArea, Thinned, Area;
+            public double Ms;
+            public string Error;
+        }
+
+        /// <summary>The work of the selection, on a worker thread (pure maths on arrays).</summary>
+        private static void Compute(SelectJob job)
+        {
+            long t0 = Stopwatch.GetTimestamp();
+            try
+            {
+                var all = new List<Vector3>(8192);
+                var srcOf = new List<int>(8192);
+                var vtxOf = new List<int>(8192);
+                // A candidate is a vertex or a point of a triangle (barycentric): the mesh of a character is dense where it is detailed (hands, face) and sparse elsewhere, so that the
+                // vertices alone leave holes of 15 cm and more on the torso and the thighs, where the worms would not be held by any anchor.
+                var triV = new List<Vector3Int>(8192);
+                var triB = new List<Vector3>(8192);
+                float meshArea = 0f;
+                for (int i = 0; i < job.Sources; i++)
+                {
+                    if (job.Skip[i] || job.Rest[i] == null) { job.World[i] = new Vector3[0]; continue; }
+                    Vector3[] world = SkinSource(job, i);
+                    job.World[i] = world;
+                    for (int v = 0; v < world.Length; v++)
+                    {
+                        all.Add(world[v]); srcOf.Add(i); vtxOf.Add(v); triV.Add(new Vector3Int(v, v, v)); triB.Add(new Vector3(1f, 0f, 0f));
+                    }
+                    int[] tris = job.Tris[i];
+                    float area = 0f;
+                    for (int k = 0; k + 2 < tris.Length; k += 3) area += Vector3.Cross(world[tris[k + 1]] - world[tris[k]], world[tris[k + 2]] - world[tris[k]]).magnitude * 0.5f;
+                    meshArea += area;
+                    AddTriangleSamples(i, tris, world, all, srcOf, vtxOf, triV, triB);
+                }
+                job.MeshArea = meshArea;
+                job.Candidates = all.Count;
+                var picks = new int[WormSimConst.MaxAnchors];
+                int count = GpuSkinAnchors.Select(all, all.Count, WormSimConst.MaxAnchors, picks, out float thinned);
+                job.Thinned = thinned;
+                float areaUsed = meshArea > thinned ? meshArea : thinned;      // the surface the worms can cover is the real one (the thinning of the anchors counts only the area it samples)
+                job.Area = areaUsed;
+
+                var set = new GpuSkinSet { Count = count, Area = areaUsed };
+                var pose = new Vector3[count];
+                var map = new Dictionary<int, int>(128);
+                var infId = new int[12];
+                var infW = new float[12];
+                for (int a = 0; a < count; a++)
+                {
+                    int ci = picks[a];
+                    int src = srcOf[ci];
+                    Vector3Int tv = triV[ci];
+                    Vector3 bc = triB[ci];
+                    Vector3 wp = all[ci];
+                    pose[a] = wp;
+                    float b2 = 1f - bc.x - bc.y;
+                    Vector3[] rest = job.Rest[src], restN = job.RestN[src];
+                    Vector3 rp = rest[tv.x] * bc.x + rest[tv.y] * bc.y + rest[tv.z] * b2;
+                    Vector3 rn = restN[tv.x] * bc.x + restN[tv.y] * bc.y + restN[tv.z] * b2;
+                    float rnl = rn.magnitude;
+                    rn = rnl > 1e-6f ? rn / rnl : restN[tv.x];
+                    var sv = new GpuSkinVertex { PosRel = new Vector4(rp.x, rp.y, rp.z, Mathf.Clamp01((wp.y - job.Foot) / job.Height)), Normal = new Vector4(rn.x, rn.y, rn.z, 0f) };
+                    if (job.IsFilter[src])
+                    {
+                        sv.Bone0 = (uint)Slot(job, map, src, 0);
+                        sv.Weights = new Vector4(1f, 0f, 0f, 0f);
+                    }
+                    else
+                    {
+                        // the influences of the three vertices of the triangle, mixed by the barycentric weights, the four strongest kept
+                        BoneWeight[] weights = job.Weights[src];
+                        int ni = 0;
+                        AddInfluence(infId, infW, ref ni, weights[tv.x], bc.x);
+                        if (bc.y > 0f) AddInfluence(infId, infW, ref ni, weights[tv.y], bc.y);
+                        if (b2 > 1e-6f) AddInfluence(infId, infW, ref ni, weights[tv.z], b2);
+                        var ids = new int[4];
+                        var ws = new float[4];
+                        for (int k = 0; k < 4; k++)
+                        {
+                            int bi = -1;
+                            for (int q = 0; q < ni; q++) if (infW[q] > 0f && (bi < 0 || infW[q] > infW[bi])) bi = q;
+                            if (bi < 0) break;
+                            ids[k] = infId[bi]; ws[k] = infW[bi]; infW[bi] = 0f;
+                        }
+                        var slots = new uint[4];
+                        float sum = 0f;
+                        for (int k = 0; k < 4; k++)
+                        {
+                            if (!(ws[k] > 0f)) { ws[k] = 0f; continue; }
+                            int slot = Slot(job, map, src, ids[k]);
+                            if (slot < 0) { ws[k] = 0f; job.Dropped++; continue; }
+                            slots[k] = (uint)slot;
+                            sum += ws[k];
+                        }
+                        if (sum <= 0f) { ws[0] = 1f; sum = 1f; slots[0] = 0u; }
+                        sv.Bone0 = slots[0]; sv.Bone1 = slots[1]; sv.Bone2 = slots[2]; sv.Bone3 = slots[3];
+                        sv.Weights = new Vector4(ws[0] / sum, ws[1] / sum, ws[2] / sum, ws[3] / sum);
+                    }
+                    set.Verts[a] = sv;
+                }
+                set.BoneCount = job.BoneKeys.Count;
+                set.Finish(pose);
+                job.Set = set;
+            }
+            catch (System.Exception e)
+            {
+                job.Error = e.ToString();
+            }
+            job.Ms = (Stopwatch.GetTimestamp() - t0) * 1000.0 / Stopwatch.Frequency;
+        }
+
+        /// <summary>World position of every vertex of a source in the pose of now: skinned by the weights with the matrices of the bones, or transformed for a mesh filter.</summary>
+        private static Vector3[] SkinSource(SelectJob job, int src)
+        {
+            Vector3[] rest = job.Rest[src];
+            if (job.Skip[src] || rest == null) return new Vector3[0];
+            var world = new Vector3[rest.Length];
+            if (job.IsFilter[src])
+            {
+                Matrix4x4 l2w = job.Local2World[src];
+                for (int v = 0; v < rest.Length; v++) world[v] = l2w.MultiplyPoint3x4(rest[v]);
+                return world;
+            }
+            BoneWeight[] weights = job.Weights[src];
+            Matrix4x4[] bm = job.BoneM[src];
+            for (int v = 0; v < rest.Length; v++)
+            {
+                Vector3 p = rest[v];
+                BoneWeight bw = weights[v];
+                Vector3 sp = Vector3.zero;
+                if (bw.weight0 > 0f) sp += bm[bw.boneIndex0].MultiplyPoint3x4(p) * bw.weight0;
+                if (bw.weight1 > 0f) sp += bm[bw.boneIndex1].MultiplyPoint3x4(p) * bw.weight1;
+                if (bw.weight2 > 0f) sp += bm[bw.boneIndex2].MultiplyPoint3x4(p) * bw.weight2;
+                if (bw.weight3 > 0f) sp += bm[bw.boneIndex3].MultiplyPoint3x4(p) * bw.weight3;
+                world[v] = sp;
+            }
+            return world;
+        }
+
+        // The slot of a bone among the bones of the anchors (added when new); -1 when the table is full.
+        private static int Slot(SelectJob job, Dictionary<int, int> map, int src, int bone)
+        {
+            int key = src * 4096 + bone;
+            if (map.TryGetValue(key, out int slot)) return slot;
+            if (job.BoneKeys.Count >= WormSimConst.MaxBones) return -1;
+            slot = job.BoneKeys.Count;
+            job.BoneKeys.Add(key);
+            map[key] = slot;
+            return slot;
+        }
+
+        /// <summary>Takes the result of the worker when it is done (main thread). True when the set is there.</summary>
+        private bool TakePending()
+        {
+            if (_pendingTask == null) return _set != null;
+            if (!_pendingTask.IsCompleted) return false;
+            SelectJob job = _pendingJob;
+            _pendingTask = null;
+            _pendingJob = null;
+            if (job.Id != _selectId) return false;                  // an older selection (the target changed since)
+            if (job.Error != null || job.Set == null)
+            {
+                Plugin.Log.LogWarning("[GpuSkin] selection failed: " + job.Error);
+                _signature = 0;
+                return false;
+            }
+            if (job.CacheKey != 0) s_sets[job.CacheKey] = new CachedSet { Set = job.Set, BoneKeys = job.BoneKeys, Area = job.Area, MeshArea = job.MeshArea, Thinned = job.Thinned, Candidates = job.Candidates };
+            ApplySet(job.Set, job.BoneKeys, job.Area, job.MeshArea, job.Thinned, job.Candidates, job.Ms, job.Dropped);
+            return true;
         }
 
         // The whole per frame job: the matrices of the bones of the anchors, relative to the origin of the mass.
@@ -378,7 +530,9 @@ namespace MistWorms.Render.Gpu
         {
             if (_uploadedTo != m || m.SkinSet != _set)
             {
+                long u0 = Stopwatch.GetTimestamp();
                 GpuWormHost.UploadSkin(m, _set);
+                _uploadMs = (Stopwatch.GetTimestamp() - u0) * 1000.0 / Stopwatch.Frequency;
                 _uploadedTo = m;
             }
             Vector3 o = m.Origin;

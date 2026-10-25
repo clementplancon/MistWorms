@@ -416,6 +416,33 @@ namespace MistWorms.Mass
 
         // ------------------------------------------------------------------ movement
 
+        private const float PlayerBodyRadius = 0.3f;
+
+        /// <summary>
+        /// What a target's body adds to the engulf range: the range r + Mass.EngulfRange was calibrated on the capsule of a player (0.3 m). A creature wider than that keeps the mass
+        /// farther from its centre (the two bodies collide), by its own radius minus the player's: with r(40) = 0.43 m a Seeker could not be reached any more.
+        /// </summary>
+        /// <summary>
+        /// The radius the engulf range counts from: r(n), but never less than what the bodies allow. The physical capsule of a mass is bounded at Mass.MaxColliderRadius whatever r(n) is
+        /// (0.5 m), and the capsule of a player is 0.3 m: the centres of the two cannot come closer than 0.8 m, so a small mass (r(40) = 0.43) whose range was r + 0.6 = 1.03 m stood at
+        /// 0.99 m and could never engulf. With this floor the range is at least 1.4 m for a player.
+        /// </summary>
+        private float EngulfRadius(float r)
+        {
+            if (_capsule == null) _capsule = GetComponent<CapsuleCollider>();
+            float body = _capsule != null ? _capsule.radius : MWConfig.Mass.MaxColliderRadius.Value;
+            return Mathf.Max(r, body + PlayerBodyRadius);
+        }
+
+        private float TargetBodyExtra()
+        {
+            if (_tKind != TargetKind.Creature || _tChar == null) return 0f;
+            Collider c = _tChar.GetComponent<Collider>();
+            if (c == null) return 0f;
+            Vector3 e = c.bounds.extents;
+            return Mathf.Max(0f, Mathf.Max(e.x, e.z) - PlayerBodyRadius);
+        }
+
         private void Hunt(float dt, Vector3? seek = null)
         {
             _state.SetMode(MassStateCodes.Hunt);
@@ -423,7 +450,7 @@ namespace MistWorms.Mass
 
             Vector3 goal = seek ?? DevGoal ?? TargetPos();
             // A little inside the engulf range: the walk helper may stop a few tenths short of its stop distance, and the engulfing needs flat <= r + EngulfRange.
-            float stop = seek.HasValue || DevGoal.HasValue ? DevGoalStop : Mathf.Max(0.5f, MassMath.Radius(Mathf.Max(1, _state.N)) + MWConfig.Mass.EngulfRange.Value - HuntStopMargin);
+            float stop = seek.HasValue || DevGoal.HasValue ? DevGoalStop : Mathf.Max(0.5f, EngulfRadius(MassMath.Radius(Mathf.Max(1, _state.N))) + MWConfig.Mass.EngulfRange.Value + TargetBodyExtra() - HuntStopMargin);
 
             WalkTo(dt, goal, stop);
         }
@@ -489,9 +516,9 @@ namespace MistWorms.Mass
                 NoteRefusal(now, $"height gap {Mathf.Abs(tp.y - pos.y):0.00} m over {EngulfMath.MaxHeightGap:0.0}", pos, tp);
                 return;
             }
-            if (!EngulfMath.InEngulfRange(flat, r, MWConfig.Mass.EngulfRange.Value))
+            if (!EngulfMath.InEngulfRange(flat, EngulfRadius(r), MWConfig.Mass.EngulfRange.Value + TargetBodyExtra()))
             {
-                NoteRefusal(now, $"out of range: flat {flat:0.00} m over r {r:0.00} + {MWConfig.Mass.EngulfRange.Value:0.00} = {r + MWConfig.Mass.EngulfRange.Value:0.00}", pos, tp);
+                NoteRefusal(now, $"out of range: flat {flat:0.00} m over r {r:0.00} + {MWConfig.Mass.EngulfRange.Value:0.00} + body {TargetBodyExtra():0.00} = {EngulfRadius(r) + MWConfig.Mass.EngulfRange.Value + TargetBodyExtra():0.00}", pos, tp);
                 return;
             }
 
@@ -540,7 +567,7 @@ namespace MistWorms.Mass
 
             _state.SetMode(MassStateCodes.Engulf);
             SetSpeedFactor(1f);
-            float reach = r + MWConfig.Mass.EngulfRange.Value;
+            float reach = EngulfRadius(r) + MWConfig.Mass.EngulfRange.Value + TargetBodyExtra();
             if (_tKind != TargetKind.Structure) WalkTo(dt, tp, MassEngulf.WalkStop);
             else if (flat > reach) WalkTo(dt, tp, reach);   // a structure is not walked onto: the mass stays against it
             else StopMoving();
@@ -608,6 +635,12 @@ namespace MistWorms.Mass
         /// <summary>True while the mass flees a fire (dev checks).</summary>
         public bool Fleeing => Time.time < _fleeUntil;
 
+        /// <summary>Dev: the point the mass flees from (the torch holder or the fire) and whether it was a torch, as the last check saw it.</summary>
+        public Vector3 FleeFrom => _fleeFrom;
+
+        /// <summary>Dev: what frightened the mass the last time (kind, path, distance).</summary>
+        public string FleeSource { get; private set; }
+
         /// <summary>Times a fire made this mass flee (dev checks).</summary>
         public int FireFlights { get; private set; }
 
@@ -624,7 +657,8 @@ namespace MistWorms.Mass
             Vector3 pos = transform.position;
             float r = MassMath.Radius(Mathf.Max(1, _state.N));
             Vector3 from;
-            bool afraid = FireSources.Nearest(pos + Vector3.up * EyeHeight, r, MWConfig.Fire.FearRadius.Value, FireMargin, out from, out _);
+            bool afraid = FireSources.Nearest(pos + Vector3.up * EyeHeight, r, MWConfig.Fire.FearRadius.Value, FireMargin, transform, out from, out _, out string who);
+            if (afraid) FleeSource = who;
             if (!afraid && m_character.GetSEMan().HaveStatusEffect(SEMan.s_statusEffectBurning))
             {
                 // Burning: no known source, run from the target (or backwards).

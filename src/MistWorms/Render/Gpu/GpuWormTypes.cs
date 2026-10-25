@@ -62,12 +62,16 @@ namespace MistWorms.Render.Gpu
         public const float FallTime = 2.5f;               // a worm that lets go falls for this long at most
         public const float SlideGain = 1.0f;              // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
         public const float HopTime = 0.5f;                // a head that has not reached the anchor of its path in this time goes on to the next one
+        public const float BirthTime = 0.5f;              // a newborn worm grows from nothing in this time, a dying one shrinks to nothing in it
         public const float PendantShare = 0.08f;          // share of the worms of the sleeve that hang by one end
     }
 
     public enum GpuPrimType { Sphere = 0, Capsule = 1, Box = 2 }
 
     public enum GpuMassMode { Dome = 0, Engulf = 1 }
+
+    /// <summary>Config Performance.GpuWorms: Auto uses the GPU ropes when the device supports them, Off keeps the CPU flipbooks.</summary>
+    public enum GpuWormsMode { Auto = 0, Off = 1 }
 
     /// <summary>One worm (16 bytes): the layout of <c>WormData</c> in WormSim.compute.</summary>
     [StructLayout(LayoutKind.Sequential)]
@@ -97,7 +101,7 @@ namespace MistWorms.Render.Gpu
         public Vector4 Skin;       // x number of skin anchors (0 = none), y engulf 0..1, z height of the target, w area of its surface (m2)
         public Vector4 Side;       // depth maps of the obstacles: x lowest height of the side maps (local), y their vertical spacing, z 1 / spacing, w 1 when the maps are valid
         public Vector4 Plan;       // skin sleeve (see GpuSleeve): x worms of the sleeve S, y worms per anchor, z height (rel) of the top of the covered surface, w anchors covered
-        public Vector4 Plan2;      // x anchors of the base of the body (where a worm enters it)
+        public Vector4 Plan2;      // x anchors of the base of the body (where a worm enters it), y worms alive (0 = all; the others shrink to nothing)
     }
 
     /// <summary>An anchor on the surface of the engulfed body (32 bytes), the layout of <c>Anchor</c> in WormSim.compute. Local frame of the mass.</summary>

@@ -88,6 +88,16 @@ namespace MistWorms.Mass
         internal float BoundRadius;
         internal bool Active;
 
+        // The GPU rope colony (GpuMassBridge): when the mass has a GpuMass the layout job is not run and the GPU draws it.
+        internal MistWorms.Render.Gpu.GpuMass Gpu;
+        internal float GpuRefusedUntil;
+        internal Transform GpuTargetTf;
+        internal Collider GpuTargetCol;
+        internal float RibbonWidth => _ribbonWidth;
+        internal float RibbonLength => _ribbonLength;
+        internal Transform TargetTransform => _hasTarget ? _targetTf : null;
+        internal bool GpuDriven => Gpu != null;
+
         /// <summary>The places belong to the layout job (the worker thread runs them): the main thread reads only the output buffers.</summary>
         internal HeapSlots Slots => _slots;
         /// <summary>Hand-over to the layout worker (snapshot in, double buffered output out).</summary>
