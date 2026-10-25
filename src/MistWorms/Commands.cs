@@ -24,6 +24,7 @@ namespace MistWorms
             CommandManager.Instance.AddConsoleCommand(new FreezeCommand());
             CommandManager.Instance.AddConsoleCommand(new GlossCommand());
             CommandManager.Instance.AddConsoleCommand(new MassCommand());
+            CommandManager.Instance.AddConsoleCommand(new MassEngulfCommand());
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_nest", "- place a worm nest in front of the player", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_wake", "- wake every dormant group of the current mine", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_calm", "- send every active group of the current mine back to dormancy", 7));
@@ -167,6 +168,41 @@ namespace MistWorms
                 Mass.WritheMassState mass = Dev.MassDev.SpawnInFront(n, withColony, out Colony.WormColony colony, out string how);
                 mass.FreezeAI = frozen;
                 Print(context, $"mw_mass: mass {mass.ZdoId} of {mass.N} worms (hp {mass.Health:0.#}, radius {mass.TargetRadius:0.00} m), {(colony != null ? how + " colony " + colony.ZdoId : "no colony")}");
+            }
+        }
+
+        private sealed class MassEngulfCommand : MWCommand
+        {
+            public override string Name => "mw_mass_engulf";
+            public override string Help => "[dev] <0..1|off> - force the engulf parameter of the closest writhing mass (render only; the local player is the target when the mass has none)";
+            public override bool IsCheat => true;
+
+            public override List<string> CommandOptionList() => new List<string> { "0", "0.5", "1", "off" };
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                Player player = Player.m_localPlayer;
+                if (args.Length == 0 || player == null)
+                {
+                    Print(context, "usage: mw_mass_engulf <0..1|off> (in game)");
+                    return;
+                }
+                float value;
+                if (string.Equals(args[0], "off", StringComparison.OrdinalIgnoreCase)) value = -1f;
+                else if (!float.TryParse(args[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value))
+                {
+                    Print(context, "usage: mw_mass_engulf <0..1|off>");
+                    return;
+                }
+                Mass.WritheMassState mass = Dev.MassDev.Nearest(player.transform.position);
+                Mass.WritheMassVisual visual = mass != null ? mass.GetComponent<Mass.WritheMassVisual>() : null;
+                if (visual == null)
+                {
+                    Print(context, "mw_mass_engulf: no mass loaded");
+                    return;
+                }
+                visual.ForcedEngulf = value < 0f ? -1f : Math.Min(1f, value);
+                Print(context, $"mw_mass_engulf: mass {mass.ZdoId} engulf {(value < 0f ? "released to the state" : visual.ForcedEngulf.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))}");
             }
         }
 

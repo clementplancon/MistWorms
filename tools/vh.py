@@ -296,6 +296,19 @@ def cmd_attack(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mass_visual(a: argparse.Namespace) -> int:
+    # What the swarm renderer did for a mass: roles visible and drawn, LOD, cap, engulf, cost. No id = the mass closest to the player.
+    query = {"id": a.id} if a.id else None
+    emit(Bridge(a.port).get("/mass-visual", query=query))
+    return 0
+
+
+def cmd_mass_engulf(a: argparse.Namespace) -> int:
+    # The mw_mass_engulf console command owns the switch (dev only until phase 5); the bridge only relays it.
+    emit(Bridge(a.port).post("/console", {"cmd": f"mw_mass_engulf {a.value}"}))
+    return 0
+
+
 def cmd_perf(a: argparse.Namespace) -> int:
     emit(Bridge(a.port).get("/perf"))
     return 0
@@ -304,6 +317,44 @@ def cmd_perf(a: argparse.Namespace) -> int:
 def cmd_shot(a: argparse.Namespace) -> int:
     query = {"name": a.name} if a.name else None
     emit(Bridge(a.port).get("/screenshot", query=query, timeout=60))
+    return 0
+
+
+def assemble_clip(name: str, fps: float, max_width: int) -> None:
+    """Builds NAME.gif and NAME.webp from docs/shots/clips/NAME/frame_*.jpg."""
+    from PIL import Image
+    folder = REPO_ROOT / "docs" / "shots" / "clips" / name
+    files = sorted(folder.glob("frame_*.jpg"))
+    if not files:
+        raise VhError(f"no frame_*.jpg in {folder}")
+    frames = []
+    for f in files:
+        with Image.open(f) as im:
+            im = im.convert("RGB")
+            if im.width > max_width:
+                im = im.resize((max_width, round(im.height * max_width / im.width)), Image.LANCZOS)
+            frames.append(im)
+    duration = max(1, round(1000.0 / fps))
+    out = folder.parent
+    gif, webp = out / f"{name}.gif", out / f"{name}.webp"
+    pal = [f.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE) for f in frames]
+    pal[0].save(gif, save_all=True, append_images=pal[1:], duration=duration, loop=0, optimize=False, disposal=1)
+    frames[0].save(webp, save_all=True, append_images=frames[1:], duration=duration, loop=0, quality=80, method=4)
+    print(f"{len(frames)} frames, {fps:.1f} fps, {frames[0].width}x{frames[0].height}")
+    for path in (gif, webp):
+        print(f"{path}  {path.stat().st_size / 1024:.0f} KiB")
+
+
+def cmd_clip(a: argparse.Namespace) -> int:
+    body = {"name": a.name, "seconds": a.seconds, "fps": a.fps, "scale": a.scale}
+    info = Bridge(a.port).post("/clip", body, timeout=a.seconds * 3 + 60)
+    emit(info)
+    assemble_clip(info.get("name", a.name), float(info["fps"]), a.max_width)
+    return 0
+
+
+def cmd_assemble(a: argparse.Namespace) -> int:
+    assemble_clip(a.name, a.fps, a.max_width)
     return 0
 
 
@@ -578,6 +629,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-colony", action="store_true", help="no colony: the mass cannot dissolve into worms")
     sp.add_argument("--freeze", action="store_true", help="freeze the AI of this mass")
 
+    sp = add("mass-visual", cmd_mass_visual, "GET /mass-visual: roles visible/drawn, LOD, cap, engulf and cost of the swarm of a mass")
+    sp.add_argument("id", nargs="?", help="ZDOID user:id of the mass (default: the closest to the player)")
+
+    sp = add("mass-engulf", cmd_mass_engulf, "force the render-only engulf parameter (0..1, or off) of the closest mass (mw_mass_engulf)")
+    sp.add_argument("value", help="0..1 or off")
+
     sp = add("nest", cmd_nest, "create a nest in front of the player")
     sp.add_argument("--force", action="store_true")
 
@@ -600,6 +657,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = add("shot", cmd_shot, "take a screenshot into docs/shots")
     sp.add_argument("name", nargs="?")
+
+    sp = add("clip", cmd_clip, "record a short clip (bridge /clip) and assemble docs/shots/clips/NAME.gif and .webp")
+    sp.add_argument("name")
+    sp.add_argument("--seconds", type=float, default=4.0, help="max 12")
+    sp.add_argument("--fps", type=float, default=15.0, help="max 30")
+    sp.add_argument("--scale", type=float, default=0.5, help="fraction of the game resolution")
+    sp.add_argument("--max-width", type=int, default=720)
+
+    sp = add("assemble", cmd_assemble, "assemble NAME.gif / .webp from an existing docs/shots/clips/NAME folder")
+    sp.add_argument("name")
+    sp.add_argument("--fps", type=float, default=15.0)
+    sp.add_argument("--max-width", type=int, default=720)
 
     sp = add("player", cmd_player, "POST /player with a JSON body")
     sp.add_argument("json", help='e.g. \'{"god":true,"clear":true,"equip":["SwordBronze"]}\'')

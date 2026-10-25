@@ -53,6 +53,12 @@ namespace MistWorms
             Log.LogInfo($"{ModName} {ModVersion} loaded{(IsDevBuild ? " (dev build)" : string.Empty)}");
         }
 
+        private void Update()
+        {
+            // The only safe moment to build the effect templates (DestroyImmediate) and to play what the hits and deaths asked for.
+            if (!Application.isBatchMode) Colony.WormEffects.Pump();
+        }
+
         private void OnVanillaPrefabsAvailable()
         {
             PrefabManager.OnVanillaPrefabsAvailable -= OnVanillaPrefabsAvailable;

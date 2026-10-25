@@ -17,7 +17,6 @@ namespace MistWorms.Render
     internal static class MaterialFactory
     {
         private const string WormAlbedo = "worm_albedo", WormNormal = "worm_normal";
-        private const string MassAlbedo = "mass_albedo", MassNormal = "mass_normal";
         private const string NestAlbedo = "nest_albedo", NestNormal = "nest_normal";
         private const string WormGloss = "worm_gloss";
 
@@ -25,7 +24,6 @@ namespace MistWorms.Render
         public const float WormGlossiness = 0.85f;
 
         public static Material Worm { get; private set; }
-        public static Material Mass { get; private set; }
         public static Material Nest { get; private set; }
 
         /// <summary>True when the worm material uses the lustre map (_UseGlossmap 1, keyword on); false in the no-map fallback.</summary>
@@ -33,7 +31,6 @@ namespace MistWorms.Render
 
         /// <summary>Per material: whether enableInstancing read back true on a platform that supports instancing.</summary>
         public static bool WormInstancing { get; private set; }
-        public static bool MassInstancing { get; private set; }
         public static bool NestInstancing { get; private set; }
 
         public static string ShaderName { get; private set; }
@@ -41,7 +38,7 @@ namespace MistWorms.Render
         public static string ShaderSource { get; private set; }
         public static string Error { get; private set; }
 
-        public static bool IsReady => Worm != null && Mass != null && Nest != null;
+        public static bool IsReady => Worm != null && Nest != null;
 
         /// <summary>Builds on first use; cheap once ready.</summary>
         public static bool EnsureBuilt() => IsReady || Build();
@@ -106,20 +103,17 @@ namespace MistWorms.Render
 
                 Material template = vanilla != null && vanilla.shader == chosen ? vanilla : null;
                 Material worm = Create("MW_Worm", chosen, template, WormAlbedo, WormNormal, WormGlossiness, false, WormGloss);
-                Material mass = Create("MW_Mass", chosen, template, MassAlbedo, MassNormal, 0.65f, true);
                 Material nest = Create("MW_Nest", chosen, template, NestAlbedo, NestNormal, 0.3f, false);
 
                 // Custom/Creature declares no _USEGLOSSMAP_ON keyword (dump section 9): the float drives it, the keyword is only set.
                 WormGlossActive = worm.HasProperty(VanillaNames.PropUseGlossmap) && worm.GetFloat(VanillaNames.PropUseGlossmap) > 0.5f
                                   && worm.HasProperty(VanillaNames.PropMetallicGlossMap) && worm.GetTexture(VanillaNames.PropMetallicGlossMap) != null;
                 Worm = worm;
-                Mass = mass;
                 Nest = nest;
                 WormInstancing = ReadBackInstancing(worm);
-                MassInstancing = ReadBackInstancing(mass);
                 NestInstancing = ReadBackInstancing(nest);
 
-                Plugin.Log.LogInfo($"[Render] materials ready: shader '{ShaderName}' via {ShaderSource}; instancing worm={WormInstancing} mass={MassInstancing} nest={NestInstancing}");
+                Plugin.Log.LogInfo($"[Render] materials ready: shader '{ShaderName}' via {ShaderSource}; instancing worm={WormInstancing} nest={NestInstancing}");
                 return true;
             }
             catch (Exception e)

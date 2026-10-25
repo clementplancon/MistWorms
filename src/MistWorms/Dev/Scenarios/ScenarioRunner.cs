@@ -151,11 +151,9 @@ namespace MistWorms.Dev.Scenarios
 
             if (timedOut)
                 ctx.Assert("timeout", false, $"<= {ctx.TimeoutSeconds:0} s", $"{result.DurationSeconds:0.0} s");
-            if (logErrors.Count > 0)
-            {
-                ctx.Assert("no_mod_errors_in_log", false, 0, logErrors.Count);
-                foreach (string line in logErrors) result.AddLog("log error: " + line);
-            }
+            // Always recorded (passing too): a hit that throws inside the animation event is cancelled silently otherwise.
+            ctx.Assert("no_mod_errors_in_log", logErrors.Count == 0, 0, logErrors.Count);
+            foreach (string line in logErrors) result.AddLog("log error: " + line);
 
             if (error != null)
             {

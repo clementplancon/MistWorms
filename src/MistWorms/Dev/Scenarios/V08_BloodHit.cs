@@ -178,6 +178,8 @@ namespace MistWorms.Dev.Scenarios
         {
             float t0 = Time.realtimeSinceStartup;
             ColonyDev.HitWorm(colony, slot, hit);
+            yield return null;      // the effect is queued by the hit and played by the next Update
+            yield return null;
             GameObject fx = WormEffects.LastFx;
             Vector3 origin = fx != null ? fx.transform.position : Vector3.zero;
             float reach = 0f;

@@ -15,6 +15,22 @@ namespace MistWorms.Render
         Strike = 2,
         Sleep = 3,
         Idle = 4,
+        Coil = 5,
+    }
+
+    /// <summary>Mesh detail of a worm: LOD1 has 240 triangles and exists for crawl, idle and coil only.</summary>
+    internal enum WormLod
+    {
+        Lod0 = 0,
+        Lod1 = 1,
+    }
+
+    /// <summary>Result of <see cref="WormRenderer.Sink.ClassifySphere"/> against the view frustum and render distance.</summary>
+    internal enum SphereVis
+    {
+        Outside = 0,
+        Inside = 1,
+        Partial = 2,
     }
 
     /// <summary>A producer of instances (colony, mass, dev preview). Called once per frame from <see cref="WormRenderer"/>.</summary>
@@ -24,9 +40,9 @@ namespace MistWorms.Render
     }
 
     /// <summary>
-    /// Client-side flipbook renderer (spec §12.1). Sources push TRS matrices per (animation, frame); each frame the
-    /// renderer culls them (distance, frustum), splits shadow casters from the rest and draws every group with
-    /// Graphics.RenderMeshInstanced in chunks of at most 1023. No allocation in the per-frame path once buffers
+    /// Client-side flipbook renderer (spec §12.1). Sources push TRS matrices per (lod, animation, frame); each frame the
+    /// renderer culls them (distance, frustum) and draws every batch with Graphics.RenderMeshInstanced in chunks of at
+    /// most 1023. A batch has one list and a fixed shadow mode (LOD0 casts shadows, LOD1 does not). No allocation in the per-frame path once buffers
     /// have reached their working size. Per-instance tint is not supported in phase 2: RenderMeshInstanced cannot
     /// take a per-instance MaterialPropertyBlock for a shader without instanced properties.
     /// </summary>
@@ -39,12 +55,16 @@ namespace MistWorms.Render
         public const string StrikeName = "worm_strike";
         public const string SleepName = "worm_sleep";
         public const string IdleName = "worm_idle";
-        public const string BoilName = "mass_boil";
+        public const string CoilName = "worm_coil";
+        public const string Lod1Suffix = "_lod1";
         public const string NestName = "nest_idle";
 
-        private const int AnimCount = 5;   // WormAnim values
-        private const int MaxInstancesPerCall = 1023;
-        private const int MaxInstancesPerList = 16384;
+        private const int AnimCount = 6;   // WormAnim values
+        private const int LodCount = 2;
+        private const int MaxInstancesPerCall = InstanceList.MaxInstancesPerCall;
+
+        /// <summary>RenderMeshInstanced call budget; above it <see cref="BatchMerge"/> folds odd frames into even ones.</summary>
+        public const int DrawCallBudget = 64;
 
         public struct FrameStats
         {
@@ -52,7 +72,15 @@ namespace MistWorms.Render
             public int Culled;
             public int DrawCalls;   // RenderMeshInstanced / RenderMesh calls, shadow passes not counted
             public int Dropped;     // refused because a list hit MaxInstancesPerList
-            public float CpuMs;     // collection + culling + submission
+            public float CpuMs;     // total: collection + culling + merge + submission
+            public float CollectMs; // sources + merge guard
+            public float SubmitMs;  // RenderMeshInstanced calls
+            public int Batches;     // non-empty lists drawn
+            public int Triangles;   // sum of instances x triangles of their mesh (shadow passes not counted)
+            public int Merged;      // lists folded by BatchMerge
+            public float HeapMs;    // sum of the per-mass collection times, reported by the mass source
+            public int HeapDrawn;   // worms drawn by the mass source
+            public int HeapLod0, HeapLod1, HeapLod2; // masses per LOD
         }
 
         private static WormRenderer s_instance;
@@ -82,12 +110,12 @@ namespace MistWorms.Render
 
         private readonly List<IWormRenderSource> _sources = new List<IWormRenderSource>();
         private readonly List<Batch> _batches = new List<Batch>();
-        private readonly Batch[][] _anim = new Batch[AnimCount][];
-        private readonly float[] _animFps = new float[AnimCount];
+        private readonly Batch[][][] _anim = new Batch[LodCount][][];   // [lod][anim][frame]
+        private readonly float[] _animFps = new float[AnimCount];      // LOD0 timing (LOD1 callers derive frames from it)
         private readonly bool[] _animLoop = new bool[AnimCount];
-        private Batch[] _dome;
-        private float _domeFps;
         private Batch _nest;
+        private InstanceList[][] _mergeGroups;
+        private InstanceList[] _fixedLists;
         private Sink _sink;
         private bool _batchesBuilt;
         private bool _warnedFallback;
@@ -114,6 +142,8 @@ namespace MistWorms.Render
 
         private void Awake()
         {
+            _anim[0] = new Batch[AnimCount][];
+            _anim[1] = new Batch[AnimCount][];
             _sink = new Sink(this);
         }
 
@@ -133,8 +163,13 @@ namespace MistWorms.Render
                     Camera cam = Utils.GetMainCamera();
                     if (cam != null)
                     {
+                        long t0 = Stopwatch.GetTimestamp();
                         Collect(cam);
+                        long t1 = Stopwatch.GetTimestamp();
                         Draw();
+                        long t2 = Stopwatch.GetTimestamp();
+                        _stats.CollectMs = (float)((t1 - t0) * 1000.0 / Stopwatch.Frequency);
+                        _stats.SubmitMs = (float)((t2 - t1) * 1000.0 / Stopwatch.Frequency);
                     }
                 }
             }
@@ -154,11 +189,7 @@ namespace MistWorms.Render
             _renderDistance = MWConfig.Performance.RenderDistance.Value;
             _shadowDistance = MWConfig.Performance.ShadowDistance.Value;
 
-            for (int i = 0; i < _batches.Count; i++)
-            {
-                _batches[i].Near.Reset();
-                _batches[i].Far.Reset();
-            }
+            for (int i = 0; i < _batches.Count; i++) _batches[i].List.Reset();
 
             for (int i = _sources.Count - 1; i >= 0; i--)
             {
@@ -174,6 +205,9 @@ namespace MistWorms.Render
                     _sources.RemoveAt(i);
                 }
             }
+
+            _stats.Merged = BatchMerge.Apply(_mergeGroups, _fixedLists, DrawCallBudget, out int lost);
+            _stats.Dropped += lost;
         }
 
         private void Add(Batch batch, in Matrix4x4 m)
@@ -192,9 +226,14 @@ namespace MistWorms.Render
                 if (_planes[i].GetDistanceToPoint(c) < -r) { _stats.Culled++; return; }
             }
 
-            float shadowReach = _shadowDistance + r;
-            InstanceList list = _shadowDistance > 0f && sqr <= shadowReach * shadowReach ? batch.Near : batch.Far;
-            if (!list.Add(m, c, r)) _stats.Dropped++;
+            if (!batch.List.Add(m, c, r)) _stats.Dropped++;
+        }
+
+        // The caller already proved the instance is visible (ClassifySphere == Inside): list and bounds only.
+        private void AddUnculled(Batch batch, in Matrix4x4 m, float scaleMax)
+        {
+            Vector3 c = m.MultiplyPoint3x4(batch.LocalCenter);
+            if (!batch.List.Add(m, c, batch.Radius * scaleMax)) _stats.Dropped++;
         }
 
         private void Draw()
@@ -202,8 +241,7 @@ namespace MistWorms.Render
             for (int i = 0; i < _batches.Count; i++)
             {
                 Batch b = _batches[i];
-                DrawList(b, b.Near, ShadowCastingMode.On);
-                DrawList(b, b.Far, ShadowCastingMode.Off);
+                DrawList(b, b.List, b.CastShadows && _shadowDistance > 0f ? ShadowCastingMode.On : ShadowCastingMode.Off);
             }
         }
 
@@ -243,6 +281,8 @@ namespace MistWorms.Render
                 }
             }
             _stats.Instances += count;
+            _stats.Batches++;
+            _stats.Triangles += count * b.Tris;
         }
 
         // ------------------------------------------------------------------ batches
@@ -252,36 +292,79 @@ namespace MistWorms.Render
             if (_batchesBuilt) return true;
             if (!AssetCatalog.IsReady || !MaterialFactory.EnsureBuilt()) return false;
 
-            _animFps[(int)WormAnim.Crawl] = Build(WormAnim.Crawl, CrawlName, MaterialFactory.Worm, MaterialFactory.WormInstancing);
-            _animFps[(int)WormAnim.Rear] = Build(WormAnim.Rear, RearName, MaterialFactory.Worm, MaterialFactory.WormInstancing);
-            _animFps[(int)WormAnim.Strike] = Build(WormAnim.Strike, StrikeName, MaterialFactory.Worm, MaterialFactory.WormInstancing);
-            _animFps[(int)WormAnim.Sleep] = Build(WormAnim.Sleep, SleepName, MaterialFactory.Worm, MaterialFactory.WormInstancing);
-            _animFps[(int)WormAnim.Idle] = Build(WormAnim.Idle, IdleName, MaterialFactory.Worm, MaterialFactory.WormInstancing);
-
-            Mesh[] boil = AssetCatalog.Frames(BoilName) ?? throw new InvalidOperationException("missing animation " + BoilName);
-            _dome = new Batch[boil.Length];
-            for (int i = 0; i < boil.Length; i++) _dome[i] = NewBatch(boil[i], MaterialFactory.Mass, MaterialFactory.MassInstancing);
-            _domeFps = AssetCatalog.Animation(BoilName).Fps;
+            _animFps[(int)WormAnim.Crawl] = Build(WormAnim.Crawl, CrawlName);
+            _animFps[(int)WormAnim.Rear] = Build(WormAnim.Rear, RearName);
+            _animFps[(int)WormAnim.Strike] = Build(WormAnim.Strike, StrikeName);
+            _animFps[(int)WormAnim.Sleep] = Build(WormAnim.Sleep, SleepName);
+            _animFps[(int)WormAnim.Idle] = Build(WormAnim.Idle, IdleName);
+            _animFps[(int)WormAnim.Coil] = Build(WormAnim.Coil, CoilName);
+            BuildLod1(WormAnim.Crawl, CrawlName);
+            BuildLod1(WormAnim.Idle, IdleName);
+            BuildLod1(WormAnim.Coil, CoilName);
 
             Mesh nest = AssetCatalog.Mesh(NestName) ?? throw new InvalidOperationException("missing mesh " + NestName);
-            _nest = NewBatch(nest, MaterialFactory.Nest, MaterialFactory.NestInstancing);
+            _nest = NewBatch(nest, MaterialFactory.Nest, MaterialFactory.NestInstancing, SingleTris(NestName), true);
 
+            BuildMergeSets();
             _batchesBuilt = true;
             return true;
         }
 
-        private float Build(WormAnim anim, string name, Material material, bool instancing)
+        private static int SingleTris(string name)
+        {
+            int[] t = AssetCatalog.FrameTriangles(name);
+            return t != null && t.Length > 0 ? t[0] : 0;
+        }
+
+        private float Build(WormAnim anim, string name)
         {
             Mesh[] frames = AssetCatalog.Frames(name) ?? throw new InvalidOperationException("missing animation " + name);
             AnimationInfo info = AssetCatalog.Animation(name) ?? throw new InvalidOperationException("missing animation info " + name);
+            int[] tris = AssetCatalog.FrameTriangles(name);
             var batches = new Batch[frames.Length];
-            for (int i = 0; i < frames.Length; i++) batches[i] = NewBatch(frames[i], material, instancing);
-            _anim[(int)anim] = batches;
+            for (int i = 0; i < frames.Length; i++)
+                batches[i] = NewBatch(frames[i], MaterialFactory.Worm, MaterialFactory.WormInstancing, tris != null ? tris[i] : 0, true);
+            _anim[0][(int)anim] = batches;
             _animLoop[(int)anim] = info.Loop;
             return info.Fps;
         }
 
-        private Batch NewBatch(Mesh mesh, Material material, bool instancing)
+        private void BuildLod1(WormAnim anim, string name)
+        {
+            string lodName = name + Lod1Suffix;
+            Mesh[] frames = AssetCatalog.Frames(lodName) ?? throw new InvalidOperationException("missing animation " + lodName);
+            int[] tris = AssetCatalog.FrameTriangles(lodName);
+            var batches = new Batch[frames.Length];
+            for (int i = 0; i < frames.Length; i++)
+                batches[i] = NewBatch(frames[i], MaterialFactory.Worm, MaterialFactory.WormInstancing, tris != null ? tris[i] : 0, false);
+            _anim[1][(int)anim] = batches;
+        }
+
+        // Degradation order of the draw call guard (phase 4B-3): cheapest to coarsen first.
+        private void BuildMergeSets()
+        {
+            var order = new[]
+            {
+                new KeyValuePair<int, WormAnim>(1, WormAnim.Idle), new KeyValuePair<int, WormAnim>(1, WormAnim.Coil), new KeyValuePair<int, WormAnim>(1, WormAnim.Crawl),
+                new KeyValuePair<int, WormAnim>(0, WormAnim.Idle), new KeyValuePair<int, WormAnim>(0, WormAnim.Coil), new KeyValuePair<int, WormAnim>(0, WormAnim.Sleep),
+                new KeyValuePair<int, WormAnim>(0, WormAnim.Rear), new KeyValuePair<int, WormAnim>(0, WormAnim.Crawl),
+            };
+            var mergeable = new HashSet<InstanceList>();
+            _mergeGroups = new InstanceList[order.Length][];
+            for (int g = 0; g < order.Length; g++)
+            {
+                Batch[] frames = _anim[order[g].Key][(int)order[g].Value];
+                var lists = new InstanceList[frames.Length];
+                for (int f = 0; f < lists.Length; f++) { lists[f] = frames[f].List; mergeable.Add(lists[f]); }
+                _mergeGroups[g] = lists;
+            }
+            var fixedLists = new List<InstanceList>();
+            for (int i = 0; i < _batches.Count; i++)
+                if (!mergeable.Contains(_batches[i].List)) fixedLists.Add(_batches[i].List);
+            _fixedLists = fixedLists.ToArray();
+        }
+
+        private Batch NewBatch(Mesh mesh, Material material, bool instancing, int tris, bool castShadows)
         {
             Bounds b = mesh.bounds;
             var batch = new Batch
@@ -291,6 +374,8 @@ namespace MistWorms.Render
                 Instancing = instancing,
                 LocalCenter = b.center,
                 Radius = b.extents.magnitude,
+                Tris = tris,
+                CastShadows = castShadows,
             };
             _batches.Add(batch);
             return batch;
@@ -303,46 +388,9 @@ namespace MistWorms.Render
             public bool Instancing;
             public Vector3 LocalCenter;
             public float Radius;
-            public readonly InstanceList Near = new InstanceList(); // inside ShadowDistance: casts shadows
-            public readonly InstanceList Far = new InstanceList();
-        }
-
-        private sealed class InstanceList
-        {
-            public Matrix4x4[] Matrices = new Matrix4x4[64];
-            public int Count;
-            private Vector3 _min, _max;
-
-            public void Reset()
-            {
-                Count = 0;
-                _min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
-                _max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
-            }
-
-            public bool Add(in Matrix4x4 m, Vector3 center, float radius)
-            {
-                if (Count == Matrices.Length)
-                {
-                    if (Count >= MaxInstancesPerList) return false;
-                    Array.Resize(ref Matrices, Count * 2); // amortised: only while the working set grows
-                }
-                Matrices[Count++] = m;
-                if (center.x - radius < _min.x) _min.x = center.x - radius;
-                if (center.y - radius < _min.y) _min.y = center.y - radius;
-                if (center.z - radius < _min.z) _min.z = center.z - radius;
-                if (center.x + radius > _max.x) _max.x = center.x + radius;
-                if (center.y + radius > _max.y) _max.y = center.y + radius;
-                if (center.z + radius > _max.z) _max.z = center.z + radius;
-                return true;
-            }
-
-            public Bounds Bounds()
-            {
-                var b = new Bounds();
-                b.SetMinMax(_min, _max);
-                return b;
-            }
+            public int Tris;
+            public bool CastShadows;   // fixed per batch: LOD0 casts, LOD1 does not
+            public readonly InstanceList List = new InstanceList();
         }
 
         // ------------------------------------------------------------------ producer API
@@ -354,30 +402,107 @@ namespace MistWorms.Render
 
             internal Sink(WormRenderer renderer) { _r = renderer; }
 
-            public void AddWorm(WormAnim anim, int frame, in Matrix4x4 trs)
+            public Vector3 CameraPosition => _r._camPos;
+            public float RenderDistance => _r._renderDistance;
+            public float ShadowDistance => _r._shadowDistance;
+
+            /// <summary>Sphere against the 6 frustum planes and the render distance; Inside lets the caller use the unculled adds.</summary>
+            public SphereVis ClassifySphere(Vector3 c, float r)
             {
-                Batch[] frames = _r._anim[(int)anim];
+                float d = (c - _r._camPos).magnitude;
+                if (d > _r._renderDistance + r) return SphereVis.Outside;
+                bool inside = d + r <= _r._renderDistance;
+                for (int i = 0; i < 6; i++)
+                {
+                    float pd = _r._planes[i].GetDistanceToPoint(c);
+                    if (pd < -r) return SphereVis.Outside;
+                    if (pd < r) inside = false;
+                }
+                return inside ? SphereVis.Inside : SphereVis.Partial;
+            }
+
+            // LOD1 only exists for crawl, idle and coil; anything else falls back to LOD0.
+            private Batch[] Frames(WormAnim anim, WormLod lod)
+            {
+                Batch[] frames = lod == WormLod.Lod1 ? _r._anim[1][(int)anim] : null;
+                return frames ?? _r._anim[0][(int)anim];
+            }
+
+            /// <summary>LOD0 draw with per-instance culling.</summary>
+            public void AddWorm(WormAnim anim, int frame, in Matrix4x4 trs) => AddWorm(anim, WormLod.Lod0, frame, trs);
+
+            /// <summary>Per-instance culling. <paramref name="frame"/> is in the numbering of the effective LOD (see <see cref="FrameCount(WormAnim, WormLod)"/>).</summary>
+            public void AddWorm(WormAnim anim, WormLod lod, int frame, in Matrix4x4 trs)
+            {
+                Batch[] frames = Frames(anim, lod);
                 if (frames == null || frames.Length == 0) return;
                 _r.Add(frames[Flipbook.Wrap(frame, frames.Length)], trs);
+            }
+
+            /// <summary>
+            /// Adds <paramref name="count"/> matrices already culled by the caller (the mass worker) to the list of (anim, lod, frame) in one block copy;
+            /// <paramref name="b"/> are their world bounds. <paramref name="frame"/> is the effective, already wrapped frame of the effective LOD.
+            /// </summary>
+            public void AddWormsBulk(WormAnim anim, WormLod lod, int frame, Matrix4x4[] src, int count, Bounds b)
+            {
+                Batch[] frames = Frames(anim, lod);
+                if (frames == null || frames.Length == 0 || count <= 0) return;
+                _r._stats.Dropped += frames[Flipbook.Wrap(frame, frames.Length)].List.AddRange(src, count, b.min, b.max);
+            }
+
+            /// <summary>The 6 frustum planes of the frame as (nx, ny, nz, d) x 6 in <paramref name="dst"/> (24 floats): dot(n, p) + d is the distance to the plane.</summary>
+            public void CopyFrustumPlanes(float[] dst)
+            {
+                for (int i = 0; i < 6; i++)
+                {
+                    Plane pl = _r._planes[i];
+                    dst[i * 4] = pl.normal.x; dst[i * 4 + 1] = pl.normal.y; dst[i * 4 + 2] = pl.normal.z; dst[i * 4 + 3] = pl.distance;
+                }
+            }
+
+            /// <summary>Frames and the largest bounding radius (plus the offset of the mesh centre) over the frames of an animation at a LOD, for the worker tables.</summary>
+            public void BucketInfo(WormAnim anim, WormLod lod, out int frames, out float radius)
+            {
+                Batch[] fr = Frames(anim, lod);
+                frames = fr != null ? fr.Length : 0;
+                radius = 0f;
+                if (fr == null) return;
+                for (int i = 0; i < fr.Length; i++)
+                {
+                    float r = fr[i].Radius + fr[i].LocalCenter.magnitude;
+                    if (r > radius) radius = r;
+                }
+            }
+
+            /// <summary>No frustum or distance test (the caller classified a sphere around it as Inside); <paramref name="scaleMax"/> bounds its scale.</summary>
+            public void AddWormUnculled(WormAnim anim, WormLod lod, int frame, in Matrix4x4 trs, float scaleMax)
+            {
+                Batch[] frames = Frames(anim, lod);
+                if (frames == null || frames.Length == 0) return;
+                _r.AddUnculled(frames[Flipbook.Wrap(frame, frames.Length)], trs, scaleMax);
             }
 
             public void AddWorm(string animation, int frame, in Matrix4x4 trs) => AddWorm(Parse(animation), frame, trs);
-
-            public void AddDome(int frame, in Matrix4x4 trs)
-            {
-                Batch[] frames = _r._dome;
-                if (frames == null || frames.Length == 0) return;
-                _r.Add(frames[Flipbook.Wrap(frame, frames.Length)], trs);
-            }
 
             public void AddNest(in Matrix4x4 trs)
             {
                 if (_r._nest != null) _r.Add(_r._nest, trs);
             }
 
-            public int FrameCount(WormAnim anim)
+            /// <summary>Per-mass figures a mass source adds to this frame's stats.</summary>
+            public void ReportHeap(float ms, int drawn, int lod)
             {
-                Batch[] frames = _r._anim[(int)anim];
+                _r._stats.HeapMs += ms;
+                _r._stats.HeapDrawn += drawn;
+                if (lod <= 0) _r._stats.HeapLod0++; else if (lod == 1) _r._stats.HeapLod1++; else _r._stats.HeapLod2++;
+            }
+
+            public int FrameCount(WormAnim anim) => FrameCount(anim, WormLod.Lod0);
+
+            /// <summary>Frames of the effective LOD (LOD0 when the animation has no LOD1).</summary>
+            public int FrameCount(WormAnim anim, WormLod lod)
+            {
+                Batch[] frames = Frames(anim, lod);
                 return frames != null ? frames.Length : 0;
             }
 
@@ -397,9 +522,6 @@ namespace MistWorms.Render
 
             public bool IsLoop(WormAnim anim) => _r._animLoop[(int)anim];
 
-            public int DomeFrameAt(float time, float phase = 0f) =>
-                Flipbook.FrameAt(_r._dome != null ? _r._dome.Length : 0, _r._domeFps, true, time, phase);
-
             public static WormAnim Parse(string animation)
             {
                 switch (animation)
@@ -409,6 +531,7 @@ namespace MistWorms.Render
                     case StrikeName: return WormAnim.Strike;
                     case SleepName: return WormAnim.Sleep;
                     case IdleName: return WormAnim.Idle;
+                    case CoilName: return WormAnim.Coil;
                     default: throw new ArgumentException("unknown worm animation '" + animation + "'");
                 }
             }

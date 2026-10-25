@@ -72,22 +72,26 @@ namespace MistWorms.Colony
 
             // The blood plays here, on the peer that lands the hit, once: the owner applying a hit that came by RPC does not play it
             // again, and in solo (attacker = owner) this local path is the only one. A hit too weak to count shows nothing.
-            if (!Disabled && hit.GetTotalDamage() > MinShownDamage)
-            {
-                Vector3 where = hit.m_point == Vector3.zero ? Store.pos[i] + Vector3.up * 0.1f : hit.m_point;
-                WormEffects.PlayHit(ref _hitFx, where, Time.time);
-            }
+            // The damage first, the effect after (and only queued: it is played by the next Update, never inside this call chain).
+            bool show = !Disabled && hit.GetTotalDamage() > MinShownDamage;
+            Vector3 where = hit.m_point == Vector3.zero ? Store.pos[i] + Vector3.up * 0.1f : hit.m_point;
 
             if (_nview.IsValid() && _nview.IsOwner())
             {
                 ApplyWormHit(i, hit.Clone());
+                if (show) WormEffects.PlayHit(ref _hitFx, where, Time.time);
                 return;
             }
-            if (!_nview.IsValid()) return;
+            if (!_nview.IsValid())
+            {
+                if (show) WormEffects.PlayHit(ref _hitFx, where, Time.time);
+                return;
+            }
 
             var pkg = new ZPackage();
             hit.Serialize(ref pkg);
             _nview.InvokeRPC(MWNames.RpcWormHit, i, (int)generation, pkg);
+            if (show) WormEffects.PlayHit(ref _hitFx, where, Time.time);
         }
 
         private void RPC_WormHit(long sender, int index, int generation, ZPackage pkg)

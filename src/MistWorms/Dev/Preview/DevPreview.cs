@@ -11,7 +11,7 @@ using UnityEngine;
 namespace MistWorms.Dev.Preview
 {
     /// <summary>
-    /// Static preview of the phase 2 assets next to the local player: worms, a mass (dome + surface worms) and a nest,
+    /// Static preview of the phase 2 assets next to the local player: worms, a real writhing mass (swarm of worms) and a nest,
     /// optionally beside a non-networked copy of a vanilla creature's model for scale comparison.
     /// Everything is placed once, relative to the player at creation time; only the animation frames change.
     /// </summary>
@@ -19,8 +19,8 @@ namespace MistWorms.Dev.Preview
     {
         public static readonly DevPreview Instance = new DevPreview();
 
-        private const float GoldenAngle = 2.39996323f;
-                private const int WormsPerRow = 6;
+        private const int WormsPerRow = 6;
+        private const float MassVisualHeight = 0.7f;    // height of the swarm over its radius (lobes up to 1.25 x 0.5 r, bodies on top), for framing only
 
         private struct WormItem
         {
@@ -30,8 +30,6 @@ namespace MistWorms.Dev.Preview
         }
 
         private readonly List<WormItem> _worms = new List<WormItem>();
-        private bool _hasDome;
-        private Matrix4x4 _dome;
         private bool _hasNest;
         private Vector3 _nestPos;
         private Quaternion _nestRot;
@@ -52,16 +50,13 @@ namespace MistWorms.Dev.Preview
         public Vector3 Forward { get; private set; } = Vector3.forward;
         public Vector3 Origin { get; private set; }
         public bool Active => Kind != "none";
+        /// <summary>Set before Show: the exact floor point of the subject (a mine interior has no terrain height); null = in front of the player.</summary>
+        public Vector3? ForcedOrigin { get; set; }
         /// <summary>Distance between worms of a worm preview (m); set before Show.</summary>
         public float WormSpacing { get; set; } = 0.5f;
-        /// <summary>
-        /// Set before Show: a "mass" preview creates a real <c>MW_WritheMass</c> (AI frozen, no colony) instead of drawing the dome and its worms
-        /// itself (plan 4B-1 point 8). The renderer then shows it through its own <see cref="WritheMassVisual"/>.
-        /// </summary>
-        public bool RealMass { get; set; }
-        /// <summary>The real mass of the current preview, or null.</summary>
+        /// <summary>The real mass of the current preview (AI frozen, no colony; drawn by <see cref="MassRenderSystem"/>), or null.</summary>
         public WritheMassState RealMassState => _realMass;
-        /// <summary>Largest dimension of the subject (dome diameter, comparison creature, worm row), for camera framing.</summary>
+        /// <summary>Largest dimension of the subject (swarm diameter, comparison creature, worm row), for camera framing.</summary>
         public float Size => Radius * 2f;
 
         // ---------------------------------------------------------------- public API
@@ -69,7 +64,6 @@ namespace MistWorms.Dev.Preview
         public void Clear()
         {
             _worms.Clear();
-            _hasDome = false;
             _hasNest = false;
             MassN = 0;
             MassRadius = 0f;
@@ -103,6 +97,7 @@ namespace MistWorms.Dev.Preview
             if (distance <= 0f) distance = DefaultDistance(kind, n);
             Vector3 origin = player.transform.position + fwd * distance;
             origin.y = ZoneSystem.instance != null && ZoneSystem.instance.GetGroundHeight(origin, out float h) ? h : player.transform.position.y;
+            if (ForcedOrigin.HasValue) origin = ForcedOrigin.Value;
 
             Forward = fwd;
             Origin = origin;
@@ -168,7 +163,6 @@ namespace MistWorms.Dev.Preview
                 { "n", MassN },
                 { "massRadius", MassRadius },
                 { "worms", _worms.Count },
-                { "dome", _hasDome },
                 { "nest", _hasNest },
                 { "compare", DummyName },
                 { "warning", Warning },
@@ -234,51 +228,16 @@ namespace MistWorms.Dev.Preview
         private string BuildMass(Vector3 origin, Vector3 fwd, Vector3 right, int n, string compare)
         {
             float r = MassMath.Radius(n);
-            Vector3 scale = MassMath.DomeScale(r);
             MassN = n;
             MassRadius = r;
 
-            int visible = 0;
-            if (RealMass)
-            {
-                // A real creature: its own visual draws the dome and the surface worms (WritheMassVisual), no colony, AI frozen.
-                _realMass = MassDev.SpawnAt(origin, n, ZDOID.None, freezeAI: true);
-                if (_realMass == null) return "could not create the real mass (MW_WritheMass not registered, or no floor under the preview)";
-            }
-            else
-            {
-                _hasDome = true;
-                _dome = Matrix4x4.TRS(origin, Quaternion.identity, scale);
-                // Surface worms on a Fibonacci spiral over the dome (spec §12.1), crawling, oriented tangent to the surface.
-                visible = Mathf.Min(n, MWConfig.Performance.MaxVisibleSurfaceWorms.Value);
-            }
-            for (int i = 0; i < visible; i++)
-            {
-                float y = 1f - (i + 0.5f) / visible * 0.95f; // unit-hemisphere height; stops short of the skirt
-                float rho = Mathf.Sqrt(Mathf.Max(0f, 1f - y * y));
-                float phi = i * GoldenAngle;
-                Vector3 unit = new Vector3(rho * Mathf.Cos(phi), y, rho * Mathf.Sin(phi));
-                Vector3 pos = origin + new Vector3(unit.x * scale.x, unit.y * scale.y, unit.z * scale.z);
-
-                // Ellipsoid normal: gradient of (x/rx)^2 + (y/ry)^2 + (z/rz)^2.
-                Vector3 normal = new Vector3(unit.x / scale.x, unit.y / scale.y, unit.z / scale.z).normalized;
-                Vector3 tangent = Vector3.ProjectOnPlane(new Vector3(-Mathf.Sin(phi), 0f, Mathf.Cos(phi)), normal);
-                if (tangent.sqrMagnitude < 1e-6f) tangent = Vector3.ProjectOnPlane(Vector3.forward, normal);
-                if ((i & 1) == 1) tangent = -tangent; // half of them crawl the other way
-                Quaternion rot = Quaternion.LookRotation(tangent.normalized, normal);
-                float s = 0.9f + 0.2f * Frac(i * 0.618034f);
-
-                _worms.Add(new WormItem
-                {
-                    Anim = WormAnim.Crawl,
-                    Phase = i * 6.1f,
-                    Matrix = Matrix4x4.TRS(pos, rot, Vector3.one * s),
-                });
-            }
+            // Always a real creature: its own visual state feeds MassRenderSystem (swarm of worms), no colony, AI frozen.
+            _realMass = MassDev.SpawnAt(origin, n, ZDOID.None, freezeAI: true);
+            if (_realMass == null) return "could not create the real mass (MW_WritheMass not registered, or no floor under the preview)";
 
             float left = -r;
             float rightEdge = r;
-            float height = scale.y;
+            float height = MassVisualHeight * r;
             if (!string.IsNullOrWhiteSpace(compare))
             {
                 float ext = SpawnDummy(compare.Trim(), origin, fwd, right, r, out float dummyHeight, out float dummyX);
@@ -387,12 +346,6 @@ namespace MistWorms.Dev.Preview
                 sink.AddWorm(w.Anim, frame, w.Matrix);
             }
 
-            if (_hasDome)
-            {
-                Matrix4x4 m = _dome;
-                sink.AddDome(sink.DomeFrameAt(t), m);
-            }
-
             if (_hasNest)
             {
                 // Slow +-3 % scale pulse (spec §12.1); the mesh itself has a single frame.
@@ -415,8 +368,6 @@ namespace MistWorms.Dev.Preview
                 default: anim = WormAnim.Crawl; return false;
             }
         }
-
-        private static float Frac(float v) => v - Mathf.Floor(v);
 
         /// <summary>Shared by the console command and the bridge: runs a preview request, returns an error or null.</summary>
         public static string Run(string kind, int n, string anim, int count, string compare, float distance)

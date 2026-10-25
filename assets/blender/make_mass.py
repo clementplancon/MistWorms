@@ -1,4 +1,12 @@
-"""Mass dome flipbook (mass_boil_00..07) + textures (spec §13.1, §13.4).
+"""Heap core (mass_core_t1..t3) + textures, and the LEGACY dome flipbook (mass_boil_00..07), removed in pass D
+(plan 4B-3, spec section 13.1, 13.4, decisions 100 and 103).
+
+CORE (pass A2): a spherical cap of an icosphere (subdivision 4, CORE_TRIS triangles), warped to a true hemisphere
+of radius 1 and height 1, skirt down to y = -0.05, origin at the centre of the base. Relief: low fbm, the MAX of 24 C/S
+worm tubes and 5 lobes. Exported three times (same geometry, UV x 1 / 1.8 / 3, so one seamless texture gives three
+texel densities with a single material). Textures: ~220 painted worms, tileable, 1024 painted then box reduced to 256.
+
+LEGACY dome (kept until pass D): ---
 
 DECISION (deviation from spec §13.2, recorded in docs/decisions.md by the integrator): the mesh is an
 UPPER DOME of radius 1 and height 1 (origin at the centre of its base, skirt down to y = -0.05 to hide
@@ -14,6 +22,21 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
 import config  # noqa: E402
+import make_worm as W  # noqa: E402  (palette of the worm; importing it only defines functions and constants)
+
+CORE_TRIS = 1600
+CORE_TEX = 256
+CORE_PAINT = 1024
+CORE_WORMS = 260       # plan: ~220; a few more worms close the black holes between the cords
+CORE_SEED = 5151
+CHUNK = 8
+PALETTE_K = 0.34       # plan: worm palette x 0.62; 0.62 read as grey rock under the preview lights
+GROOVE_PX = 28.0       # plan: 10 px (2.5 px after the 4x reduction: aliasing); 12 reads a little better
+# relief amplitudes (unit hemisphere). Plan: fbm 0.06, tubes 0.05, lobes 0.08, positive only; that buried the coiled bodies, which
+# live in the CoreGapM gap above the core, and a taller shift made a bell with a flared skirt. Compromise: 0.055 / 0.04 / 0.11 and
+# the whole relief shifted by RELIEF_SHIFT (the height is then renormalised to exactly 1).
+RELIEF_FBM, RELIEF_TUBE, RELIEF_LOBE = 0.055, 0.04, 0.11
+RELIEF_SHIFT = -0.03
 
 SUBDIV = 4
 TARGET_TRIS = 2200
@@ -21,6 +44,221 @@ FRAMES = 8
 SKIRT_Y = -0.05
 TEX = 1024
 
+# =========================================================================== CORE (pass A2)
+def build_core():
+    """Returns (pos (V,3), faces (F,3), uv (V,2), info). Positions are unit-hemisphere + relief; UV before the tile multiplier."""
+    verts, faces = icosphere(SUBDIV)
+    a, b = 0.37, 0.61
+    ca, sa, cb, sb = np.cos(a), np.sin(a), np.cos(b), np.sin(b)
+    rx = np.array([[1, 0, 0], [0, ca, -sa], [0, sa, ca]])
+    rz = np.array([[cb, -sb, 0], [sb, cb, 0], [0, 0, 1]])
+    verts = verts @ (rz @ rx).T
+    cy = verts[faces][:, :, 1].mean(axis=1)
+    order = np.sort(cy)[::-1]
+    yc = float(order[CORE_TRIS - 1]) - 1e-9
+    faces = faces[cy >= yc]
+    used = np.unique(faces)
+    remap = -np.ones(len(verts), dtype=np.int64)
+    remap[used] = np.arange(len(used))
+    faces = remap[faces]
+    d = verts[used]
+    edges = {}
+    for f in faces:
+        for i in range(3):
+            e = tuple(sorted((int(f[i]), int(f[(i + 1) % 3]))))
+            edges[e] = edges.get(e, 0) + 1
+    bnd = set()
+    for (p_, q_), cnt in edges.items():
+        if cnt == 1:
+            bnd.update((p_, q_))
+    boundary = np.array(sorted(bnd), dtype=np.int64)
+
+    theta = np.arccos(np.clip(d[:, 1], -1, 1))
+    phi = np.arctan2(d[:, 2], d[:, 0])
+    theta_max = float(theta.max())
+    # warp the polar angle so the cut becomes the equator: a hemisphere of radius 1 and height 1
+    th2 = np.minimum(theta * (np.pi / 2) / theta_max, np.pi / 2)
+    dh = np.stack([np.sin(th2) * np.cos(phi), np.cos(th2), np.sin(th2) * np.sin(phi)], 1)
+
+    rng = np.random.default_rng([config.SEED, CORE_SEED])
+    disp = RELIEF_FBM * 2.0 * (C.fbm3(dh * 2.2, 7, octaves=3) - 0.5)
+    # 24 C/S worm tubes laid on the hemisphere, the relief is the MAX of their profiles
+    tube = np.zeros(len(dh))
+    for _ in range(24):
+        p = rng.normal(size=3)
+        p[1] = abs(p[1]) + 0.25
+        p = p / np.linalg.norm(p)
+        t = np.cross(p, rng.normal(size=3))
+        t = t / np.linalg.norm(t)
+        length = rng.uniform(0.4, 0.9)
+        rt = rng.uniform(0.07, 0.10)
+        kappa0 = rng.uniform(1.2, 3.0) * rng.choice([-1.0, 1.0])
+        s_shape = rng.random() < 0.5          # S: the curvature changes sign half way
+        steps = 36
+        dl = length / steps
+        pts = []
+        for i in range(steps + 1):
+            pts.append(p.copy())
+            kap = kappa0 * (np.cos(np.pi * i / steps) if s_shape else 1.0)
+            p = p + t * dl
+            p = p / np.linalg.norm(p)
+            t = t - np.dot(t, p) * p
+            t = t / np.linalg.norm(t)
+            cs_, sn_ = np.cos(kap * dl), np.sin(kap * dl)
+            t = t * cs_ + np.cross(p, t) * sn_
+        pts = np.array(pts)
+        dist = np.sqrt(((dh[:, None, :] - pts[None, :, :]) ** 2).sum(axis=2)).min(axis=1)
+        prof = np.where(dist < rt, (1.0 - (dist / rt) ** 2) ** 2 * RELIEF_TUBE, 0.0)
+        tube = np.maximum(tube, prof)
+    # 5 broad lobes
+    lobes = np.zeros(len(dh))
+    for _ in range(5):
+        c = rng.normal(size=3)
+        c[1] = abs(c[1]) + 0.2
+        c = c / np.linalg.norm(c)
+        lobes += RELIEF_LOBE * np.exp(-((dh - c) ** 2).sum(axis=1) / (2 * 0.35 ** 2))
+    y = dh[:, 1]
+    weight = 0.25 + 0.75 * C.smoothstep(y / 0.18)
+    disp = (disp + tube + lobes) * weight
+    disp = disp + RELIEF_SHIFT
+    pos = dh * (1.0 + disp)[:, None]
+    pos[:, 1] = pos[:, 1] / pos[:, 1].max()                       # height exactly 1 at the highest bump
+    pos[boundary, 1] = SKIRT_Y
+    rho = theta / (theta_max + 0.01)
+    uv = np.stack([0.5 + 0.5 * rho * np.cos(phi), 0.5 + 0.5 * rho * np.sin(phi)], 1)
+    return pos, faces, uv, {"boundary": len(boundary), "theta_max": theta_max}
+
+
+def paint_tubes(S, rng, count=CORE_WORMS):
+    """Painter's algorithm of `count` worms in a TILEABLE field (copies are painted wrapped around the edges).
+    Returns (height, colour, groove, covered)."""
+    height = np.zeros((S, S))
+    layer = np.full((S, S), -1.0)
+    col = np.zeros((S, S, 3))
+    groove = np.zeros((S, S))
+    palette = np.array([W.COL_BASE, W.COL_BELLY, W.COL_BACK, W.COL_PATCH])
+    step = 8.0
+    for n in range(count):
+        px, py = rng.random() * S, rng.random() * S
+        hd = rng.random() * 2 * np.pi
+        length = rng.uniform(520, 780)
+        K = int(length / step)
+        spiral = rng.random() < 0.35          # constant-curvature worms read as the coils of the heap
+        curv = rng.choice([-1.0, 1.0]) * rng.uniform(0.10, 0.17) if spiral else rng.normal(0, 0.07)
+        pts = np.zeros((K, 2))
+        for k in range(K):
+            pts[k] = (px, py)
+            hd += curv + rng.normal(0, 0.06)
+            px += step * np.cos(hd)
+            py += step * np.sin(hd)
+        t = np.linspace(0, 1, K)
+        w0 = rng.uniform(15.0, 19.0)
+        wk = w0 * (0.55 + 0.45 * C.smoothstep(t * 4.0)) * (1.0 - 0.5 * C.smoothstep((t - 0.85) / 0.15))
+        lay = rng.random() * 0.45
+        tint = palette[rng.integers(len(palette))] * PALETTE_K * rng.uniform(0.85, 1.15)
+        green = rng.random() < 0.35
+        vph = rng.random() * 6.28
+        # paint the worm in chunks of CHUNK stamps (exact: same base layer, the larger profile wins); each chunk has a small bbox
+        for c0 in range(0, K, CHUNK):
+            c1 = min(K, c0 + CHUNK + 1)
+            for sx in (-S, 0, S):
+                for sy in (-S, 0, S):
+                    q = pts[c0:c1] + np.array([sx, sy])
+                    wc = wk[c0:c1]
+                    x0 = int(max(0, q[:, 0].min() - w0 - 2))
+                    x1 = int(min(S, q[:, 0].max() + w0 + 3))
+                    y0 = int(max(0, q[:, 1].min() - w0 - 2))
+                    y1 = int(min(S, q[:, 1].max() + w0 + 3))
+                    if x1 <= x0 or y1 <= y0:
+                        continue
+                    gx, gy = np.meshgrid(np.arange(x0, x1) + 0.5, np.arange(y0, y1) + 0.5)
+                    d2 = (gx[..., None] - q[None, None, :, 0]) ** 2 + (gy[..., None] - q[None, None, :, 1]) ** 2
+                    qq = d2 / (wc[None, None, :] ** 2)
+                    qm = qq.min(axis=2)
+                    ti = t[c0:c1][qq.argmin(axis=2)]
+                    lat = np.sqrt(np.clip(qm, 0, 1))
+                    h = np.sqrt(np.clip(1.0 - qm, 0, 1))
+                    arc = ti * length
+                    ring = np.cos(2 * np.pi * arc / GROOVE_PX)    # grooves along the worm
+                    gr = C.smoothstep((ring - 0.55) / 0.35) * C.smoothstep((h - 0.05) / 0.2)
+                    h = h * (1.0 - 0.06 * gr)
+                    top = lay + 0.5 * h
+                    cur = layer[y0:y1, x0:x1]
+                    win = (h > 0.02) & (top > cur)
+                    shade = 0.55 + 0.45 * np.clip(h, 0, 1) ** 0.8         # low contrast (revision 2): the core is the dark depth between the worms
+                    dorsal = np.exp(-(lat / 0.16) ** 2)           # dorsal line, a little warmer and darker
+                    pix = tint[None, None, :] * shade[..., None]
+                    outline = 0.50 + 0.50 * C.smoothstep((1.0 - lat) / 0.30)             # dark rim: separates neighbouring cords at 256 px
+                    pix = pix * outline[..., None]
+                    pix = pix * (1 - 0.30 * dorsal[..., None])
+                    pix = pix * (1 - 0.10 * gr[..., None])
+                    if green:
+                        vein = np.exp(-((lat - 0.55) / 0.10) ** 2) * C.smoothstep(np.sin(ti * 19.0 + vph) * 2.0 + 0.4)
+                        pix = pix * (1 - 0.25 * vein[..., None]) + (W.COL_VEIN * PALETTE_K)[None, None, :] * (0.25 * vein)[..., None]
+                    head = C.smoothstep((ti - 0.90) / 0.08) * 0.30
+                    pix = pix * (1 - head[..., None])
+                    sub = col[y0:y1, x0:x1]
+                    sub[win] = pix[win]
+                    gsub = groove[y0:y1, x0:x1]
+                    gsub[win] = gr[win]
+                    height[y0:y1, x0:x1] = np.where(win, top, height[y0:y1, x0:x1])
+                    layer[y0:y1, x0:x1] = np.where(win, top, cur)
+    return height, col, groove, height > 0
+
+
+def make_core_textures(out_dir):
+    S = CORE_PAINT
+    rng = np.random.default_rng([config.SEED, 888])
+    height, col, groove, covered = paint_tubes(S, rng)
+    hollow = np.array([0x0B, 0x0A, 0x07]) / 255.0
+    print("mass_core texture: %.1f %% of the texels covered by worms" % (100.0 * covered.mean()))
+    mott = 0.9 + 0.2 * C.fbm2_tile(S, S, 8, 41, octaves=2)
+    col = np.where(covered[..., None], col, hollow[None, None, :] * mott[..., None])
+    f = CORE_PAINT // CORE_TEX
+    albedo = W.box_reduce(col, f)
+    C.write_png(os.path.join(out_dir, "mass_core_albedo.png"), C.to_u8(albedo))
+    hn = W.box_reduce(height, f)
+    C.write_png(os.path.join(out_dir, "mass_core_normal.png"), C.normal_map_from_height(hn, 3.0))
+    g = np.where(covered, 0.80, 0.92)
+    g = g * (1 - groove) + 0.60 * groove
+    g = W.box_reduce(g, f)
+    rgba = np.zeros((CORE_TEX, CORE_TEX, 4), dtype=np.uint8)
+    rgba[..., 3] = C.to_u8(g)
+    C.write_png(os.path.join(out_dir, "mass_core_gloss.png"), rgba)
+
+
+def render_core_preview(out_dir, prev_dir, pos, faces, uv):
+    import bpy
+    C.reset_scene()
+    C.setup_world((0.04, 0.045, 0.05), 1.0)
+    mat = C.make_pbr_material("core", os.path.join(out_dir, "mass_core_albedo.png"),
+                              os.path.join(out_dir, "mass_core_normal.png"), roughness=0.2, normal_strength=1.0,
+                              specular=0.6, gloss_png=os.path.join(out_dir, "mass_core_gloss.png"), closest=True)
+    o = C.make_object("core", pos, faces, uv[faces] * 1.8)
+    o.data.materials.append(mat)
+    C.add_ground(8.0, (0.14, 0.14, 0.15))
+    C.add_light("AREA", C.gltf_to_blender((1.0, 2.5, 2.0)), 130, size=2.5, target=C.gltf_to_blender((0, 0.3, 0)))
+    C.add_light("AREA", C.gltf_to_blender((-2.0, 1.0, -1.5)), 40, size=2.5, color=(0.7, 0.8, 1.0), target=C.gltf_to_blender((0, 0.3, 0)))
+    C.add_camera(C.gltf_to_blender((0.9, 1.2, 2.6)), C.gltf_to_blender((0, 0.4, 0)), lens=40)
+    C.configure_render(1200, 800, 64)
+    C.render_to(os.path.join(prev_dir, "mass_core_bare.png"))
+    from shutil import copyfile
+    copyfile(os.path.join(out_dir, "mass_core_albedo.png"), os.path.join(prev_dir, "mass_core_albedo_tex.png"))
+
+
+def export_core(out):
+    pos, faces, uv, info = build_core()
+    C.check_outward(pos, faces, "mass_core")
+    print("mass_core: %d vertices, %d triangles, %d boundary verts; bounds min %s max %s" %
+          (len(pos), len(faces), info["boundary"], np.round(pos.min(0), 3), np.round(pos.max(0), 3)))
+    for name, T in config.CORE_TILES.items():
+        C.reset_scene()
+        obj = C.make_object("mass_core", pos, faces, (uv[faces] * T))
+        C.export_glb(obj, os.path.join(out, name + ".glb"))
+    return pos, faces, uv
+
+
+# =========================================================================== LEGACY dome (removed in pass D)
 
 # --------------------------------------------------------------------------- geometry
 def icosphere(sub):
@@ -270,6 +508,9 @@ def main():
     print("  bounds f0 min %s max %s" % (np.round(frames[0].min(0), 3), np.round(frames[0].max(0), 3)))
     make_textures(out)
     render_previews(out, prev, dome, frames)
+    cpos, cfaces, cuv = export_core(out)
+    make_core_textures(out)
+    render_core_preview(out, prev, cpos, cfaces, cuv)
     C.stats("make_mass", t0)
 
 

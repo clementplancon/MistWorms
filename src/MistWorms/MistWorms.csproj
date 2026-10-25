@@ -7,12 +7,18 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <DebugType>portable</DebugType>
-    <Configurations>Debug;Release</Configurations>
+    <Configurations>Debug;Release;Profile</Configurations>
   </PropertyGroup>
 
   <!-- MW_DEV gates the whole dev harness (spec §1.4, §15): QuickStart, DevBridge, scenarios, debug commands. -->
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <DefineConstants>$(DefineConstants);MW_DEV</DefineConstants>
+  </PropertyGroup>
+  <!-- Profile: the dev harness (MW_DEV: scenarios, bridge, commands) with the optimizer on. Every budget measurement (ms, GC) is made with this one. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Profile'">
+    <DefineConstants>$(DefineConstants);MW_DEV</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>portable</DebugType>
   </PropertyGroup>
   <ItemGroup Condition="'$(Configuration)' == 'Release'">
     <Compile Remove="Dev\**" />

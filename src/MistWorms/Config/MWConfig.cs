@@ -40,6 +40,7 @@ namespace MistWorms.Config
                 Performance.Bind();
                 Dev.Bind();
 
+                Migrate();
                 CheckRanges();
             }
             finally
@@ -71,6 +72,36 @@ namespace MistWorms.Config
                 m_spirit = Resist.Spirit.Value,
                 m_nonPlayer = HitData.DamageModifier.Normal,
             };
+        }
+
+        /// <summary>
+        /// Version of the config layout this build writes. A file with a lower <c>General.ConfigVersion</c> (a fresh file starts at 0) goes through the
+        /// migrations below, in order, then is stamped. A migration only touches a value that still equals the OLD default: a value the user
+        /// chose is never overwritten. Each one is logged.
+        /// </summary>
+        public const int CurrentConfigVersion = 2;
+
+        private static void Migrate()
+        {
+            int from = General.ConfigVersion.Value;
+            if (from >= CurrentConfigVersion) return;
+
+            // v1 (phase 4B-3): the cap of worms drawn on one mass went from 40 to 400; v2: real size worms, 600 (the LOD0 cap of the layout).
+            int cap = MistWorms.Mass.MassLayoutConst.Lod0Cap;
+            if (from < 1) MigrateInt(Performance.MaxVisibleSurfaceWorms, 40, cap, 1);
+            if (from < 2) MigrateInt(Performance.MaxVisibleSurfaceWorms, 400, cap, 2);
+
+            Plugin.Log?.LogInfo($"[Config] ConfigVersion {from} -> {CurrentConfigVersion}");
+            General.ConfigVersion.Value = CurrentConfigVersion;
+        }
+
+        private static void MigrateInt(ConfigEntry<int> entry, int oldDefault, int newDefault, int toVersion)
+        {
+            if (ConfigMigrations.ShouldReplace(entry.Value, oldDefault))
+            {
+                Plugin.Log?.LogInfo($"[Config] migration to v{toVersion}: {entry.Definition.Section}.{entry.Definition.Key} {entry.Value} (old default) -> {newDefault}");
+                entry.Value = newDefault;
+            }
         }
 
         private static void CheckRanges()
@@ -110,9 +141,12 @@ namespace MistWorms.Config
         {
             private const string S = nameof(General);
             public static ConfigEntry<bool> Enabled;
+            public static ConfigEntry<int> ConfigVersion;
 
             internal static void Bind()
             {
+                ConfigVersion = Local(S, nameof(ConfigVersion), 0,
+                    "Do not edit. Layout version of this file; when it is older than the mod, changed defaults are migrated once (see the log).", I(0, 1000));
                 Enabled = Synced(S, nameof(Enabled), true,
                     "Master switch. When false nothing spawns (no seeding, laying or releasing) and existing worms, masses and nests stay inert.");
             }
@@ -506,6 +540,7 @@ namespace MistWorms.Config
             private const string S = nameof(Performance);
             public static ConfigEntry<float> RenderDistance;
             public static ConfigEntry<int> MaxVisibleSurfaceWorms;
+            public static ConfigEntry<bool> MassWorkerThread;
             public static ConfigEntry<int> MaxSoundSources;
             public static ConfigEntry<float> ShadowDistance;
             public static ConfigEntry<float> SimRateNear;
@@ -518,9 +553,11 @@ namespace MistWorms.Config
                 // range chosen
                 RenderDistance = Local(S, nameof(RenderDistance), 60f,
                     "Worms farther than this many metres from the camera are not drawn.", F(10f, 300f));
-                // range chosen: one surface worm per worm at most, and Mass.MaxCount defaults to 200.
-                MaxVisibleSurfaceWorms = Local(S, nameof(MaxVisibleSurfaceWorms), 40,
-                    "Maximum instanced worms drawn crawling on the surface of one mass.", I(0, 200));
+                // range chosen: phase 4B-3 addendum, LOD0 cap of one mass (the visible count is n*k(n), above Mass.MaxCount).
+                MaxVisibleSurfaceWorms = Local(S, nameof(MaxVisibleSurfaceWorms), MistWorms.Mass.MassLayoutConst.Lod0Cap,
+                    "Maximum instanced worms drawn on the surface of one mass near the camera.", I(0, 1000));
+                MassWorkerThread = Local(S, nameof(MassWorkerThread), true,
+                    "Compute the layout of the writhing masses on a background thread (one frame late). Off: everything on the main thread.");
                 // range chosen
                 MaxSoundSources = Local(S, nameof(MaxSoundSources), 4,
                     "Maximum simultaneous crawl/idle sounds from nearby worms.", I(0, 32));
@@ -566,5 +603,15 @@ namespace MistWorms.Config
                     "Debug builds only: enable devcommands automatically when the test world loads.");
             }
         }
+    }
+}
+
+namespace MistWorms.Config
+{
+    /// <summary>Pure rule of the config migrations (unit tested).</summary>
+    public static class ConfigMigrations
+    {
+        /// <summary>A value is replaced only when it still equals the old default.</summary>
+        public static bool ShouldReplace(int current, int oldDefault) => current == oldDefault;
     }
 }

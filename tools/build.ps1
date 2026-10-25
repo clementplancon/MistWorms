@@ -4,14 +4,15 @@
   local dedicated server (spec §1.4, §15.6).
 .DESCRIPTION
   Order: dotnet test (fail fast) -> dotnet build -> deploy. Deployed layout, per plugin dir:
-    MistWorms.dll (+ MistWorms.pdb in Debug), Localization/*.json, assets/** (from assets/build/).
+    MistWorms.dll (+ MistWorms.pdb in Debug and Profile), Localization/*.json, assets/** (from assets/build/).
   Release excludes src/MistWorms/Dev/** and the MW_DEV symbol (see MistWorms.csproj).
 .EXAMPLE
   tools/build.ps1
   tools/build.ps1 -Configuration Release -NoDeploy
+  tools/build.ps1 -Configuration Profile      # MW_DEV + optimizer: the configuration for every budget measurement (ms, GC)
 #>
 param(
-    [ValidateSet('Debug', 'Release')]
+    [ValidateSet('Debug', 'Release', 'Profile')]
     [string]$Configuration = 'Debug',
     [switch]$SkipTests,
     [switch]$NoDeploy
@@ -71,7 +72,7 @@ function Deploy-Plugin([string]$gameDir) {
     }
 
     Copy-Item $dll $dest
-    if ($Configuration -eq 'Debug') {
+    if ($Configuration -ne 'Release') {
         $pdb = Join-Path $outDir 'MistWorms.pdb'
         if (Test-Path $pdb) { Copy-Item $pdb $dest }
     }

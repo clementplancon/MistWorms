@@ -19,6 +19,8 @@ namespace MistWorms.Dev.Scenarios
     internal abstract class VisualScenario : IDevScenario
     {
         private const float ClearRadius = 2.5f;
+        protected const float SequenceGap = 3.5f;      // sequences and clips of the masses: the camera 3 to 4 m from the edge of the swarm
+        protected const float SequenceHeight = 1.6f;
         private const float MaxSlopeDeg = 12f;
         private static readonly float[] Yaws = { 35f, -40f };
 
@@ -38,9 +40,6 @@ namespace MistWorms.Dev.Scenarios
 
         protected virtual bool TopShot => false;
 
-        /// <summary>A "mass" subject is a real MW_WritheMass (AI frozen, no colony) rather than the static dome of the preview (phase 4B-1).</summary>
-        protected virtual bool UseRealMass => true;
-
         /// <summary>Minimum height of the subject ground above the water level (m).</summary>
         protected virtual float MinHeightAboveWater => 0.5f;
 
@@ -56,7 +55,42 @@ namespace MistWorms.Dev.Scenarios
             yield break;
         }
 
-        private static int SolidMask() =>
+        /// <summary>True for the scenarios that look at a mass in its real setting, the infested mine (parameter where=open gives the old open-ground setting).</summary>
+        protected virtual bool DefaultInMine => false;
+
+        /// <summary>Set once the subject stands in the mine.</summary>
+        protected bool InMine { get; private set; }
+
+        /// <summary>Count really used (the mine view may shrink it when no floor is big enough).</summary>
+        protected int ActualN { get; private set; }
+
+        /// <summary>What a camera must not be inside of or look through: the solid layers and the terrain (open ground has rocks and slopes as well as the mine walls).</summary>
+        protected static int CameraMask() => SolidMask() | LayerMask.GetMask("terrain");
+
+        /// <summary>
+        /// A camera position at <paramref name="horizontal"/> metres from <paramref name="root"/> along <paramref name="dir"/> (or along one of the three
+        /// other quarter turns) at <paramref name="height"/> (or 1 m, then 2.5 m higher), with nothing solid on it and a clear line to <paramref name="look"/>.
+        /// Returns false (and the first candidate) when none is clear.
+        /// </summary>
+        protected static bool ClearCamera(Vector3 root, Vector3 dir, float horizontal, float height, Vector3 look, out Vector3 pos)
+        {
+            int mask = CameraMask();
+            pos = root + dir.normalized * horizontal + Vector3.up * height;
+            foreach (float lift in new[] { 0f, 1f, 2.5f })
+            {
+                for (int k = 0; k < 4; k++)
+                {
+                    Vector3 d = Quaternion.AngleAxis(90f * k, Vector3.up) * dir.normalized;
+                    Vector3 c = root + d * horizontal + Vector3.up * (height + lift);
+                    if (Physics.CheckSphere(c, 0.4f, mask, QueryTriggerInteraction.Ignore) || Physics.Linecast(c, look, mask, QueryTriggerInteraction.Ignore)) continue;
+                    pos = c;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        protected static int SolidMask() =>
             LayerMask.GetMask("Default", "static_solid", "Default_small", "piece", "piece_nonsolid", "vehicle", "item");
 
         public IEnumerator Run(ScenarioContext ctx)
@@ -65,6 +99,8 @@ namespace MistWorms.Dev.Scenarios
             bool clutterHidden = false;
             bool timeForced = false;
             var hiddenRenderers = new List<Renderer>();
+            GameObject torch = null;
+            bool movedPlayer = false;
             try
             {
                 yield return ctx.WaitUntil(() => Player.m_localPlayer != null && DevBridge.IsReady(Player.m_localPlayer), 60f, "player_ready");
@@ -75,7 +111,7 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert("materials_resolved", materials, true,
                     materials ? $"{MaterialFactory.ShaderName} via {MaterialFactory.ShaderSource}" : MaterialFactory.Error);
                 if (!AssetCatalog.IsReady || !materials) yield break;
-                ctx.Log($"instancing supported: worm={MaterialFactory.WormInstancing} mass={MaterialFactory.MassInstancing} nest={MaterialFactory.NestInstancing}");
+                ctx.Log($"instancing supported: worm={MaterialFactory.WormInstancing} nest={MaterialFactory.NestInstancing}");
 
                 // Noon so the lighting is the same in every capture; the vanilla console command is the supported way.
                 ctx.Console($"{VanillaNames.CmdTimeOfDay} {TimeOfDay.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}");
@@ -126,9 +162,56 @@ namespace MistWorms.Dev.Scenarios
                     return true;
                 }
 
-                yield return ctx.MoveToOpenGround(1f, AcceptSpot);
-                if (!ctx.LastOpenGround.Found) yield break;
-                player = Player.m_localPlayer;
+                string where = ctx.Param("where", DefaultInMine ? "mine" : "open");
+                InMine = false;
+                if (kind == "mass" && where != "open")
+                {
+                    float r0 = MassMath.Radius(n < 1 ? 10 : n);
+                    player.SetGodMode(true);
+                    movedPlayer = true;
+                    yield return ctx.TpMine();
+                    if (ctx.LastTpMine.Ok)
+                    {
+                        yield return ctx.Wait(1f);
+                        player = Player.m_localPlayer;
+                        var site = new MineSiteResult();
+                        Vector3 here = player.transform.position;
+                        float rSite = r0;
+                        // A site where the camera can stand 3.5 m from the edge, 1.6 m up, with a clear view of the swarm (tried first, dropped if nothing passes).
+                        yield return MineSite.Find(here, r0 + 4.5f, MineSite.MinimumFor(r0), site,
+                            (floor, clearance) => ClearCamera(floor, Vector3.right, rSite + SequenceGap, SequenceHeight, floor + Vector3.up * (0.35f * rSite), out _));
+                        if (site.Found && !site.ExtraTestPassed) ctx.Log("mine site: no floor with a clear camera 3.5 m from the edge; using the best floor without that test");
+                        if (site.Distribution != null) ctx.Log("mine site: " + site.Distribution);
+                        if (site.Found && site.Clearance < MineSite.MinimumFor(r0))
+                        {
+                            // No room for this swarm: a smaller one for the mine view (logged), the biggest that fits the best floor.
+                            int smaller = MineSite.FitCount(site.Clearance - 0.8f);
+                            ctx.Log($"mine view: no floor with {MineSite.MinimumFor(r0):0.0} m free radius for n={n} (r {r0:0.00} m); using n={smaller} (r {MassMath.Radius(smaller):0.00} m) on a {site.Clearance:0.0} m clearance");
+                            n = smaller;
+                            r0 = MassMath.Radius(n);
+                        }
+                        ctx.Assert("mine_site_found", site.Found, $"flat floor with >= {MineSite.MinimumFor(r0):0.0} m free radius", site.Found ? $"{site.Floor} clearance {site.Clearance:0.0} m after {site.Tested} tests, {site.FloorSamples} floor samples, {site.Rooms} rooms" : site.Error);
+                        if (site.Found)
+                        {
+                            var moved = new TeleportOutcome();
+                            yield return DevWorld.TeleportPlayer(site.Floor + Vector3.up * 0.3f, Player.m_localPlayer.transform.rotation, false, 30f, moved);
+                            InMine = moved.Ok;
+                            if (moved.Ok) DevPreview.Instance.ForcedOrigin = site.Floor;
+                            else ctx.Log("could not move inside the mine: " + moved.Error);
+                        }
+                    }
+                    else ctx.Log($"mine not reachable ({ctx.LastTpMine.Error}): falling back to open ground");
+                    player = Player.m_localPlayer;
+                }
+
+                if (!InMine)
+                {
+                    if (movedPlayer) { player.SetGhostMode(false); movedPlayer = false; }
+                    yield return ctx.MoveToOpenGround(1f, AcceptSpot);
+                    if (!ctx.LastOpenGround.Found) yield break;
+                    player = Player.m_localPlayer;
+                }
+                ctx.Log(InMine ? "context: infested mine" : "context: open ground");
 
                 // Player out of frame: hide its renderers during the shots.
                 foreach (Renderer r in player.GetComponentsInChildren<Renderer>(true))
@@ -137,14 +220,15 @@ namespace MistWorms.Dev.Scenarios
                 }
 
                 DevPreview.Instance.WormSpacing = WormSpacing;
-                DevPreview.Instance.RealMass = kind == "mass" && UseRealMass;
                 string error = DevPreview.Run(kind, n, anim, count, compare, distanceParam);
                 ctx.Assert("preview_created", error == null, "no error", error ?? "ok");
                 if (error != null) yield break;
                 DevPreview preview = DevPreview.Instance;
-                if (DevPreview.Instance.RealMass) AssertRealMass(ctx, preview, n);
+                ActualN = n;
+                if (kind == "mass") AssertRealMass(ctx, preview, n);
                 if (preview.Warning != null) ctx.Log("preview warning: " + preview.Warning);
-                if (kind == "mass") ctx.Log($"mass n={preview.MassN} radius={preview.MassRadius:0.00} m, dome height {preview.MassRadius * MassMath.DomeHeightFactor:0.00} m");
+                if (kind == "mass") ctx.Log($"mass n={preview.MassN} radius={preview.MassRadius:0.00} m");
+                if (InMine && ctx.ParamBool("torch", true)) torch = SpawnTorch(ctx, preview);
 
                 float size = Mathf.Max(preview.Size, 0.6f);
                 float camDist = CameraDistance(size);
@@ -183,13 +267,31 @@ namespace MistWorms.Dev.Scenarios
                 if (clutterHidden && ClutterSystem.instance != null) ClutterSystem.instance.enabled = true;
                 if (timeForced && TimeOfDay != 0.5f) ctx.Console($"{VanillaNames.CmdTimeOfDay} -1");
                 DevPreview.Instance.WormSpacing = 0.5f;
-                DevPreview.Instance.RealMass = false;
+                DevPreview.Instance.ForcedOrigin = null;
+                if (torch != null) { if (ZNetScene.instance != null) ZNetScene.instance.Destroy(torch); else Object.Destroy(torch); }
+                if (movedPlayer && Player.m_localPlayer != null) { Player.m_localPlayer.SetGhostMode(false); Player.m_localPlayer.SetGodMode(false); }
                 if (!keep)
                 {
                     DevCamera.Follow();
                     DevPreview.Instance.Clear();
                 }
             }
+        }
+
+        /// <summary>A vanilla ground torch beside the swarm, on the camera side, for the mine (its own lamps are far apart).</summary>
+        private static GameObject SpawnTorch(ScenarioContext ctx, DevPreview preview)
+        {
+            GameObject prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(VanillaNames.PieceGroundTorch) : null;
+            if (prefab == null) { ctx.Log("no ground torch prefab: the mine light only"); return null; }
+            Vector3 side = Vector3.Cross(Vector3.up, preview.Forward);
+            Vector3 pos = preview.Origin + side * (preview.MassRadius + 1.6f) + preview.Forward * (preview.MassRadius + 0.8f);
+            if (Physics.Raycast(pos + Vector3.up * 1.5f, Vector3.down, out RaycastHit hit, 3f, SolidMask(), QueryTriggerInteraction.Ignore)) pos = hit.point;
+            else pos.y = preview.Origin.y;
+            GameObject go = Object.Instantiate(prefab, pos, Quaternion.identity);
+            Fireplace fire = go.GetComponent<Fireplace>();
+            if (fire != null) fire.AddFuel(fire.m_maxFuel);
+            ctx.Log($"torch at {pos}");
+            return go;
         }
 
         /// <summary>The subject is a real, valid mass of the asked size with exactly n x Worm.Health, and what the camera sees is its own visual.</summary>
@@ -212,7 +314,7 @@ namespace MistWorms.Dev.Scenarios
         /// <summary>Places the camera at the yaw, nudging by +20 degrees (up to 6 tries) while the line to the subject is blocked.</summary>
         private static void PlaceCamera(ScenarioContext ctx, DevPreview preview, float yaw, float dist)
         {
-            int mask = SolidMask();
+            int mask = CameraMask();
             Vector3 pos, look;
             for (int i = 0; i <= 6; i++)
             {
@@ -274,8 +376,208 @@ namespace MistWorms.Dev.Scenarios
         protected override bool TopShot => true;
     }
 
+    /// <summary>
+    /// Shared flow of V02 to V04 (phase 4B-3, pass D): a real writhing mass with the AI frozen, drawn as a swarm of worms with no core.
+    /// After the two standard angles: a side shot 3 m from the edge, a close-up 1 m from the edge, a 45 degree dive, the camera at the centre of
+    /// the swarm (nothing within 0.5 m), a sequence of 4 shots 1 s apart (the shape changes), the cap checks by distance (when
+    /// <see cref="CheckCaps"/>) and a clip. The assertions come from the swarm renderer itself (WritheMassVisual / MassRenderSystem), the judgement
+    /// of the look is done on the captures and the clip.
+    /// </summary>
+    internal abstract class MassVisualScenario : VisualScenario
+    {
+        private const float SideGap = 3f;
+        private const float CloseGap = 1f;
+        private const float InsideMinDistance = 0.5f;
+        private const float SequenceInterval = 1f;
+        private const int SequenceShots = 4;
+        private const float ClipSeconds = 5f;
+
+        protected override bool DefaultInMine => true;
+
+        /// <summary>Checks the drawn cap at 8, 20, 45 m and beyond the render distance (only meaningful for a swarm big enough to reach the cap).</summary>
+        protected virtual bool CheckCaps => false;
+
+        protected override IEnumerator Extra(ScenarioContext ctx, DevPreview preview)
+        {
+            WritheMassState mass = preview.RealMassState;
+            WritheMassVisual visual = mass != null ? mass.GetComponent<WritheMassVisual>() : null;
+            ctx.Assert("mass_visual_present", visual != null, true, visual != null);
+            if (visual == null) yield break;
+
+            yield return ctx.WaitFrames(20);
+            ctx.Assert("mass_visual_active", visual.Active, true, visual.Active);
+            ctx.Assert("mass_ground_found", visual.Ground.Have, true, visual.Ground.Have);
+            ctx.Assert("mass_root_rests_on_body", Vector3.Distance(visual.Root, mass.transform.position) < 0.15f, "< 0.15 m",
+                Vector3.Distance(visual.Root, mass.transform.position));
+
+            float r = Mathf.Max(0.3f, visual.ShownRadius);
+            Vector3 fwd = preview.Forward;
+            Vector3 side = Vector3.Cross(Vector3.up, fwd);
+
+            // ---- side shot 3 m from the edge, close-up 1 m from the edge, 45 degree dive
+            yield return Aim(ctx, visual, side, r + SideGap, 1.3f, "side_3m");
+            AssertDrawn(ctx, visual, mass.N, "side_3m");
+            AssertRoles(ctx, visual, mass.N, "side_3m");
+            yield return Aim(ctx, visual, side, r + CloseGap, 0.7f, "close_1m");
+            AssertDrawn(ctx, visual, mass.N, "close_1m");
+            float dive = Mathf.Max(3f, r * 2.4f + 1.5f);
+            yield return Aim(ctx, visual, side, dive * Mathf.Cos(45f * Mathf.Deg2Rad), dive * Mathf.Sin(45f * Mathf.Deg2Rad), "dive_45");
+            AssertDrawn(ctx, visual, mass.N, "dive_45");
+            ctx.Log($"roles drawn at 45 degrees: {Roles(visual)}");
+
+            // ---- camera at the centre: nothing within 0.5 m, still some worms around
+            DevCamera.Free(visual.Center, visual.Center + fwd);
+            yield return ctx.WaitFrames(12);
+            yield return ctx.Shot("inside");
+            float closest = visual.ClosestToCam;
+            ctx.Assert("camera_inside_clear_radius", closest >= InsideMinDistance - 0.01f, $">= {InsideMinDistance} m", closest == float.MaxValue ? "none tracked" : closest.ToString("0.00"));
+            ctx.Assert("camera_inside_still_draws", visual.LastDrawn > 0, "> 0", visual.LastDrawn);
+
+            // ---- the shape changes: 4 shots 1 s apart, lobes compared between the first and the next ones
+            var first = new Vector2[MassLayoutConst.LobeMax];
+            float maxMove = 0f;
+            var firstPose = new Vector3[MassLayoutConst.SlotCount];
+            var firstSeen = new bool[MassLayoutConst.SlotCount];
+            float wormMove = 0f;
+            int wormMatched = 0;
+            for (int i = 0; i < SequenceShots; i++)
+            {
+                float t0 = Time.realtimeSinceStartup;
+                AimNow(ctx, visual, side, r + SequenceGap, SequenceHeight);
+                yield return ctx.WaitFrames(3);
+                for (int j = 0; j < first.Length; j++)
+                {
+                    var c = new Vector2(visual.LobeSnapshot[j].Cx, visual.LobeSnapshot[j].Cz);
+                    if (i == 0) first[j] = c;
+                    else maxMove = Mathf.Max(maxMove, Vector2.Distance(first[j], c));
+                }
+                // Mean move of the same worms (the candidates the worker keeps: flux, border and the highest places) between the first and this capture.
+                MassJob job = visual.Job;
+                if (job != null && job.ReadyIdx >= 0)
+                {
+                    MassOutput o = job.Out[job.ReadyIdx];
+                    if (i == 0)
+                    {
+                        for (int k = 0; k < o.CandCount; k++) { firstPose[o.Cand[k].Slot] = new Vector3(o.Cand[k].M.m03, o.Cand[k].M.m13, o.Cand[k].M.m23); firstSeen[o.Cand[k].Slot] = true; }
+                    }
+                    else if (i == SequenceShots - 1)
+                    {
+                        for (int k = 0; k < o.CandCount; k++)
+                        {
+                            int sl = o.Cand[k].Slot;
+                            if (!firstSeen[sl]) continue;
+                            wormMove += Vector3.Distance(firstPose[sl], new Vector3(o.Cand[k].M.m03, o.Cand[k].M.m13, o.Cand[k].M.m23));
+                            wormMatched++;
+                        }
+                    }
+                }
+                yield return ctx.Shot("seq_" + i);
+                float took = Time.realtimeSinceStartup - t0;
+                if (i < SequenceShots - 1 && took < SequenceInterval) yield return ctx.Wait(SequenceInterval - took);
+            }
+            float meanMove = wormMatched > 0 ? wormMove / wormMatched : 0f;
+            ctx.Log($"shape change over 3 s: largest lobe move {maxMove:0.000} m, mean move of {wormMatched} matched drawn worms {meanMove:0.000} m");
+            ctx.Assert("shape_changes_over_the_sequence", wormMatched >= 10 && meanMove >= 0.05f, "the matched drawn worms move >= 0.05 m on average over 3 s", $"{meanMove:0.000} m over {wormMatched} worms");
+
+            // ---- caps by distance
+            if (CheckCaps && mass.N >= 150) yield return Caps(ctx, visual, side, r);
+            else if (CheckCaps) ctx.Log($"caps check skipped: n={mass.N} is too small to reach the caps (the mine view shrank it)");
+
+            // ---- clip, framed on the swarm
+            AimNow(ctx, visual, Quaternion.AngleAxis(35f, Vector3.up) * side, r + SequenceGap, SequenceHeight);
+            yield return ctx.WaitFrames(10);
+            double pf = visual.PerfFrames, pm = visual.PerfMain, pj = visual.PerfJobs, pe = visual.PerfEval, pd = visual.PerfDraw, pk = visual.PerfWorker, pr = visual.PerfRefreshed, pw = visual.PerfDrawn;
+            yield return ctx.Clip("loop", ClipSeconds);
+            double frames = visual.PerfFrames - pf;
+            double jobs = visual.PerfJobs - pj;
+            if (frames > 0 && jobs > 0)
+            {
+                // The reference figure of the cost of one swarm: mean over the frames of the clip (build the plugin with -Configuration Profile to compare with the budget).
+                ctx.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "PERF mass n={0} lod={1} cap={2}: over {3:0} frames of the clip, MAIN thread {4:0.000} ms per frame (snapshot + block copy; budget 0.05 ms in LOD0); WORKER {5:0.000} ms per job = evaluate {6:0.000} + draw {7:0.000} (budget 1 ms for all masses; {8}); {9:0} of {10} places recomputed per job, {11:0} worms drawn",
+                    mass.N, visual.LastLod, visual.LastCap, frames, (visual.PerfMain - pm) / frames, (visual.PerfWorker - pk) / jobs, (visual.PerfEval - pe) / jobs, (visual.PerfDraw - pd) / jobs,
+                    MWConfig.Performance.MassWorkerThread.Value ? "worker thread" : "inline on the main thread",
+                    (visual.PerfRefreshed - pr) / jobs, visual.LastSlotCount, (visual.PerfDrawn - pw) / jobs));
+            }
+        }
+
+        private static string Roles(WritheMassVisual v) =>
+            $"body {v.DrawnByRole[0]}, flux {v.DrawnByRole[1]}, border {v.DrawnByRole[2]} (lod {v.LastLod}, cap {v.LastCap})";
+
+        /// <summary>Camera <paramref name="horizontal"/> metres from the centre of the swarm along <paramref name="dir"/>, then a capture.</summary>
+        private static IEnumerator Aim(ScenarioContext ctx, WritheMassVisual v, Vector3 dir, float horizontal, float height, string shot)
+        {
+            AimNow(ctx, v, dir, horizontal, height);
+            yield return ctx.WaitFrames(15);
+            yield return ctx.Shot(shot);
+        }
+
+        private static void AimNow(ScenarioContext ctx, WritheMassVisual v, Vector3 dir, float horizontal, float height)
+        {
+            Vector3 look = v.Root + Vector3.up * (0.35f * Mathf.Max(0.3f, v.ShownRadius));
+            // Closer step by step (1 m at a time, never under 1.5 m from the edge) when no side is clear at the asked distance.
+            bool clear = false;
+            Vector3 pos = default;
+            float minH = Mathf.Max(1.5f, v.ShownRadius + 1.5f);
+            for (float h = horizontal; h >= minH - 1e-3f && !clear; h -= 1f)
+            {
+                clear = ClearCamera(v.Root, dir, h, height, look, out pos);
+                if (clear && h < horizontal) ctx.Log($"camera: {horizontal - h:0.0} m closer than asked to see the swarm");
+            }
+            if (!clear)
+            {
+                ClearCamera(v.Root, dir, horizontal, height, look, out pos);
+                ctx.Log("camera: no clear position on the four sides, using the first one");
+            }
+            DevCamera.Free(pos, look);
+        }
+
+        private static void AssertDrawn(ScenarioContext ctx, WritheMassVisual v, int n, string tag)
+        {
+            int slots = MassLayout.VisibleCount(n, MassLayoutConst.SlotCount);
+            int cap = v.LastCap;
+            int drawn = v.LastDrawn;
+            // Occlusion hides the inner and the far side places; the threshold then draws about `cap` of what remains.
+            int low = (int)(0.25f * Mathf.Min(slots, cap));
+            ctx.Assert($"drawn_count_{tag}", drawn >= low && drawn <= cap, $"{low}..{cap} (places {slots}, visible {v.VisibleTotal})", $"{drawn} ({Roles(v)})");
+        }
+
+        private static void AssertRoles(ScenarioContext ctx, WritheMassVisual v, int n, string tag)
+        {
+            int total = v.DrawnByRole[0] + v.DrawnByRole[1] + v.DrawnByRole[2];
+            ctx.Assert($"roles_all_present_{tag}", total > 0 && v.DrawnByRole[0] > 0 && v.DrawnByRole[1] > 0 && (n < MassLayoutConst.BorderMinN || v.DrawnByRole[2] > 0),
+                "body, flux (and border from n = 6)", Roles(v));
+            if (n < 50 || total <= 0) return;
+            float body = v.DrawnByRole[0] / (float)total, flux = v.DrawnByRole[1] / (float)total, border = v.DrawnByRole[2] / (float)total;
+            ctx.Assert($"role_fractions_{tag}", body >= 0.30f && body <= 0.80f && flux >= 0.12f && flux <= 0.50f && border >= 0.02f && border <= 0.25f,
+                "body 0.30..0.80, flux 0.12..0.50, border 0.02..0.25", $"body {body:0.00}, flux {flux:0.00}, border {border:0.00}");
+        }
+
+        private static IEnumerator Caps(ScenarioContext ctx, WritheMassVisual v, Vector3 dir, float r)
+        {
+            int lod0Cap = MWConfig.Performance.MaxVisibleSurfaceWorms.Value;
+            float rd = MWConfig.Performance.RenderDistance.Value;
+            foreach (float d in new[] { 8f, 20f, 45f, rd + 10f })
+            {
+                Vector3 look = v.Root + Vector3.up * (0.35f * r);
+                ClearCamera(v.Root, dir, r + d, 1.5f + 0.1f * d, look, out Vector3 camPos);
+                DevCamera.Free(camPos, look);
+                yield return ctx.WaitFrames(20);
+                int expected = MassRenderSystem.CapAt(d, rd, lod0Cap);
+                int expectedLod = d < 12f ? 0 : d < 30f ? 1 : 2;
+                int drawn = v.LastDrawn;
+                if (d >= rd)
+                    ctx.Assert($"cap_{d:0}m", drawn == 0 && (v.CulledLastFrame || v.LastCap == 0), "nothing drawn beyond the render distance", $"drawn {drawn}, culled {v.CulledLastFrame}");
+                else
+                    ctx.Assert($"cap_{d:0}m", v.LastCap == expected && drawn <= expected && drawn >= (int)(0.5f * expected) && v.LastLod == expectedLod,
+                        $"cap {expected}, lod {expectedLod}, drawn {(int)(0.5f * expected)}..{expected}", $"cap {v.LastCap}, lod {v.LastLod}, drawn {drawn}");
+                if (d == 20f) yield return ctx.Shot("cap_20m");
+            }
+        }
+    }
+
     /// <summary>V02: a mass of 10 next to a tick (spec §4.5: about a tick).</summary>
-    internal sealed class V02_Mass10 : VisualScenario
+    internal sealed class V02_Mass10 : MassVisualScenario
     {
         public override string Name => "V02_Mass10";
 
@@ -286,9 +588,11 @@ namespace MistWorms.Dev.Scenarios
     }
 
     /// <summary>V03: a mass of 200 next to a seeker soldier (spec §4.5: a bit smaller than the soldier).</summary>
-    internal sealed class V03_Mass200 : VisualScenario
+    internal sealed class V03_Mass200 : MassVisualScenario
     {
         public override string Name => "V03_Mass200";
+
+        protected override bool CheckCaps => true;
 
         protected override void Describe(out string kind, out int n, out string anim, out int count, out string compare)
         {
@@ -297,7 +601,7 @@ namespace MistWorms.Dev.Scenarios
     }
 
     /// <summary>V04: a mass of 50 next to a seeker brood (bonus; spec table: about hip height).</summary>
-    internal sealed class V04_Mass50 : VisualScenario
+    internal sealed class V04_Mass50 : MassVisualScenario
     {
         public override string Name => "V04_Mass50";
 

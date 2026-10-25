@@ -73,6 +73,7 @@ namespace MistWorms.Colony
             public string Source;
             public int Attempts;
             public bool GaveUp;
+            public bool Warmed;
             public float NextTry;
 
             public Slot(string what, string[] names, Action<GameObject> prepare)
@@ -89,6 +90,7 @@ namespace MistWorms.Colony
                 Source = null;
                 Attempts = 0;
                 GaveUp = false;
+                Warmed = false;
                 NextTry = 0f;
             }
         }
@@ -127,59 +129,137 @@ namespace MistWorms.Colony
         }
 
         /// <summary>
-        /// Builds every template now and instantiates each once, disabled, then destroys the instance, so the first strike or hit of a fight does
-        /// not pay for the first use (called once per colony at its first tick). Nothing is played.
+        /// Kept for the colonies' first tick: the templates are no longer built there (a tick can run inside an animation event or a rendering
+        /// callback, where DestroyImmediate is refused); <see cref="Pump"/> builds and warms them from the plugin's Update.
         /// </summary>
         public static void Prewarm()
         {
-            try
-            {
-                foreach (Slot slot in s_all)
-                {
-                    GameObject template = Resolve(slot);
-                    if (template == null) continue;
-                    GameObject probe = Object.Instantiate(template, Vector3.zero, Quaternion.identity);   // inactive, like its template
-                    Object.Destroy(probe);
-                }
-            }
-            catch (Exception e)
-            {
-                Plugin.LogException("WormEffects.Prewarm", e);
-            }
         }
 
         // ------------------------------------------------------------------ plays
 
-        /// <summary>Green splash and hurt sound at <paramref name="position"/>, played by the peer that landed the hit.</summary>
+        // Why a queue: an effect is asked for from places where Unity forbids creating or destroying objects (animation events: a melee swing is
+        // an event of the animator; rendering callbacks: a worm landing). The Play* calls only note the request; `Pump`, called from the plugin's
+        // Update, builds the templates (they need DestroyImmediate) and plays what is pending. A request older than PendingLife is dropped.
+
+        private enum Kind : byte { Hit, Death, Strike, Idle }
+
+        private struct Pending
+        {
+            public Kind Kind;
+            public Vector3 Position;
+            public float Expire;
+        }
+
+        public const int PendingMax = 64;
+        public const float PendingLife = 2f;
+
+        private static readonly Pending[] s_pending = new Pending[PendingMax];
+        private static int s_pendingHead, s_pendingCount;
+        private static bool s_warnedPlay;
+
+        /// <summary>Requests waiting for the next Pump (dev checks).</summary>
+        public static int PendingCount => s_pendingCount;
+
+        private static void Enqueue(Kind kind, Vector3 position)
+        {
+            if (Application.isBatchMode) return;
+            if (s_pendingCount >= PendingMax) return;      // a burst beyond the limiter: drop
+            int at = (s_pendingHead + s_pendingCount) % PendingMax;
+            s_pending[at] = new Pending { Kind = kind, Position = position, Expire = Time.unscaledTime + PendingLife };
+            s_pendingCount++;
+        }
+
+        /// <summary>Green splash and hurt sound at <paramref name="position"/>, played by the peer that landed the hit (deferred to the next Update; never throws).</summary>
         public static void PlayHit(ref Limiter limiter, Vector3 position, float now)
         {
-            if (!limiter.Allow(now)) return;
-            SpawnFx(s_hit, position);
-            SpawnSound(s_hitSound, position);
+            if (limiter.Allow(now)) Enqueue(Kind.Hit, position);
         }
 
         public static void PlayDeath(ref Limiter limiter, Vector3 position, float now)
         {
-            if (!limiter.Allow(now)) return;
-            SpawnFx(s_death, position);
-            SpawnSound(s_deathSound, position);
+            if (limiter.Allow(now)) Enqueue(Kind.Death, position);
         }
 
         public static void PlayStrike(ref Limiter limiter, Vector3 position, float now)
         {
-            if (!limiter.Allow(now)) return;
-            SpawnSound(s_strikeSound, position);
+            if (limiter.Allow(now)) Enqueue(Kind.Strike, position);
         }
 
         public static void PlayIdle(ref Limiter limiter, Vector3 position, float now)
         {
-            if (!limiter.Allow(now)) return;
-            SpawnSound(s_idleSound, position);
+            if (limiter.Allow(now)) Enqueue(Kind.Idle, position);
+        }
+
+        /// <summary>
+        /// Called from a normal Update (the plugin's): builds the templates once the ZNetScene is ready (again after a scene change), then plays the
+        /// pending effects. Nothing here throws.
+        /// </summary>
+        public static void Pump()
+        {
+            if (Application.isBatchMode) return;
+            try
+            {
+                if (ZNetScene.instance == null) return;
+                CheckScene();
+                foreach (Slot slot in s_all)
+                {
+                    if (slot.Template == null && !slot.GaveUp) Resolve(slot);
+                    if (slot.Template != null && !slot.Warmed)
+                    {
+                        // Instantiates the template once and destroys the copy, so the first real play has no first-use cost.
+                        slot.Warmed = true;
+                        Object.Destroy(Object.Instantiate(slot.Template, Vector3.zero, Quaternion.identity));
+                    }
+                }
+
+                float now = Time.unscaledTime;
+                int n = s_pendingCount;
+                for (int k = 0; k < n; k++)
+                {
+                    Pending p = s_pending[s_pendingHead];
+                    s_pendingHead = (s_pendingHead + 1) % PendingMax;
+                    s_pendingCount--;
+                    if (p.Expire < now) continue;
+                    PlayNow(p.Kind, p.Position);
+                }
+            }
+            catch (Exception e)
+            {
+                s_pendingCount = 0;
+                if (!s_warnedPlay)
+                {
+                    s_warnedPlay = true;
+                    Plugin.LogException("WormEffects.Pump", e);
+                }
+            }
+        }
+
+        private static void PlayNow(Kind kind, Vector3 position)
+        {
+            try
+            {
+                switch (kind)
+                {
+                    case Kind.Hit: SpawnFx(s_hit, position); SpawnSound(s_hitSound, position); break;
+                    case Kind.Death: SpawnFx(s_death, position); SpawnSound(s_deathSound, position); break;
+                    case Kind.Strike: SpawnSound(s_strikeSound, position); break;
+                    default: SpawnSound(s_idleSound, position); break;
+                }
+            }
+            catch (Exception e)
+            {
+                if (!s_warnedPlay)
+                {
+                    s_warnedPlay = true;
+                    Plugin.LogException("WormEffects.PlayNow " + kind, e);
+                }
+            }
         }
 
         private static void SpawnFx(Slot slot, Vector3 position)
         {
-            GameObject template = Resolve(slot);
+            GameObject template = slot.Template;     // built by Pump, never here
             if (template == null) return;
             GameObject fx = Object.Instantiate(template, position, Quaternion.identity);   // inactive, like its template
             fx.SetActive(true);
@@ -193,7 +273,7 @@ namespace MistWorms.Colony
             if (Application.isBatchMode) return;
             Player listener = Player.m_localPlayer;
             if (listener == null || (listener.transform.position - position).sqrMagnitude > SoundRange * SoundRange) return;
-            GameObject template = Resolve(slot);
+            GameObject template = slot.Template;
             if (template == null) return;
             Object.Instantiate(template, position, Quaternion.identity).SetActive(true);
         }

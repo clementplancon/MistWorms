@@ -73,6 +73,96 @@ namespace MistWorms.Dev
             return null;
         }
 
+        /// <summary>The loaded mass closest to <paramref name="from"/>, or null.</summary>
+        public static WritheMassState Nearest(Vector3 from)
+        {
+            WritheMassState best = null;
+            float bestSqr = float.MaxValue;
+            foreach (WritheMassState m in WritheMassState.All)
+            {
+                if (m == null || !m.Valid) continue;
+                float d = (m.transform.position - from).sqrMagnitude;
+                if (d < bestSqr) { bestSqr = d; best = m; }
+            }
+            return best;
+        }
+
+        private static Dictionary<string, object> Roles(int a, int b, int c) =>
+            new Dictionary<string, object> { { "body", a }, { "flux", b }, { "border", c } };
+
+        private static Dictionary<string, object> Fractions(int a, int b, int c)
+        {
+            float t = a + b + c;
+            return new Dictionary<string, object> { { "body", t > 0f ? a / t : 0f }, { "flux", t > 0f ? b / t : 0f }, { "border", t > 0f ? c / t : 0f } };
+        }
+
+        /// <summary>
+        /// What the swarm renderer did for this mass in the last frame it was drawn (route /mass-visual): visible and drawn roles, LOD, cap,
+        /// engulf, the closest drawn worm to the camera, the highest drawn worm, smoothed root against body, cost.
+        /// </summary>
+        public static Dictionary<string, object> VisualJson(WritheMassState m)
+        {
+            var v = m.GetComponent<WritheMassVisual>();
+            var d = new Dictionary<string, object> { { "zdoid", m.ZdoId.ToString() }, { "n", m.N } };
+            if (v == null) { d["visual"] = false; return d; }
+            d["visual"] = true;
+            d["active"] = v.Active;
+            d["culled"] = v.CulledLastFrame;
+            d["lod"] = v.LastLod;
+            d["cap"] = v.LastCap;
+            d["slotsEvaluated"] = v.LastSlotCount;
+            d["visibleSlots"] = v.VisibleTotal;
+            d["drawn"] = v.LastDrawn;
+            d["visibleRoles"] = Roles(v.VisibleByRole[0], v.VisibleByRole[1], v.VisibleByRole[2]);
+            d["visibleRoleFraction"] = Fractions(v.VisibleByRole[0], v.VisibleByRole[1], v.VisibleByRole[2]);
+            d["drawnRoles"] = Roles(v.DrawnByRole[0], v.DrawnByRole[1], v.DrawnByRole[2]);
+            d["drawnRoleFraction"] = Fractions(v.DrawnByRole[0], v.DrawnByRole[1], v.DrawnByRole[2]);
+            d["visFrac"] = v.VisFrac;
+            d["threshold"] = v.LastP;
+            d["closestDrawnToCamera"] = v.ClosestToCam == float.MaxValue ? -1f : v.ClosestToCam;
+            d["maxDrawnHeight"] = v.MaxDrawnHeight;
+            d["heapMs"] = v.HeapMs;
+            d["cost"] = new Dictionary<string, object> { { "evaluateMs", v.EvalMs }, { "drawMs", v.DrawMs }, { "composeMs", v.ComposeMs }, { "rendererAddMs", v.AddMs }, { "evaluatedSlots", v.EvaluatedSlots } };
+            d["engulf"] = v.EngulfShown;
+            d["engulfForced"] = v.ForcedEngulf;
+            d["hasTarget"] = v.HasTarget;
+            d["radius"] = v.P.R;
+            d["sigma"] = v.Sigma;
+            d["speed"] = v.Speed;
+            d["streamK"] = v.StreamK;
+            d["pseudoRamp"] = v.PseudoRamp;
+            d["root"] = v.Root;
+            d["body"] = m.transform.position;
+            d["rootToBody"] = Vector3.Distance(v.Root, m.transform.position);
+            d["center"] = v.Center;
+            d["boundRadius"] = v.BoundRadius;
+            d["groundHave"] = v.Ground.Have;
+            d["groundSamples"] = v.Ground.Samples;
+            d["groundHits"] = v.Ground.Hits;
+            d["groundTiltDeg"] = Vector3.Angle(Vector3.up, v.Up);
+            d["blocked"] = new List<object> { v.Ground.Blocked0, v.Ground.Blocked1, v.Ground.Blocked2, v.Ground.Blocked3 };
+            d["targetDist"] = v.P.TargetDist;
+            d["targetTurns"] = v.P.TargetTurns;
+            d["worker"] = new Dictionary<string, object>
+            {
+                { "enabled", MistWorms.Config.MWConfig.Performance.MassWorkerThread.Value }, { "running", MassWorker.Running }, { "jobsRun", MassWorker.JobsRun },
+                { "mainMs", v.HeapMs }, { "workerMs", v.WorkerMs }, { "busy", v.Job != null && v.Job.Busy },
+            };
+            if (v.Slots != null)
+            {
+                Lobe e = v.LobeSnapshot[MassLayoutConst.EngulfLobe];
+                d["engulfLobe"] = new Dictionary<string, object> { { "cx", e.Cx }, { "cz", e.Cz }, { "rx", e.Rx }, { "ry", e.Ry }, { "rz", e.Rz } };
+                if (v.P.TargetDist >= 0f)
+                {
+                    V3 t = v.P.TargetLocal();
+                    d["targetLocal"] = new Dictionary<string, object> { { "x", t.X }, { "z", t.Z } };
+                }
+            }
+            d["fallsInProgress"] = MassTransients.LiveCount;
+            d["fallsSpawned"] = MassTransients.Spawned;
+            return d;
+        }
+
         /// <summary>Destroys every mass owned by this peer (mw_kill); returns how many.</summary>
         public static int KillAll()
         {

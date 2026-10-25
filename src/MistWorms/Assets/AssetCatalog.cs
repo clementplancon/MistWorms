@@ -22,13 +22,15 @@ namespace MistWorms.Assets
     {
         private const long SlowLoadMs = 300;
 
-        /// <summary>Textures with this prefix are Point filtered like the vanilla creatures (dump section 1); mass and nest stay bilinear until phase 4B.</summary>
-        public const string WormTexturePrefix = "worm_";
+        /// <summary>Textures with one of these prefixes are Point filtered like the vanilla creatures (dump section 1); the nest stays bilinear.</summary>
+        public static readonly string[] PointTexturePrefixes = { "worm_" };
 
         private static readonly Dictionary<string, Mesh> _meshes = new Dictionary<string, Mesh>();
         private static readonly Dictionary<string, Mesh[]> _frames = new Dictionary<string, Mesh[]>();
         private static readonly Dictionary<string, Texture2D> _textures = new Dictionary<string, Texture2D>();
         private static readonly Dictionary<string, AnimationInfo> _anims = new Dictionary<string, AnimationInfo>();
+        private static readonly Dictionary<string, int> _tris = new Dictionary<string, int>();
+        private static readonly Dictionary<string, int[]> _frameTris = new Dictionary<string, int[]>();
 
         private static string _breakdown = string.Empty;
 
@@ -66,6 +68,13 @@ namespace MistWorms.Assets
             return _frames.TryGetValue(animation, out f) ? f : null;
         }
 
+        /// <summary>Triangle count per frame (manifest 'triangles', else the parsed index count); read at load because UploadMeshData makes the meshes unreadable.</summary>
+        public static int[] FrameTriangles(string animation)
+        {
+            int[] t;
+            return _frameTris.TryGetValue(animation, out t) ? t : null;
+        }
+
         public static Mesh Mesh(string name)
         {
             Mesh m;
@@ -92,6 +101,8 @@ namespace MistWorms.Assets
             _frames.Clear();
             _textures.Clear();
             _anims.Clear();
+            _tris.Clear();
+            _frameTris.Clear();
         }
 
         private static void LoadAll(string dir)
@@ -207,6 +218,7 @@ namespace MistWorms.Assets
                 if (declared != vc) Plugin.Log?.LogWarning("[Assets] " + file + ": manifest says " + declared + " vertices, file has " + vc);
 
                 _meshes[name] = GltfLoader.Build(arrays[mi], name);
+                _tris[name] = (int)JsonReader.Num(entry, "triangles", data.Indices.Length / 3);
             }
             long meshMs = sw.ElapsedMilliseconds;
             sw.Restart();
@@ -214,15 +226,23 @@ namespace MistWorms.Assets
             foreach (var kv in _anims)
             {
                 var arr = new Mesh[kv.Value.Frames];
+                var tris = new int[arr.Length];
                 for (int i = 0; i < arr.Length; i++)
                 {
                     Mesh m;
                     string frameName = kv.Key + "_" + i.ToString("00");
-                    if (!_meshes.TryGetValue(frameName, out m) && !(kv.Value.Frames == 1 && _meshes.TryGetValue(kv.Key, out m)))
-                        throw new FileNotFoundException("animation '" + kv.Key + "' is missing frame " + frameName);
+                    string used = frameName;
+                    if (!_meshes.TryGetValue(frameName, out m))
+                    {
+                        used = kv.Key;
+                        if (!(kv.Value.Frames == 1 && _meshes.TryGetValue(kv.Key, out m)))
+                            throw new FileNotFoundException("animation '" + kv.Key + "' is missing frame " + frameName);
+                    }
                     arr[i] = m;
+                    tris[i] = _tris[used];
                 }
                 _frames[kv.Key] = arr;
+                _frameTris[kv.Key] = tris;
             }
 
             TextureLoader.ResetTimings();
@@ -234,7 +254,7 @@ namespace MistWorms.Assets
                 string file = texFiles[ti];
 
                 Texture2D tex = TextureLoader.FromPng(pngs[ti], name, JsonReader.Bool(entry, "linear", false),
-                    name.StartsWith(WormTexturePrefix, StringComparison.Ordinal));
+                    IsPointTexture(name));
                 if (tex == null) throw new InvalidDataException(file + ": PNG could not be decoded");
                 int w = (int)JsonReader.Num(entry, "width", tex.width), h = (int)JsonReader.Num(entry, "height", tex.height);
                 if (tex.width != w || tex.height != h)
@@ -248,6 +268,13 @@ namespace MistWorms.Assets
             _breakdown = "read+parse+convert " + parallelMs + " (parallel), meshes " + meshMs + ", textures " + sw.ElapsedMilliseconds
                 + " [decode " + TextureLoader.Ms(TextureLoader.DecodeTicks).ToString("0") + ", compress " + TextureLoader.Ms(TextureLoader.CompressTicks).ToString("0")
                 + ", apply+mips " + TextureLoader.Ms(TextureLoader.ApplyTicks).ToString("0") + "]";
+        }
+
+        private static bool IsPointTexture(string name)
+        {
+            for (int i = 0; i < PointTexturePrefixes.Length; i++)
+                if (name.StartsWith(PointTexturePrefixes[i], StringComparison.Ordinal)) return true;
+            return false;
         }
 
         private static bool SameIndices(int[] a, int[] b)

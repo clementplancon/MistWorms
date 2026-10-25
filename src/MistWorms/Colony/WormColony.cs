@@ -371,6 +371,11 @@ namespace MistWorms.Colony
 
             float now = Time.time;
             float windup = MWConfig.Worm.CobraWindup.Value;
+            Vector3 cam = sink.CameraPosition;
+            float cullDist = sink.RenderDistance + 0.5f;
+            float cullSqr = cullDist * cullDist;
+            float lodDist = Mathf.Max(12f, sink.ShadowDistance);   // beyond it crawl and idle use the 240 triangle LOD1 (and cast no shadow)
+            float lodSqr = lodDist * lodDist;
 
             for (int i = 0; i < s.HighWater; i++)
             {
@@ -381,6 +386,10 @@ namespace MistWorms.Colony
                 float since = now - s.lastSimTime[i];
                 float interval = s.simInterval[i];
                 Vector3 p = InterpolatedPos(i, now);
+
+                float dx = p.x - cam.x, dy = p.y - cam.y, dz = p.z - cam.z;
+                float dSqr = dx * dx + dy * dy + dz * dz;
+                if (dSqr > cullSqr) continue;   // the renderer would cull it anyway; skip the matrix
 
                 // Look variation, stable for a given worm: scale and a roll around the body axis (render only, the proxy keeps its size).
                 WormMath.Variation(i, s.generation[i], out float scale, out float rollDeg);
@@ -432,7 +441,10 @@ namespace MistWorms.Colony
                 }
 
                 Matrix4x4 m = Matrix4x4.TRS(p, rot, new Vector3(scale, scale, scale));
-                sink.AddWorm(anim, frame, m);
+                if (dSqr > lodSqr && (anim == WormAnim.Crawl || anim == WormAnim.Idle))
+                    sink.AddWorm(anim, WormLod.Lod1, frame >> 1, m);   // LOD1 frame j is pose 2j of LOD0: the phase stays continuous
+                else
+                    sink.AddWorm(anim, frame, m);
             }
         }
     }

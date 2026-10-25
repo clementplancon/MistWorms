@@ -43,7 +43,25 @@ def read_accessor(js, bin_data, index, expect_type, allowed_components):
     return out
 
 
-def parse_glb(path):
+def budget_for(name):
+    """TRI_BUDGET key by suffix then longest prefix: *_lod1* -> worm_lod1, else the longest key that prefixes the name."""
+    if "_lod1" in name:
+        return config.TRI_BUDGET["worm_lod1"]
+    keys = [k for k in config.TRI_BUDGET if name.startswith(k) and k != "worm_lod1"]
+    return config.TRI_BUDGET[max(keys, key=len)]
+
+
+def ring_centres(pos, rings, around):
+    """Centres of rings 1..rings-1 of a worm mesh (vertex 0 = tail pole, then `around` vertices per ring)."""
+    out = []
+    for i in range(1, rings):
+        base = 1 + (i - 1) * around
+        pts = pos[base:base + around]
+        out.append([sum(p[c] for p in pts) / around for c in range(3)])
+    return out
+
+
+def parse_glb(path, uv_max=1.0):
     with open(path, "rb") as f:
         data = f.read()
     if len(data) < 20:
@@ -104,12 +122,12 @@ def parse_glb(path):
     if bad_normals > 0:
         raise Violation("%d non-unit normals" % bad_normals)
     for u in uvs:
-        if not (-0.001 <= u[0] <= 1.001 and -0.001 <= u[1] <= 1.001):
-            raise Violation("uv outside [0,1]: %s" % (u,))
+        if not (-0.001 <= u[0] <= uv_max + 0.001 and -0.001 <= u[1] <= uv_max + 0.001):
+            raise Violation("uv outside [0,%g]: %s" % (uv_max, u))
     mins = [min(v[i] for v in pos) for i in range(3)]
     maxs = [max(v[i] for v in pos) for i in range(3)]
     return {"vertices": len(pos), "triangles": len(idx) // 3, "indices": tuple(idx), "uvs": tuple(uvs),
-            "min": mins, "max": maxs}
+            "min": mins, "max": maxs, "pos": pos}
 
 
 def png_size(path):
@@ -138,9 +156,9 @@ def main():
     info = {}
 
     for anim, (frames, fps, loop) in config.ANIMATIONS.items():
-        names = [anim] if anim == "nest_idle" else ["%s_%02d" % (anim, i) for i in range(frames)]
-        prefix = anim.split("_")[0]
-        lo, hi = config.TRI_BUDGET[prefix]
+        names = [anim] if frames == 1 else ["%s_%02d" % (anim, i) for i in range(frames)]
+        lo, hi = budget_for(anim)
+        uv_max = config.CORE_TILES.get(anim, 1.0)
         first = None
         for name in names:
             path = os.path.join(build, name + ".glb")
@@ -148,7 +166,7 @@ def main():
                 errors.append("%s: file missing" % name)
                 continue
             try:
-                m = parse_glb(path)
+                m = parse_glb(path, uv_max)
             except (Violation, KeyError, ValueError, struct.error) as e:
                 errors.append("%s: %s" % (name, e))
                 continue
@@ -174,13 +192,38 @@ def main():
         mn, mx = m["min"], m["max"]
         ext = [mx[i] - mn[i] for i in range(3)]
         if name.startswith(("worm_crawl", "worm_idle", "worm_sleep")):
-            if not config.WORM_LENGTH[0] <= ext[2] <= config.WORM_LENGTH[1]:
-                errors.append("%s: length along Z %.3f outside %s" % (name, ext[2], config.WORM_LENGTH))
+            wl = config.WORM_LENGTH_LOD1 if "_lod1" in name else config.WORM_LENGTH
+            if not wl[0] <= ext[2] <= wl[1]:
+                errors.append("%s: length along Z %.3f outside %s" % (name, ext[2], wl))
             if mn[1] < -0.015 or ext[0] > 0.2:
                 errors.append("%s: not resting on the ground / too wide (minY %.3f, width %.3f)" % (name, mn[1], ext[0]))
         if name.startswith("worm_"):
             if abs((mn[2] + mx[2]) / 2) > 0.2:
                 errors.append("%s: origin far from the body" % name)
+        if name.startswith("worm_coil"):
+            lod1 = "_lod1" in name
+            rings, around = (16, 8) if lod1 else (28, 14)
+            if max(ext[0], ext[2]) > config.COIL_EXTENT_XZ_MAX:
+                errors.append("%s: XZ extent %.3f above %.2f" % (name, max(ext[0], ext[2]), config.COIL_EXTENT_XZ_MAX))
+            if ext[1] > config.COIL_HEIGHT_MAX:
+                errors.append("%s: height %.3f above %.2f" % (name, ext[1], config.COIL_HEIGHT_MAX))
+            if mn[1] < -0.015:
+                errors.append("%s: below the belly line (minY %.3f)" % (name, mn[1]))
+            cen = ring_centres(m["pos"], rings, around)
+            gap = max(8 if not lod1 else 4, 1)       # rings at least ~0.11 m of arc apart
+            dmin = min(sum((cen[i][c] - cen[j][c]) ** 2 for c in range(3)) ** 0.5
+                       for i in range(len(cen)) for j in range(i + gap, len(cen)))
+            m["ringGap"] = dmin
+            if dmin < config.COIL_RING_MIN_DIST:
+                errors.append("%s: non-adjacent rings %.3f m apart, below %.3f (self intersection)" %
+                              (name, dmin, config.COIL_RING_MIN_DIST))
+        if name.startswith("mass_core_t"):
+            lo_, hi_ = config.CORE_HALF_EXTENT
+            rx, rz = ext[0] / 2, ext[2] / 2
+            if not (lo_ <= rx <= hi_ and lo_ <= rz <= hi_):
+                errors.append("%s: core half extent %.3f/%.3f outside %s" % (name, rx, rz, config.CORE_HALF_EXTENT))
+            if not lo_ <= mx[1] <= hi_ or mn[1] < config.CORE_Y_MIN:
+                errors.append("%s: core height range %.3f..%.3f unexpected" % (name, mn[1], mx[1]))
         if name == "worm_rear_05" and not 0.24 <= mx[1] <= 0.32:
             errors.append("worm_rear_05: height %.3f, spec says ~0.28" % mx[1])
         if name == "nest_idle":
@@ -214,8 +257,8 @@ def main():
             errors.append("%s: size %dx%d, expected %dx%d" % (name, tw, th, w, h))
         if name.startswith("worm_") and max(tw, th) > config.WORM_TEXTURE_MAX:
             errors.append("%s: %dx%d above the %d px worm limit" % (name, tw, th, config.WORM_TEXTURE_MAX))
-        if (ctype == 6) != (name == "worm_gloss"):
-            errors.append("%s: %s (only worm_gloss carries alpha)" % (name, "RGBA" if ctype == 6 else "RGB, expected RGBA"))
+        if (ctype == 6) != name.endswith("_gloss"):
+            errors.append("%s: %s (only *_gloss textures carry alpha)" % (name, "RGBA" if ctype == 6 else "RGB, expected RGBA"))
         textures.append({"name": name, "file": name + ".png", "width": tw, "height": th, "linear": linear})
 
     if errors:
@@ -231,6 +274,7 @@ def main():
         "animations": {a: {"frames": f, "fps": fps, "loop": loop} for a, (f, fps, loop) in config.ANIMATIONS.items()},
         "meshes": meshes,
         "textures": textures,
+        "massLayout": config.MASS_LAYOUT,
     }
     with open(os.path.join(build, "manifest.json"), "w", encoding="utf8", newline="\n") as fh:
         json.dump(manifest, fh, indent=1)
@@ -241,8 +285,11 @@ def main():
     for m in meshes:
         groups.setdefault(m["name"].rsplit("_", 1)[0] if m["name"] != "nest_idle" else "nest_idle", []).append(m["triangles"])
     for g, tris in groups.items():
-        print("  %-12s %2d frame(s)  %d vertices-frame0  %d triangles" %
+        print("  %-16s %2d frame(s)  %d vertices-frame0  %d triangles" %
               (g, len(tris), next(m["vertices"] for m in meshes if m["name"].startswith(g)), tris[0]))
+    rg = [info[n]["ringGap"] for n in info if "ringGap" in info[n]]
+    if rg:
+        print("  coil: smallest distance between non-adjacent ring centres %.3f m (limit %.3f)" % (min(rg), config.COIL_RING_MIN_DIST))
     return 0
 
 

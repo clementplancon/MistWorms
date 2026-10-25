@@ -1,4 +1,5 @@
-"""Thunderstore icon (256x256) and banner (1024x256): the shipped dome + worms on a dark misty ground.
+"""Thunderstore icon (256x256) and banner (1024x256): the shipped worm heap (core + worm instances laid out by mass_layout.py,
+n = 10) + a few big worms on a dark misty ground.
 
 Uses the exported .glb files and PNG textures from assets/build, so run it after make_worm/make_mass.
 Run: blender --background --python render_icon.py
@@ -11,6 +12,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common as C  # noqa: E402
+import mass_layout as L  # noqa: E402
+import make_mass_preview as MP  # noqa: E402
 
 
 def import_glb(path):
@@ -44,14 +47,13 @@ def build_scene(build_dir):
         print("mist skipped:", e)
     worm_mat = C.make_pbr_material("worm", os.path.join(build_dir, "worm_albedo.png"),
                                    os.path.join(build_dir, "worm_normal.png"), roughness=0.25)
-    mass_mat = C.make_pbr_material("mass", os.path.join(build_dir, "mass_albedo.png"),
-                                   os.path.join(build_dir, "mass_normal.png"), roughness=0.3, specular=0.5)
     ground_mat = C.flat_material("ground", (0.035, 0.035, 0.04), 0.7)
 
-    dome = import_glb(os.path.join(build_dir, "mass_boil_00.glb"))
-    dome.data.materials.append(mass_mat)
-    r = 0.83
-    dome.scale = (r, r, 0.8 * r)
+    # the heap: n = 10 (r = 0.83 m, as the old dome), placed by the layout reference, shipped core and coil/crawl/idle meshes
+    MP._state["meshes"] = MP.load_meshes(build_dir)
+    MP.setup_materials(build_dir, MP._state["meshes"])
+    MP._state["keep"] = set(m.name for m in MP._state["meshes"].values())
+    MP.populate(MP.heap_params(10, 0.0, 17.3), L.Slots(L.GOLDEN_SEED), 0, 120)
 
     # unit worms are tiny at icon scale, so the foreground ones are drawn 2.2x larger (poster licence)
     placements = [(-0.9, 0.9, 0.5, 2.2, 2), (0.15, 1.15, 2.6, 2.2, 5), (1.0, 0.7, 3.6, 2.0, 8),

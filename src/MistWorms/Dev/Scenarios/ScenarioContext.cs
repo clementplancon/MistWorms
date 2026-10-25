@@ -90,6 +90,16 @@ namespace MistWorms.Dev.Scenarios
             }
         }
 
+        /// <summary>Records a short clip of JPG frames into docs/shots/clips/&lt;scenario&gt;_&lt;name&gt; (assemble with `vh.py assemble`); failures are logged, not fatal.</summary>
+        public IEnumerator Clip(string name, float seconds = 4f, float fps = 15f, float scale = 0.5f)
+        {
+            Dictionary<string, object> info = null;
+            string error = null;
+            yield return DevShots.Clip($"{Name}_{name}", seconds, fps, scale, true, (i, e) => { info = i; error = e; });
+            if (info != null) Log($"clip {info["dir"]} frames={info["frames"]} fps={info["fps"]}");
+            else Log($"clip '{name}' failed: {error}");
+        }
+
         /// <summary>Runs a console command and returns the lines it printed.</summary>
         public List<string> Console(string cmd)
         {

@@ -250,6 +250,10 @@ namespace MistWorms.Dev
                     req.RequireMethod("POST");
                     MassRoute(req, reply);
                     return null;
+                case "/mass-visual":
+                    req.RequireMethod("GET");
+                    MassVisualRoute(req, reply);
+                    return null;
                 case "/state":
                     req.RequireMethod("GET");
                     StateRoute(req, reply);
@@ -275,6 +279,9 @@ namespace MistWorms.Dev
                 case "/screenshot":
                     req.RequireMethod("GET", "POST");
                     return ScreenshotRoute(req, reply);
+                case "/clip":
+                    req.RequireMethod("POST");
+                    return ClipRoute(req, reply);
                 case "/scenario":
                     req.RequireMethod("POST");
                     ScenarioRoute(req, reply);
@@ -504,6 +511,36 @@ namespace MistWorms.Dev
             body["requested"] = n;
             body["colonySource"] = how;
             body["colonyKind"] = colony != null ? colony.Kind.ToString() : null;
+            reply.Body = body;
+        }
+
+        /// <summary>GET /mass-visual[?id=user:id]: what the swarm renderer did for a mass (the closest to the player without id), plus the renderer totals.</summary>
+        private static void MassVisualRoute(BridgeRequest req, BridgeReply reply)
+        {
+            string id = req.Query?["id"];
+            Mass.WritheMassState mass;
+            if (!string.IsNullOrEmpty(id))
+            {
+                mass = MassDev.Find(id);
+                if (mass == null) throw new BridgeException(404, $"no loaded mass '{id}'");
+            }
+            else
+            {
+                Player player = Player.m_localPlayer;
+                mass = MassDev.Nearest(player != null ? player.transform.position : Vector3.zero);
+                if (mass == null) throw new BridgeException(404, "no mass loaded");
+            }
+            Render.WormRenderer.FrameStats s = Render.WormRenderer.Last;
+            Dictionary<string, object> body = MassDev.VisualJson(mass);
+            body["renderer"] = new Dictionary<string, object>
+            {
+                { "frame", Render.WormRenderer.LastFrame },
+                { "instances", s.Instances }, { "drawCalls", s.DrawCalls }, { "batches", s.Batches }, { "triangles", s.Triangles },
+                { "merged", s.Merged }, { "dropped", s.Dropped }, { "culled", s.Culled },
+                { "cpuMs", s.CpuMs }, { "collectMs", s.CollectMs }, { "submitMs", s.SubmitMs },
+                { "heapMs", s.HeapMs }, { "heapDrawn", s.HeapDrawn }, { "heapLod0", s.HeapLod0 }, { "heapLod1", s.HeapLod1 }, { "heapLod2", s.HeapLod2 },
+                { "masses", Mass.MassRenderSystem.Count },
+            };
             reply.Body = body;
         }
 
@@ -783,6 +820,19 @@ namespace MistWorms.Dev
             yield return DevShots.Capture(name, (p, e) => { path = p; error = e; });
             if (error != null) throw new BridgeException(504, error);
             reply.Body = new Dictionary<string, object> { { "path", path } };
+        }
+
+        private static IEnumerator ClipRoute(BridgeRequest req, BridgeReply reply)
+        {
+            string name = req.String("name");
+            if (string.IsNullOrWhiteSpace(name)) name = "clip_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+            Dictionary<string, object> info = null;
+            string error = null;
+            yield return DevShots.Clip(name, MiniJson.GetFloat(req.Body, "seconds", 4f), MiniJson.GetFloat(req.Body, "fps", 15f),
+                MiniJson.GetFloat(req.Body, "scale", 0.5f), MiniJson.GetBool(req.Body, "hideUi", true), (i, e) => { info = i; error = e; });
+            if (error != null) throw new BridgeException(504, error);
+            info["name"] = DevShots.Sanitize(name);
+            reply.Body = info;
         }
 
         private static void ScenarioRoute(BridgeRequest req, BridgeReply reply)
@@ -1143,6 +1193,101 @@ namespace MistWorms.Dev
             if (hideHere) { yield return null; yield return null; }   // let the UI and the world texts update before the frame is read
             yield return CaptureCore(name, onDone);
             RestoreUi();
+        }
+
+        public static string ClipsDir => Path.Combine(ShotsDir, "clips");
+
+        /// <summary>
+        /// Records a burst of JPG frames (real time) into docs/shots/clips/&lt;name&gt;. Never throws; reports (info, null) or (null, error).
+        /// Textures are allocated once and reused; only the JPG encoding allocates per frame.
+        /// </summary>
+        public static IEnumerator Clip(string name, float seconds, float fps, float scale, bool hideUi, Action<Dictionary<string, object>, string> onDone)
+        {
+            seconds = Mathf.Clamp(seconds, 0.1f, 12f);
+            fps = Mathf.Clamp(fps, 1f, 30f);
+            scale = Mathf.Clamp(scale, 0.05f, 1f);
+            string dir = Path.Combine(ClipsDir, Sanitize(name));
+            int total = Mathf.Max(1, Mathf.RoundToInt(seconds * fps));
+            int w = Mathf.Max(16, Mathf.RoundToInt(Screen.width * scale));
+            int h = Mathf.Max(16, Mathf.RoundToInt(Screen.height * scale));
+            Texture2D full = null, small = null;
+            RenderTexture rt = null, previous = null;
+            bool hid = false;
+            string error = null;
+            int written = 0;
+            float start = 0f, end = 0f;
+            try
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                Directory.CreateDirectory(dir);
+                full = new Texture2D(Screen.width, Screen.height, TextureFormat.RGB24, false);
+                small = new Texture2D(w, h, TextureFormat.RGB24, false);
+                rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32);
+                if (hideUi) { HideUi(); hid = true; }
+            }
+            catch (Exception e)
+            {
+                error = $"clip setup failed: {e.Message}";
+            }
+
+            if (error == null)
+            {
+                if (hid) { yield return null; yield return null; }
+                start = Time.realtimeSinceStartup;
+                float interval = 1f / fps;
+                float deadline = start + seconds + 10f;   // never loop forever (minimized window...)
+                while (written < total && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return new WaitForEndOfFrame();
+                    float now = Time.realtimeSinceStartup;
+                    if (now - start < written * interval) continue;   // not yet time for the next frame
+                    try
+                    {
+                        full.ReadPixels(new Rect(0, 0, Screen.width, Screen.height), 0, 0, false);
+                        full.Apply(false);
+                        Graphics.Blit(full, rt);
+                        previous = RenderTexture.active;
+                        RenderTexture.active = rt;
+                        small.ReadPixels(new Rect(0, 0, w, h), 0, 0, false);
+                        small.Apply(false);
+                        RenderTexture.active = previous;
+                        File.WriteAllBytes(Path.Combine(dir, $"frame_{written:000}.jpg"), small.EncodeToJPG(85));
+                        written++;
+                        end = now;
+                    }
+                    catch (Exception e)
+                    {
+                        error = $"clip frame {written} failed: {e.Message}";
+                        break;
+                    }
+                }
+            }
+
+            try { if (RenderTexture.active == rt) RenderTexture.active = previous; } catch { /* ignore */ }
+            if (rt != null) RenderTexture.ReleaseTemporary(rt);
+            if (full != null) UnityEngine.Object.Destroy(full);
+            if (small != null) UnityEngine.Object.Destroy(small);
+            if (hid) RestoreUi();
+
+            if (error == null && written == 0) error = "clip captured no frame (is the window minimized?)";
+            if (error != null) { onDone(null, error); yield break; }
+
+            float duration = Mathf.Max(0.001f, end - start);
+            float realFps = written > 1 ? (written - 1) / duration : written / seconds;
+            if (realFps < fps * 0.85f)
+                Plugin.Log.LogWarning($"[Clip {name}] capture slowed the game: requested {fps:0.#} fps, measured {realFps:0.#} fps");
+            else
+                Plugin.Log.LogInfo($"[Clip {name}] {written} frames, {realFps:0.#} fps over {duration:0.##} s");
+            onDone(new Dictionary<string, object>
+            {
+                { "dir", dir },
+                { "frames", written },
+                { "fps", Math.Round(realFps, 2) },
+                { "requestedFps", fps },
+                { "duration", Math.Round(duration, 3) },
+                { "width", w },
+                { "height", h },
+            }, null);
         }
 
         private static IEnumerator CaptureCore(string name, Action<string, string> onDone)
