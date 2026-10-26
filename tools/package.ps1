@@ -67,6 +67,13 @@ if (-not $hasIcon) {
     finally { $img.Dispose() }
 }
 
+$banner = Join-Path $tsDir 'banner.png'
+if (Test-Path $banner) {
+    $img = [System.Drawing.Image]::FromFile($banner)
+    try { if ($img.Width -ne 1024 -or $img.Height -ne 256) { $errors.Add("banner.png is $($img.Width)x$($img.Height), expected 1024x256") } }
+    finally { $img.Dispose() }
+}
+
 if ($errors.Count) {
     $errors | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
     throw "Package validation failed ($($errors.Count) problem(s))."
@@ -81,7 +88,9 @@ if (-not (Test-Path $dll)) { throw "Release build not found: $dll" }
 
 # The Release build must not carry the dev harness; its namespace name would be in the metadata.
 $dllText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($dll))
-if ($dllText.Contains('MistWorms.Dev')) { throw "$dll contains the MistWorms.Dev namespace: not a clean Release build." }
+foreach ($s in 'MistWorms.Dev', 'DevBridge', 'ScenarioRunner') {
+    if ($dllText.Contains($s)) { throw "$dll contains '$s': not a clean Release build." }
+}
 
 # --- Assemble ------------------------------------------------------------------------------
 $dist = Join-Path $RepoRoot 'dist'
@@ -91,11 +100,14 @@ if (Test-Path $zipPath) { Remove-Item -Force $zipPath }
 
 $entries = New-Object System.Collections.Generic.List[object]
 function Add-Entry([string]$source, [string]$entryName) { $entries.Add([pscustomobject]@{ Source = $source; Name = $entryName }) }
-function Add-Tree([string]$sourceDir, [string]$prefix, [string]$filter = '*') {
+function Add-Tree([string]$sourceDir, [string]$prefix, [string]$filter = '*', [string[]]$exclude = @()) {
     if (-not (Test-Path $sourceDir)) { Write-Warning "$sourceDir not found, '$prefix' left empty."; return }
     $root = (Resolve-Path $sourceDir).Path.TrimEnd('\') + '\'
     Get-ChildItem $sourceDir -Recurse -File -Filter $filter | ForEach-Object {
-        Add-Entry $_.FullName ($prefix + $_.FullName.Substring($root.Length).Replace('\', '/'))
+        $rel = $_.FullName.Substring($root.Length).Replace('\', '/')
+        # $exclude: a top-level folder name, or a file name pattern.
+        foreach ($x in $exclude) { if ($rel.StartsWith("$x/") -or $_.Name -like $x) { return } }
+        Add-Entry $_.FullName ($prefix + $rel)
     }
 }
 
@@ -106,7 +118,14 @@ if ($hasIcon) { Add-Entry $icon 'icon.png' }
 Add-Entry $dll 'plugins/MistWorms/MistWorms.dll'
 # The folder also holds MWLocalization.cs; only the language files ship.
 Add-Tree (Join-Path $RepoRoot 'src\MistWorms\Localization') 'plugins/MistWorms/Localization/' '*.json'
-Add-Tree (Join-Path $RepoRoot 'assets\build') 'plugins/MistWorms/assets/'
+# assets/build also holds inspection renders and the parity file of the layout port: dev files, never shipped.
+Add-Tree (Join-Path $RepoRoot 'assets\build') 'plugins/MistWorms/assets/' '*' @('previews', 'mass_layout_golden.json', '*.pdb', '*.blend*')
+
+# The GPU path needs its shader bundle (tools/build-shaders.ps1 drops it in assets/build) and the asset manifest.
+foreach ($req in 'mistworms_shaders', 'manifest.json', 'worm_albedo.png') {
+    if (-not ($entries | Where-Object { $_.Name -eq "plugins/MistWorms/assets/$req" })) { throw "Required asset missing from the package: assets/$req (run tools/build-shaders.ps1 or tools/build-assets.ps1)" }
+}
+if (-not ($entries | Where-Object { $_.Name -like 'plugins/MistWorms/assets/*.glb' })) { throw 'No .glb in the package assets.' }
 
 $zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
 try {
@@ -118,3 +137,5 @@ try {
 $entries | ForEach-Object { Write-Host "  $($_.Name)" }
 Write-Step "Package written: $zipPath ($([math]::Round((Get-Item $zipPath).Length / 1KB)) KB)"
 Write-Host 'Validate it at https://thunderstore.io/tools/package-validation/ before publishing.'
+
+& (Join-Path $PSScriptRoot 'verify-zip.ps1') -Zip $zipPath

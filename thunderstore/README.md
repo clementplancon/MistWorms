@@ -1,11 +1,4 @@
-<!--
-DRAFT (phase 1). Rewrite against the final behaviour in phase 9 (spec §16, §17.1).
-TODO(user): set "website_url" in thunderstore/manifest.json to the GitHub repository URL.
--->
-
 # MistWorms
-
-> **Draft — not released yet.** Numbers below are the planned defaults and may change before 1.0.0.
 
 The infested mines of the Mistlands gain a parasite: the **Mist Worm**. One worm is nothing; a few hundred are a problem.
 
@@ -32,13 +25,14 @@ All values live in `BepInEx/config/dev.pointvirgule.mistworms.cfg`. Gameplay key
 | --- | --- | --- |
 | `General.Enabled` | true | Turns all spawning off |
 | `Worm.Health` | 10 | Health of one worm (mass health = count × this) |
-| `Worm.DurabilityPerBite` / `Worm.BiteInterval` | 1 / 0.5 s | Gear eaten per worm per bite |
+| `Worm.DurabilityPerBite` / `Worm.BiteInterval` | 1 / 0.5 | Gear eaten per worm per bite; seconds between bites |
 | `Mass.FormThreshold` / `Mass.MaxCount` / `Mass.DissolveThreshold` | 3 / 200 / 5 | Mass formation, size cap, break-up |
 | `Engulf.SlowFactor` | 0.5 | Speed multiplier while engulfed |
-| `Targets.AttackPlayers` / `AttackTamed` / `AttackCreatures` / `AttackStructures` | true | What an awake colony eats |
-| `Fire.AfraidOfFire` / `Fire.FearRadius` | true / 4 m | Fire repels worms |
-| `Nest.MaxAlivePerNest` / `Colony.MaxAlivePerMine` | 50 / 400 | Population caps |
-| `Performance.RenderDistance` | 60 m | Local only |
+| `Targets.AttackPlayers` / `Targets.AttackTamed` / `Targets.AttackCreatures` / `Targets.AttackStructures` | true | What an awake colony eats |
+| `Fire.AfraidOfFire` / `Fire.FearRadius` | true / 4 | Fire repels worms (radius in metres) |
+| `Nest.MaxAlivePerNest` / `Colony.MaxAlivePerMine` | 25 / 200 | Population caps per nest and per mine |
+| `Nest.MaxNestsPerMine` / `Nest.SpawnInterval` | 8 / 30 | Nests per mine; seconds between two eggs of a nest |
+| `Performance.RenderDistance` | 60 | Metres, local only |
 
 ## Installation
 
@@ -60,8 +54,6 @@ Valheim 1.0.x (tested on 1.0.20). Requires BepInExPack_Valheim and Jotunn. No ot
 ---
 
 ## Français
-
-> **Brouillon — pas encore publié.** Les valeurs indiquées sont les réglages prévus.
 
 Les mines infestées des Terres brumeuses accueillent un parasite : le **Ver des brumes**, insignifiant seul, redoutable en nombre.
 
