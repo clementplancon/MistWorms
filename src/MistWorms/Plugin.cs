@@ -21,7 +21,7 @@ namespace MistWorms
     {
         public const string ModGuid = "dev.pointvirgule.mistworms";
         public const string ModName = "MistWorms";
-        public const string ModVersion = "0.1.0";
+        public const string ModVersion = "1.0.0";
 
         internal static Plugin Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; }
