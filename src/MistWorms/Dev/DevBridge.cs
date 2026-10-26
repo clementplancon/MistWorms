@@ -609,7 +609,7 @@ namespace MistWorms.Dev
             string how;
             try { mass = MassDev.SpawnInFront(n, withColony, out colony, out how); }
             catch (InvalidOperationException e) { throw new BridgeException(409, e.Message); }
-            mass.FreezeAI = freeze;
+            mass.DevFrozen = freeze;
 
             Dictionary<string, object> body = MassDev.Json(mass);
             body["requested"] = n;

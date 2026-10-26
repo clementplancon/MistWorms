@@ -156,7 +156,7 @@ namespace MistWorms.Drops
             }
 #if MW_DEV
             DroppedNoTarget++;
-            Plugin.Log.LogInfo($"[Pool] {kind} consumed packet for {id}: not owned here and no other owner to forward to, lost");
+            Plugin.DevInfo($"[Pool] {kind} consumed packet for {id}: not owned here and no other owner to forward to, lost");
 #endif
         }
 
@@ -165,7 +165,7 @@ namespace MistWorms.Drops
             if (ignored <= 0) return;
 #if MW_DEV
             IgnoredEntries += ignored;
-            Plugin.Log.LogInfo($"[Pool] {ignored} invalid consumed entries from peer {sender} ignored");
+            Plugin.DevInfo($"[Pool] {ignored} invalid consumed entries from peer {sender} ignored");
 #endif
             if (!s_warnedIgnored)
             {

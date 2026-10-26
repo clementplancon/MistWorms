@@ -33,7 +33,10 @@ namespace MistWorms.Colony
 #endif
 
         /// <summary>Dev switch (mw_freeze): every colony stops simulating, worms stay where they are.</summary>
+#if MW_DEV
+        /// <summary>Dev freeze of every colony (mw_freeze): worms stay where they are.</summary>
         public static bool Frozen;
+#endif
 
         private ZNetView _nview;
         private bool _initialized;
@@ -265,12 +268,14 @@ namespace MistWorms.Colony
                 _mirrorMode = false;
                 DropMirrorForOwnership();
             }
+#if MW_DEV
             if (Frozen)
             {
                 try { TickNet(Time.time); }   // a frozen colony still shows its worms to the peers (and keeps them alive on their side)
                 catch (Exception e) { Plugin.LogException("WormColony.TickNet", e); }
                 return;
             }
+#endif
 
             try
             {

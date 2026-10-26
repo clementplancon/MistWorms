@@ -124,7 +124,7 @@ namespace MistWorms.Mass
         {
             if (leftover.IsEmpty) return;
 #if MW_DEV
-            Plugin.Log.LogInfo($"[Pool] mass {ZdoId}: pool of refused worms dropped ({leftover.Count} resources)");
+            Plugin.DevInfo($"[Pool] mass {ZdoId}: pool of refused worms dropped ({leftover.Count} resources)");
 #endif
             WormDrops.DropPoolRest(leftover, PoolDropPoint());
             leftover.Clear();

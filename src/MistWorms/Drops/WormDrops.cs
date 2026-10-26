@@ -14,7 +14,6 @@ namespace MistWorms.Drops
         private const float DropArea = 0.3f;   // plan B4: items scatter within 0.3 m of the worm
 
         private static readonly List<KeyValuePair<GameObject, int>> s_list = new List<KeyValuePair<GameObject, int>>(3);
-        private static readonly HashSet<string> s_warned = new HashSet<string>();
 
         // Bait table cache, rebuilt when the config text changes (the entry is read on every kill).
         private static string s_tableText;
@@ -207,7 +206,7 @@ namespace MistWorms.Drops
                 s_pendUnits[i] = 0;
             }
             s_pendHead = s_pendCount = 0;
-            Plugin.Log.LogInfo($"[Drops] session ended with {stacks} pool stacks still queued: abandoned");
+            Plugin.DevInfo($"[Drops] session ended with {stacks} pool stacks still queued: abandoned");
         }
 
         /// <summary>Plugin.Update: lets the queued items of the last worms out, <see cref="StacksPerFrame"/> stacks per frame.</summary>
@@ -276,7 +275,7 @@ namespace MistWorms.Drops
 
         private static void WarnOnce(string key, string message)
         {
-            if (s_warned.Add(key)) Plugin.Log.LogWarning(message);
+            Plugin.WarnOnce(key, message);
         }
     }
 }

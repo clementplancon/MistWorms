@@ -26,7 +26,7 @@ namespace MistWorms.Dev
             if (!Physics.Raycast(near + Vector3.up * FloorProbeUp, Vector3.down, out RaycastHit hit, FloorProbeUp + FloorProbeDown, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore))
                 return null;
             WritheMassState mass = WritheMassState.Create(hit.point + Vector3.up * SpawnLift, n, colony);
-            if (mass != null) mass.FreezeAI = freezeAI;
+            if (mass != null) mass.DevFrozen = freezeAI;
             return mass;
         }
 
@@ -34,7 +34,7 @@ namespace MistWorms.Dev
         public static WritheMassState SpawnExact(Vector3 position, int n, ZDOID colony, bool freezeAI)
         {
             WritheMassState mass = WritheMassState.Create(position, n, colony);
-            if (mass != null) mass.FreezeAI = freezeAI;
+            if (mass != null) mass.DevFrozen = freezeAI;
             return mass;
         }
 
@@ -203,7 +203,7 @@ namespace MistWorms.Dev
                 { "pos", m.transform.position },
                 { "colony", m.ColonyId.ToString() },
                 { "dissolving", m.Dissolving },
-                { "frozenAI", m.FreezeAI },
+                { "frozenAI", m.DevFrozen },
                 { "hoverName", m.Character != null ? m.Character.GetHoverName() : null },
                 { "stream", m.IsStream },
                 { "streamWidth", m.StreamWidth },

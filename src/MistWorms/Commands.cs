@@ -29,9 +29,6 @@ namespace MistWorms
             CommandManager.Instance.AddConsoleCommand(new GpuMassCommand());
             CommandManager.Instance.AddConsoleCommand(new NestCommand());
             CommandManager.Instance.AddConsoleCommand(new SeedCommand());
-            CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_wake", "- wake every dormant group of the current mine", 7));
-            CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_calm", "- send every active group of the current mine back to dormancy", 7));
-            CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_perf", "- print simulation/render/network timings", 8, cheat: false));
             CommandManager.Instance.AddConsoleCommand(new ScenarioCommand());
             CommandManager.Instance.AddConsoleCommand(new ScenariosCommand());
             CommandManager.Instance.AddConsoleCommand(new DumpCommand());
@@ -79,32 +76,6 @@ namespace MistWorms
         }
 
 #if MW_DEV
-        /// <summary>Placeholder for commands whose feature lands in a later phase (spec §16).</summary>
-        private sealed class StubCommand : MWCommand
-        {
-            private readonly string _name;
-            private readonly string _help;
-            private readonly int _phase;
-            private readonly bool _cheat;
-
-            public StubCommand(string name, string help, int phase, bool cheat = true)
-            {
-                _name = name;
-                _help = help;
-                _phase = phase;
-                _cheat = cheat;
-            }
-
-            public override string Name => _name;
-            public override string Help => $"[dev] {_help}";
-            public override bool IsCheat => _cheat;
-
-            protected override void Execute(string[] args, Terminal context)
-            {
-                Print(context, $"{_name}: not implemented yet (phase {_phase})");
-            }
-        }
-
         private sealed class SpawnCommand : MWCommand
         {
             public override string Name => "mw_spawn";
@@ -216,7 +187,7 @@ namespace MistWorms
                 }
 
                 Mass.WritheMassState mass = Dev.MassDev.SpawnInFront(n, withColony, out Colony.WormColony colony, out string how);
-                mass.FreezeAI = frozen;
+                mass.DevFrozen = frozen;
                 Print(context, $"mw_mass: mass {mass.ZdoId} of {mass.N} worms (hp {mass.Health:0.#}, radius {mass.TargetRadius:0.00} m), {(colony != null ? how + " colony " + colony.ZdoId : "no colony")}");
             }
         }

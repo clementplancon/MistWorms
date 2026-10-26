@@ -134,9 +134,9 @@ namespace MistWorms.Colony
             _blacklist.Add(i, s.targetId[i], now);
             _obstacleKey[i] = 0L;
 #if MW_DEV
-            Plugin.Log.LogInfo($"[Target] worm {i} gives up {target.Kind} {(target.Object != null ? target.Object.name : "?")} (no progress, distance {distance:0.00} m)");
+            Plugin.DevInfo($"[Target] worm {i} gives up {target.Kind} {(target.Object != null ? target.Object.name : "?")} (no progress, distance {distance:0.00} m)");
 #endif
-            Plugin.Log.LogDebug($"[Target] worm {i} gives up {target.Kind} {(target.Object != null ? target.Object.name : "?")}: no progress for {ProgressWatch.Window:0} s, set aside {TargetBlacklist.DefaultSeconds:0} s");
+            Plugin.DevDebug($"[Target] worm {i} gives up {target.Kind} {(target.Object != null ? target.Object.name : "?")}: no progress for {ProgressWatch.Window:0} s, set aside {TargetBlacklist.DefaultSeconds:0} s");
             return true;
         }
 
@@ -155,9 +155,9 @@ namespace MistWorms.Colony
             _obstacleKey[i] = s.targetId[i];
             _tgtObject[i] = null;
 #if MW_DEV
-            Plugin.Log.LogInfo($"[Target] worm {i} takes {(pick.Object != null ? pick.Object.name : "?")} as an obstacle on the way to its {target.Kind} target");
+            Plugin.DevInfo($"[Target] worm {i} takes {(pick.Object != null ? pick.Object.name : "?")} as an obstacle on the way to its {target.Kind} target");
 #endif
-            Plugin.Log.LogDebug($"[Target] worm {i} takes {(pick.Object != null ? pick.Object.name : "?")} as an obstacle on the way to its {target.Kind} target");
+            Plugin.DevDebug($"[Target] worm {i} takes {(pick.Object != null ? pick.Object.name : "?")} as an obstacle on the way to its {target.Kind} target");
             return true;
         }
 

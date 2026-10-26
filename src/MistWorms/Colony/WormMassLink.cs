@@ -397,7 +397,7 @@ namespace MistWorms.Colony
 
             MassesFormed++;
             WormsFormed += k;
-            Plugin.Log.LogInfo($"[Colony] {k} worms formed mass {mass.ZdoId} at {e.Pos}");
+            Plugin.DevInfo($"[Colony] {k} worms formed mass {mass.ZdoId} at {e.Pos}");
             return true;
         }
 
@@ -716,7 +716,7 @@ namespace MistWorms.Colony
                 DissolveApexes.Add(s.leapHeight[slot]);
 #endif
             }
-            Plugin.Log.LogInfo($"[Colony] mass {mass} dissolved: {n - DissolveLost}/{n} fleeing worms created at {position} ({drawn} from drawn worms of the heap)");
+            Plugin.DevInfo($"[Colony] mass {mass} dissolved: {n - DissolveLost}/{n} fleeing worms created at {position} ({drawn} from drawn worms of the heap)");
         }
 
         /// <summary>One step of the leap of a dissolved worm: a straight line to the landing with a parabola of the chosen height. True while it lasts.</summary>

@@ -50,7 +50,7 @@ namespace MistWorms.Colony
                 if (_reserve == null) _reserve = new MassPool();
                 pool = _reserve;
 #if MW_DEV
-                Plugin.Log.LogInfo($"[Pool] worm {slot} (generation {generation}) is gone or has no pool slot: {list.Count} entries go to the reserve of colony {ZdoId}");
+                Plugin.DevInfo($"[Pool] worm {slot} (generation {generation}) is gone or has no pool slot: {list.Count} entries go to the reserve of colony {ZdoId}");
 #endif
             }
             int refused = 0;
@@ -82,7 +82,7 @@ namespace MistWorms.Colony
             if (!_dissolvePool.Read(pool)) _dissolvePool.Clear();
             if (_dissolvePool.IsEmpty) return;
 #if MW_DEV
-            Plugin.Log.LogInfo($"[Pool] colony {ZdoId}: dissolution refused, its pool is dropped at {position}");
+            Plugin.DevInfo($"[Pool] colony {ZdoId}: dissolution refused, its pool is dropped at {position}");
 #endif
             WormDrops.DropPoolRest(_dissolvePool, position + UnityEngine.Vector3.up * 0.3f);
         }

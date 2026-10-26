@@ -138,7 +138,7 @@ namespace MistWorms.Colony
             if (!merge) _snapLast = data;
             SnapshotRestored += restored;
             SnapshotSkipped += skipped;
-            Plugin.Log.LogInfo($"[Snapshot] colony {ZdoId}: {restored}/{n} worms {(merge ? "taken over from a duplicate colony" : "restored")} ({asleep} asleep, {restored - asleep} idle), {skipped} left out, {pools} pools, reserve {(_reserve != null ? _reserve.TotalAll() : 0f):0.###}");
+            Plugin.DevInfo($"[Snapshot] colony {ZdoId}: {restored}/{n} worms {(merge ? "taken over from a duplicate colony" : "restored")} ({asleep} asleep, {restored - asleep} idle), {skipped} left out, {pools} pools, reserve {(_reserve != null ? _reserve.TotalAll() : 0f):0.###}");
         }
 
         private void ReserveMerge(MassPool pool)
@@ -257,7 +257,7 @@ namespace MistWorms.Colony
             if (zdo == null || !zdo.IsOwner() || zdo.GetPrefab() != s_colonyHash) return;
             WormColony colony = ColonyRegistry.FindById(zdo.m_uid);
             if (colony == null || !colony._snapSettled) return;
-            if (colony.WriteSnapshot()) Plugin.Log.LogInfo($"[Snapshot] colony {colony.ZdoId}: ownership is leaving this peer, snapshot written first");
+            if (colony.WriteSnapshot()) Plugin.DevInfo($"[Snapshot] colony {colony.ZdoId}: ownership is leaving this peer, snapshot written first");
             colony.NoteHandOffWritten();
         }
 
@@ -297,7 +297,7 @@ namespace MistWorms.Colony
             // A colony that has read its snapshot gives what is alive now; one that has not gives what its ZDO holds.
             byte[] data = _snapSettled && IsOwner && _configured ? BuildSnapshot().ToArray() : _zdo.GetByteArray(HashSnapshot, null);
             if (data == null || data.Length < SnapshotFormat.HeaderBytes) return;
-            Plugin.Log.LogInfo($"[Snapshot] duplicate colony {ZdoId}: its {SnapshotFormat.PeekCount(data)} worms, pools and reserve go to colony {keep.ZdoId}");
+            Plugin.DevInfo($"[Snapshot] duplicate colony {ZdoId}: its {SnapshotFormat.PeekCount(data)} worms, pools and reserve go to colony {keep.ZdoId}");
             if (keep.IsOwner)
             {
                 keep.ReceiveAbsorb(data, BoxCenter);

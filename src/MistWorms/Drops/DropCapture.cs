@@ -143,7 +143,7 @@ namespace MistWorms.Drops
             if (last == null || !Attribute(id, last.m_attacker, CobraMark.Is(last.m_skillRaiseAmount), now, out CaptureTarget who))
             {
 #if MW_DEV
-                Plugin.Log.LogInfo($"[Capture] {Utils.GetPrefabName(c.gameObject)} {id} died, not attributed: last hit {(last == null ? "none" : $"attacker {last.m_attacker}, mark {CobraMark.Is(last.m_skillRaiseAmount)} (skill {last.m_skillRaiseAmount}), type {last.m_hitType}")}, " +
+                Plugin.DevInfo($"[Capture] {Utils.GetPrefabName(c.gameObject)} {id} died, not attributed: last hit {(last == null ? "none" : $"attacker {last.m_attacker}, mark {CobraMark.Is(last.m_skillRaiseAmount)} (skill {last.m_skillRaiseAmount}), type {last.m_hitType}")}, " +
                                    $"registry {(Registry.TryGet(id, now, out ZDOID rc, out int rs, out _) ? $"worm {rs} of {rc}" : "no entry")} ({Registry.Count} live)");
 #endif
                 return false;
@@ -166,7 +166,7 @@ namespace MistWorms.Drops
 
             s_book.Mark(id, now);   // the registry entry is left to expire: a saddle of the same death is attributed through it
             string victim = Utils.GetPrefabName(c.gameObject);
-            Plugin.Log.LogInfo($"[Capture] {victim} {id} killed by {who}: {Describe(s_list)} go to the pool instead of the ground");
+            Plugin.DevInfo($"[Capture] {victim} {id} killed by {who}: {Describe(s_list)} go to the pool instead of the ground");
 #if MW_DEV
             Note(victim, who, s_list, false);
 #endif
@@ -201,7 +201,7 @@ namespace MistWorms.Drops
                 return false;
             }
             string victim = Utils.GetPrefabName(c.gameObject);
-            Plugin.Log.LogInfo($"[Capture] saddle of {victim} {id} killed by {who}: {Describe(s_list)} go to the pool instead of the ground");
+            Plugin.DevInfo($"[Capture] saddle of {victim} {id} killed by {who}: {Describe(s_list)} go to the pool instead of the ground");
 #if MW_DEV
             Note(victim, who, s_list, false);
 #endif
@@ -292,7 +292,7 @@ namespace MistWorms.Drops
                 return false;
             }
             string victim = Utils.GetPrefabName(go);
-            Plugin.Log.LogInfo($"[Capture] {what} {victim} destroyed by {who}: {Describe(s_list)} go to the pool instead of the ground");
+            Plugin.DevInfo($"[Capture] {what} {victim} destroyed by {who}: {Describe(s_list)} go to the pool instead of the ground");
 #if MW_DEV
             Note(victim, who, s_list, true);
 #endif

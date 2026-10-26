@@ -103,7 +103,25 @@ namespace MistWorms.Mass
 
         /// <summary>Times the step assist lifted the mass over a low obstacle, and what the last stalled check found (dev log).</summary>
         public int StepAssists { get; private set; }
+#if MW_DEV
         public string LastAssistNote { get; private set; }
+#endif
+        // Conditional: in Release the calls vanish, with their interpolated arguments; the bodies exist only for the compiler.
+        [Conditional("MW_DEV")]
+        private void AssistNote(string note)
+        {
+#if MW_DEV
+            LastAssistNote = note;
+#endif
+        }
+
+        [Conditional("MW_DEV")]
+        private void AssistNoteAdd(string note)
+        {
+#if MW_DEV
+            LastAssistNote += note;
+#endif
+        }
         public int StalledChecks { get; private set; }
         private Rigidbody _rb;
         private CapsuleCollider _capsule;
@@ -173,7 +191,7 @@ namespace MistWorms.Mass
         private void Step(float dt)
         {
             float now = Time.time;
-            if (_state.FreezeAI || _state.Dissolving || m_character.IsDead())
+            if (_state.AiFrozen || _state.Dissolving || m_character.IsDead())
             {
                 if (_engulfing) EndEngulf(DetachReason.Dissolution, now);
                 StopMoving();
@@ -337,7 +355,7 @@ namespace MistWorms.Mass
             DormantRounds++;
             if (_engulfing) EndEngulf(DetachReason.Dissolution, now);
             StopMoving();
-            Plugin.Log.LogInfo($"[Mass] {_state.ZdoId} (n={_state.N}) goes back to sleep around {deposit}");
+            Plugin.DevInfo($"[Mass] {_state.ZdoId} (n={_state.N}) goes back to sleep around {deposit}");
             _state.BeginDormantDissolve(deposit);
         }
 
@@ -382,9 +400,9 @@ namespace MistWorms.Mass
             if (_tKind == TargetKind.Player) return;
             _blacklist.Add(0, key, now);
 #if MW_DEV
-            Plugin.Log.LogInfo($"[Target] mass {_state.ZdoId} gives up {_tKind} (no progress, distance {distance:0.00} m)");
+            Plugin.DevInfo($"[Target] mass {_state.ZdoId} gives up {_tKind} (no progress, distance {distance:0.00} m)");
 #endif
-            Plugin.Log.LogDebug($"[Target] mass {_state.ZdoId} gives up {_tKind} {(TargetObject != null ? TargetObject.name : "?")}: no progress for {ProgressWatch.Window:0} s, set aside {TargetBlacklist.DefaultSeconds:0} s");
+            Plugin.DevDebug($"[Target] mass {_state.ZdoId} gives up {_tKind} {(TargetObject != null ? TargetObject.name : "?")}: no progress for {ProgressWatch.Window:0} s, set aside {TargetBlacklist.DefaultSeconds:0} s");
             SetTarget((Player)null);
             _nextTarget = 0f;
         }
@@ -400,9 +418,9 @@ namespace MistWorms.Mass
             Vector3 goal = _tChar != null ? _tChar.GetCenterPoint() : TargetPos();
             if (!_scanner.PickObstacle(center, radius, pos.y, goal - center, ObstacleReach(), now, EngulfMath.MaxHeightGap, _blacklist, 0, out TargetChoice pick)) return false;
 #if MW_DEV
-            Plugin.Log.LogInfo($"[Target] mass {_state.ZdoId} takes {(pick.Object != null ? pick.Object.name : "?")} as an obstacle on the way to its {_tKind} target");
+            Plugin.DevInfo($"[Target] mass {_state.ZdoId} takes {(pick.Object != null ? pick.Object.name : "?")} as an obstacle on the way to its {_tKind} target");
 #endif
-            Plugin.Log.LogDebug($"[Target] mass {_state.ZdoId} takes {(pick.Object != null ? pick.Object.name : "?")} as an obstacle on the way to its {_tKind} target");
+            Plugin.DevDebug($"[Target] mass {_state.ZdoId} takes {(pick.Object != null ? pick.Object.name : "?")} as an obstacle on the way to its {_tKind} target");
             SetTarget(pick);
             _obstacle = true;
             _targetSeen = now;
@@ -664,7 +682,7 @@ namespace MistWorms.Mass
             _biteDir = d.sqrMagnitude > 1e-4f ? d.normalized : transform.forward;
             _nextInfest = now;                                  // the effect goes out at once
             _state.SetMode(MassStateCodes.Engulf);
-            Plugin.Log.LogDebug($"[Engulf] {_state.ZdoId} (n={_state.N}) engulfs {_tKind} {(TargetObject != null ? TargetObject.name : "?")} at {flat:0.00} m (r {r:0.00})");
+            Plugin.DevDebug($"[Engulf] {_state.ZdoId} (n={_state.N}) engulfs {_tKind} {(TargetObject != null ? TargetObject.name : "?")} at {flat:0.00} m (r {r:0.00})");
         }
 
         /// <summary>Why the last engulfing was refused while the mass was hunting its target (dev log, S13): reason, distances, vertical gap. Empty in a release build.</summary>
@@ -676,7 +694,7 @@ namespace MistWorms.Mass
             if (now < _nextRefusalLog) return;
             _nextRefusalLog = now + 2f;
             EngulfNote = $"engulf refused for {_tKind} {(TargetObject != null ? TargetObject.name : "?")}: {reason}; mass at {pos:0.00}, point {target:0.00}, 3D {Vector3.Distance(pos, target):0.00} m, vertical {target.y - pos.y:0.00} m";
-            Plugin.Log.LogInfo($"[Engulf] {_state.ZdoId} {EngulfNote}");
+            Plugin.DevInfo($"[Engulf] {_state.ZdoId} {EngulfNote}");
         }
 
         private float _nextRefusalLog;
@@ -744,7 +762,7 @@ namespace MistWorms.Mass
             if (p != null) MassEngulf.SendInfest(p, false);
             if (reason == DetachReason.TargetInvalid) _nextTarget = 0f;   // a new target is chosen at once (spec §9.3)
             if (!_state.Dissolving && !m_character.IsDead()) _state.SetMode(MassStateCodes.Hunt);
-            Plugin.Log.LogDebug($"[Engulf] {_state.ZdoId} lets go: {reason}");
+            Plugin.DevDebug($"[Engulf] {_state.ZdoId} lets go: {reason}");
         }
 
         /// <summary>The target's owner reports that the tick just sent was parried perfectly: the next one comes ParryDelay later (plan 5, A11).</summary>
@@ -877,7 +895,9 @@ namespace MistWorms.Mass
             bool found = false;
             float rise = 0f;
             int noRoom = 0, noFloor = 0, tried = 0;
+#if MW_DEV
             string blockers = null;
+#endif
             for (int n = 0; n < AssistNudges.Length && !found; n++)
             {
                 for (int k = 0; k < AssistLifts.Length && !found; k++)
@@ -888,11 +908,13 @@ namespace MistWorms.Mass
                     if (Physics.CheckSphere(centre, radius * 0.95f, mask, QueryTriggerInteraction.Ignore))
                     {
                         noRoom++;
+#if MW_DEV
                         if (blockers == null)
                         {
                             Collider[] over = Physics.OverlapSphere(centre, radius * 0.95f, mask, QueryTriggerInteraction.Ignore);
                             blockers = over.Length > 0 ? $"{over[0].name}/{LayerMask.LayerToName(over[0].gameObject.layer)} x{over.Length}" : "?";
                         }
+#endif
                         continue;
                     }
                     if (!Physics.Raycast(centre, Vector3.down, out RaycastHit h, radius + 0.35f, mask, QueryTriggerInteraction.Ignore) || h.normal.y < 0.5f) { noFloor++; continue; }
@@ -904,6 +926,7 @@ namespace MistWorms.Mass
             }
             if (!found)
             {
+#if MW_DEV
                 // Geometry around the stall, for the log: headroom above the body, what is straight ahead at three heights, the floor ahead.
                 string around = string.Empty;
                 if (Physics.Raycast(pos + Vector3.up * (2f * radius), Vector3.up, out RaycastHit ceiling, 4f, mask, QueryTriggerInteraction.Ignore)) around += $" headroom above the body top {ceiling.distance:0.00} ({ceiling.collider.name});";
@@ -917,6 +940,7 @@ namespace MistWorms.Mass
                 RaycastHit[] downs = Physics.RaycastAll(up3, Vector3.down, 5f, mask, QueryTriggerInteraction.Ignore);
                 foreach (RaycastHit d in downs) around += $" down@0.8 ahead: {d.collider.name} at {d.point.y - pos.y:0.00} (n.y {d.normal.y:0.00});";
                 LastAssistNote = $"nothing fits: {noRoom}/{tried} blocked (first {blockers}), {noFloor}/{tried} without a floor under;{around}";
+#endif
 
                 // The staircases of the mines are steeper (about 50 degrees, risers of 0.4 m on treads of 0.3 m) than a sphere of 0.6 m can walk: it
                 // rests on the noses. The body is then hopped one stride toward the goal onto the floor found there.
@@ -931,24 +955,24 @@ namespace MistWorms.Mass
                 {
                     _rb.position = goalPoint + Vector3.up * 0.1f;
                     StepAssists++;
-                    LastAssistNote = $"hopped {gainToGoal:0.00} m up onto the goal";
+                    AssistNote($"hopped {gainToGoal:0.00} m up onto the goal");
                     return;
                 }
-                if (Utils.DistanceXZ(goalPoint, pos) <= AssistGoalReach && gainToGoal >= 0.1f && gainToGoal <= AssistHopProbe) LastAssistNote += " goal hop: no room even for a small probe;";
+                if (Utils.DistanceXZ(goalPoint, pos) <= AssistGoalReach && gainToGoal >= 0.1f && gainToGoal <= AssistHopProbe) AssistNoteAdd(" goal hop: no room even for a small probe;");
                 Vector3 hop = pos + toGoal / distance * Mathf.Min(distance, AssistHopStride);
-                if (!Physics.Raycast(hop + Vector3.up * AssistHopProbe, Vector3.down, out RaycastHit floorHit, 2f * AssistHopProbe, mask, QueryTriggerInteraction.Ignore)) { LastAssistNote += " hop: no floor"; return; }
+                if (!Physics.Raycast(hop + Vector3.up * AssistHopProbe, Vector3.down, out RaycastHit floorHit, 2f * AssistHopProbe, mask, QueryTriggerInteraction.Ignore)) { AssistNoteAdd(" hop: no floor"); return; }
                 float gain = floorHit.point.y - pos.y;
-                if (floorHit.normal.y < 0.5f || gain < 0.1f || gain > AssistHopProbe) { LastAssistNote += $" hop: floor not usable (gain {gain:0.00}, n.y {floorHit.normal.y:0.00})"; return; }
-                if (Physics.CheckSphere(floorHit.point + Vector3.up * (radius + 0.05f), radius * 0.7f, mask, QueryTriggerInteraction.Ignore)) { LastAssistNote += " hop: no room"; return; }
+                if (floorHit.normal.y < 0.5f || gain < 0.1f || gain > AssistHopProbe) { AssistNoteAdd($" hop: floor not usable (gain {gain:0.00}, n.y {floorHit.normal.y:0.00})"); return; }
+                if (Physics.CheckSphere(floorHit.point + Vector3.up * (radius + 0.05f), radius * 0.7f, mask, QueryTriggerInteraction.Ignore)) { AssistNoteAdd(" hop: no room"); return; }
                 _rb.position = floorHit.point + Vector3.up * 0.1f;
                 StepAssists++;
-                LastAssistNote = $"hopped {gain:0.00} m up toward the goal";
+                AssistNote($"hopped {gain:0.00} m up toward the goal");
                 return;
             }
 
             _rb.position = target;
             StepAssists++;
-            LastAssistNote = $"lifted {rise + 0.05f:0.00} m";
+            AssistNote($"lifted {rise + 0.05f:0.00} m");
         }
 
         private void Idle(float dt)
@@ -1033,7 +1057,7 @@ namespace MistWorms.Mass
             if (now >= _nextCostLog)
             {
                 if (_nextCostLog > 0f)
-                    Plugin.Log.LogDebug($"[Mass] AI cost of {m_nview.GetZDO().m_uid}: avg {CostAvgMs:0.000} ms, max {_costMaxMs:0.000} ms over {_costTicks} ticks; " +
+                    Plugin.DevDebug($"[Mass] AI cost of {m_nview.GetZDO().m_uid}: avg {CostAvgMs:0.000} ms, max {_costMaxMs:0.000} ms over {_costTicks} ticks; " +
                                         $"walking ticks {MoveTicks} (path {PathTicks}, no path {NoPathTicks}), n={_state.N}, stream={_state.IsStream}");
                 _nextCostLog = now + CostLogPeriod;
             }

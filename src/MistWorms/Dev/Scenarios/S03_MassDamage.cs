@@ -279,7 +279,7 @@ namespace MistWorms.Dev.Scenarios
             int near = 0;
             foreach (Character c in Character.GetAllCharacters())
                 if (c != null && !c.IsPlayer() && c != mass.Character && (c.transform.position - mass.transform.position).sqrMagnitude < 15f * 15f) near++;
-            return $"mass moved {Vector3.Distance(mass.transform.position, spawnedAt):0.00} m, AI frozen={mass.FreezeAI}, target={(ai != null && ai.Target != null)}, " +
+            return $"mass moved {Vector3.Distance(mass.transform.position, spawnedAt):0.00} m, AI frozen={mass.DevFrozen}, target={(ai != null && ai.Target != null)}, " +
                    $"hit sphere {HitSphereText(mass)}, creatures within 15 m={near}";
         }
 

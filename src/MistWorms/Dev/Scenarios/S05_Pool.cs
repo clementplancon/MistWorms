@@ -91,7 +91,7 @@ namespace MistWorms.Dev.Scenarios
                     player.m_stamina = player.GetMaxStamina();
                     yield return null;
                 }
-                first.FreezeAI = true;                       // ends the engulfing (and with it the Infested effect)
+                first.DevFrozen = true;                       // ends the engulfing (and with it the Infested effect)
                 yield return ctx.WaitFrames(5);              // the last RPC of a tick has arrived
                 float lost = dmax - cuirass.m_durability;
                 ctx.Log($"cuirass {cuirass.m_durability:0.#}/{dmax:0.#}: {lost:0.#} points eaten; RPCs sent {PoolRpc.Sent}, received {PoolRpc.Received}, entries ignored {PoolRpc.IgnoredEntries}");

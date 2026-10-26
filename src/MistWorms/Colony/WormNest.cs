@@ -153,7 +153,7 @@ namespace MistWorms.Colony
             _givenUp = true;
             _colony = null;
             if (!IsValid || !_nview.IsOwner()) return;
-            Plugin.Log.LogInfo($"[Nest] nest {Index} at {transform.position} removed: {why}");
+            Plugin.DevInfo($"[Nest] nest {Index} at {transform.position} removed: {why}");
             DestroyQuiet();
         }
 

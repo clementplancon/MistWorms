@@ -38,7 +38,9 @@ namespace MistWorms.Config
                 Colony.Bind();
                 Network.Bind();
                 Performance.Bind();
-                Dev.Bind();
+#if MW_DEV
+                Dev.Bind();   // the [Dev] section exists in dev builds only: a Release .cfg never has it
+#endif
 
                 Migrate();
                 CheckRanges();
@@ -626,7 +628,8 @@ namespace MistWorms.Config
             }
         }
 
-        /// <summary>Dev harness settings (spec §15). Bound in every build so the keys never come back null, but only Debug builds read them.</summary>
+#if MW_DEV
+        /// <summary>Dev harness settings (spec §15). Compiled and bound only under MW_DEV (never in Release).</summary>
         public static class Dev
         {
             private const string S = nameof(Dev);
@@ -651,6 +654,7 @@ namespace MistWorms.Config
                     "Debug builds only: enable devcommands automatically when the test world loads.");
             }
         }
+#endif
     }
 }
 

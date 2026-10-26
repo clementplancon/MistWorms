@@ -172,7 +172,7 @@ namespace MistWorms.Dev.Scenarios
             mass.SetTarget(player.GetZDOID());
             visual.ProbeEnabled = true;
             yield return ctx.Wait(0.7f);                 // settles on the floor, the layout of the first frames
-            mass.FreezeAI = false;
+            mass.DevFrozen = false;
             ai.DevGoal = goalFar;
             float distance0 = Vector3.Distance(start, far);
             ctx.Log($"{tag}: r {r:0.00} m, run {run:0.0} m, goal {goalFar}");

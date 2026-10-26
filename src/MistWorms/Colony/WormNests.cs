@@ -329,7 +329,7 @@ namespace MistWorms.Colony
                 created++;
             }
             WormsReleased += created;
-            Plugin.Log.LogInfo($"[Colony] nest {index} destroyed at {position}: {created}/{wanted} active worms released");
+            Plugin.DevInfo($"[Colony] nest {index} destroyed at {position}: {created}/{wanted} active worms released");
         }
     }
 }

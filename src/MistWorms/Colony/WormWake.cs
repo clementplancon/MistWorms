@@ -243,7 +243,7 @@ namespace MistWorms.Colony
             GroupsWoken++;
             PublishAwake();
 #if MW_DEV
-            Plugin.Log.LogInfo($"[Wake] colony {ZdoId}: group {k} awake");
+            Plugin.DevInfo($"[Wake] colony {ZdoId}: group {k} awake");
 #endif
         }
 
@@ -407,7 +407,7 @@ namespace MistWorms.Colony
                 changed = true;
                 GroupsSlept++;
 #if MW_DEV
-                Plugin.Log.LogInfo($"[Wake] colony {ZdoId}: group {k} back to sleep");
+                Plugin.DevInfo($"[Wake] colony {ZdoId}: group {k} back to sleep");
 #endif
             }
             if (changed) PublishAwake();
@@ -537,7 +537,7 @@ namespace MistWorms.Colony
                 placed++;
             }
             SleptWorms += placed;
-            Plugin.Log.LogInfo($"[Colony] mass {mass} went back to sleep: {placed}/{n} sleeping worms laid down around {center}");
+            Plugin.DevInfo($"[Colony] mass {mass} went back to sleep: {placed}/{n} sleeping worms laid down around {center}");
         }
 
         private Vector3 DepositPoint(Vector3 center, int k, int n, float start)

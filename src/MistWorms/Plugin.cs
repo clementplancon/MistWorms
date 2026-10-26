@@ -29,6 +29,13 @@ namespace MistWorms
 
         private Harmony _harmony;
 
+        /// <summary>Per-event diagnostics: the call, and the interpolated message with it, does not exist in Release.</summary>
+        [System.Diagnostics.Conditional("MW_DEV")]
+        internal static void DevInfo(string message) => Log?.LogInfo(message);
+
+        [System.Diagnostics.Conditional("MW_DEV")]
+        internal static void DevDebug(string message) => Log?.LogDebug(message);
+
         private void Awake()
         {
             Instance = this;
@@ -124,10 +131,26 @@ namespace MistWorms
             }
         }
 
-        /// <summary>Logs an exception from a patch or simulation step without letting it escape into vanilla code.</summary>
+        /// <summary>
+        /// Logs an exception from a patch or simulation step without letting it escape into vanilla code. Once per context: a catch that sits in an
+        /// Update or a Tick would otherwise write to the log every frame. The repeats are only counted (<see cref="SuppressedExceptions"/>).
+        /// </summary>
         internal static void LogException(string context, Exception e)
         {
+            if (!s_loggedSites.Add(context)) { SuppressedExceptions++; return; }
             Log?.LogError($"[{context}] {e}");
         }
+
+        /// <summary>Warns once per <paramref name="key"/>; the repeats are counted in silence.</summary>
+        internal static void WarnOnce(string key, string message)
+        {
+            if (!s_warnedKeys.Add(key)) { SuppressedWarnings++; return; }
+            Log?.LogWarning(message);
+        }
+
+        private static readonly System.Collections.Generic.HashSet<string> s_loggedSites = new System.Collections.Generic.HashSet<string>();
+        private static readonly System.Collections.Generic.HashSet<string> s_warnedKeys = new System.Collections.Generic.HashSet<string>();
+        internal static int SuppressedExceptions { get; private set; }
+        internal static int SuppressedWarnings { get; private set; }
     }
 }

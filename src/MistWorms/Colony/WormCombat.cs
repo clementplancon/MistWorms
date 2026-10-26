@@ -261,7 +261,7 @@ namespace MistWorms.Colony
             }
 #if MW_DEV
             _frameStrikeBiteMs += (System.Diagnostics.Stopwatch.GetTimestamp() - t1) * 1000f / System.Diagnostics.Stopwatch.Frequency;
-            if (landed && !DevMeasureAlloc && Store.targetKind[i] != (byte)TargetKind.Player) Plugin.Log.LogInfo($"[Worm] {i} struck its {(TargetKind)Store.targetKind[i]} target");
+            if (landed && !DevMeasureAlloc && Store.targetKind[i] != (byte)TargetKind.Player) Plugin.DevInfo($"[Worm] {i} struck its {(TargetKind)Store.targetKind[i]} target");
             if (landed) StrikesLanded++;
             else StrikesMissed++;
 #endif

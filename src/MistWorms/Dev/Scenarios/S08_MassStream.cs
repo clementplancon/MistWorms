@@ -589,7 +589,7 @@ namespace MistWorms.Dev.Scenarios
             yield return ctx.WaitFrames(15);
             yield return ctx.Shot("overview_corridor");
             DevCamera.Follow();
-            mass.FreezeAI = false;
+            mass.DevFrozen = false;
 
             float t0 = Time.time;
             float progress = 0f, maxProgress = 0f, timeToRequired = -1f, firstStream = -1f, maxSpheres = 0f, ribbon = 0f, ribbonLength = 0f;
@@ -862,7 +862,7 @@ namespace MistWorms.Dev.Scenarios
                     if (mass == null || Mathf.Abs(settled) > StartTolerance) { MassDev.Destroy(mass); mass = null; }
                 }
                 if (mass == null) { ctx.Assert($"stairs_{agent}", false, "a mass starting within 0.3 m of the foot of the stairs", "none"); continue; }
-                mass.FreezeAI = false;
+                mass.DevFrozen = false;
                 var ai = mass.GetComponent<WritheMassAI>();
                 ai.PathAgent = agent;
                 ai.DevForcedTarget = player;   // the stairs test is about the path, not about the senses (they are covered by the corridor part)

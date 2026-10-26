@@ -60,8 +60,25 @@ namespace MistWorms.Mass
         private int _hoverN = -1;
         private string _hoverLanguage;
 
-        /// <summary>Dev switch (plan 4B-1 point 8): the AI of this mass does nothing. Honoured by <see cref="WritheMassAI"/>.</summary>
-        public bool FreezeAI { get; set; }
+#if MW_DEV
+        /// <summary>Dev switch (plan 4B-1 point 8): the AI of this mass does nothing. Honoured by <see cref="WritheMassAI"/>. Never touched by the merge.</summary>
+        public bool DevFrozen { get; set; }
+#endif
+
+        /// <summary>Internal flag of the merge: the AI of a mass that slides onto a bigger one does nothing until the merge ends or is cancelled.</summary>
+        internal bool MergeFrozen { get; set; }
+
+        /// <summary>The AI must stand still: merge in progress, or (dev builds only) the dev freeze.</summary>
+        internal bool AiFrozen
+        {
+            get
+            {
+#if MW_DEV
+                if (DevFrozen) return true;
+#endif
+                return MergeFrozen;
+            }
+        }
 
         public Character Character => _character;
         public WritheMassAI Ai => _ai;
@@ -284,7 +301,7 @@ namespace MistWorms.Mass
             if (_ai != null) _ai.ReleaseOnDestroy();
 #if MW_DEV
             // The journal of the disappearance of a mass (a mass that vanishes in a scenario is otherwise a mystery): why, the last creature that hit it, its last state.
-            Plugin.Log.LogInfo($"[Mass] {_idText} (n={_lastN}) removed: {DestroyReason ?? "unknown (the scene, a zone unload or a destroy that did not say why)"}; last hit by {LastAttacker ?? "nobody"}; health {_lastHealth:0.#}; state {_lastState}");
+            Plugin.DevInfo($"[Mass] {_idText} (n={_lastN}) removed: {DestroyReason ?? "unknown (the scene, a zone unload or a destroy that did not say why)"}; last hit by {LastAttacker ?? "nobody"}; health {_lastHealth:0.#}; state {_lastState}");
 #endif
             s_all.Remove(this);
             if (_character != null) s_byCharacter.Remove(_character);

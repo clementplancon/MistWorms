@@ -32,7 +32,6 @@ namespace MistWorms.Mass
 
         private int _slidersIn;       // masses of this peer that slide onto this one right now: it does not slide itself meanwhile
         private bool _merging;
-        private bool _frozenBeforeMerge;
         private WritheMassState _mergeInto;
         private Vector3 _mergeFrom;
         private float _mergeT0;
@@ -138,11 +137,10 @@ namespace MistWorms.Mass
             big._slidersIn++;
             _mergeFrom = transform.position;
             _mergeT0 = now;
-            _frozenBeforeMerge = FreezeAI;
-            FreezeAI = true;
+            MergeFrozen = true;
             WriteState(MassStateCodes.With(StateCode, MassStateCodes.Merging, true));
             SetBodiesIgnoring(big, true);
-            Plugin.Log.LogInfo($"[Mass] merge: {ZdoId} (n={N}) slides onto {big.ZdoId} (n={big.N}), the smaller of the two goes to the bigger");
+            Plugin.DevInfo($"[Mass] merge: {ZdoId} (n={N}) slides onto {big.ZdoId} (n={big.N}), the smaller of the two goes to the bigger");
         }
 
         private void SetBodiesIgnoring(WritheMassState other, bool ignore)
@@ -176,7 +174,7 @@ namespace MistWorms.Mass
             int bigBefore = big.N;
             NestCounts own = OwnerNests();                 // the nests of origin go with the worms, like the pool
             int accepted = big.AddWorms(k, OwnerPool(), own);   // the pool (quantities and carries) goes with the worms; a cut group takes the fraction accepted/k
-            Plugin.Log.LogInfo($"[Mass] merge: {ZdoId} (n={k}) into {big.ZdoId}: the big one {bigBefore} -> {big.N}, accepted {accepted}");
+            Plugin.DevInfo($"[Mass] merge: {ZdoId} (n={k}) into {big.ZdoId}: the big one {bigBefore} -> {big.N}, accepted {accepted}");
             if (accepted < 0 || accepted >= k)
             {
                 // Done (a remote big mass takes the RPC and applies its own cap).
@@ -209,7 +207,7 @@ namespace MistWorms.Mass
             if (_mergeInto != null && _mergeInto._slidersIn > 0) _mergeInto._slidersIn--;
             SetBodiesIgnoring(_mergeInto, false);
             _mergeInto = null;
-            FreezeAI = _frozenBeforeMerge;
+            MergeFrozen = false;
             WriteState(MassStateCodes.With(StateCode, MassStateCodes.Merging, false));
         }
 
@@ -229,7 +227,7 @@ namespace MistWorms.Mass
             _transferCooldownUntil = now + MassMergeMath.TransferCooldown;
             if (accepted == 0) return;
             int moved = accepted > 0 ? accepted : k;     // a remote big mass applies its own cap on the RPC
-            Plugin.Log.LogInfo($"[Mass] {ZdoId} ({N}) hands {moved} worms to {big.ZdoId} ({big.N}) and keeps the rest");
+            Plugin.DevInfo($"[Mass] {ZdoId} ({N}) hands {moved} worms to {big.ZdoId} ({big.N}) and keeps the rest");
 
             // The worms that leave slide onto the big heap (a few of them: the ring of glides is shared).
             int glides = Math.Min(moved, TransferGlideMax);
