@@ -3,7 +3,7 @@
 Imports each worm .glb from assets/build ONCE, then creates the instances with bpy.data.objects.new(name, mesh). Placement comes
 from `mass_layout.py` (the Python reference of MassLayout.Evaluate) with the game's draw selection: priority threshold, LOD cap,
 inner-place culling against the camera. Bodies always use the 240-triangle LOD1 meshes. Also writes
-assets/build/mass_layout_golden.json (the parity contract of the C# port) and the shape-change GIF (make_gif.py, Pillow).
+the shape-change GIF (make_gif.py, Pillow).
 
 Conversion Unity -> Blender: (x, y, z) -> (-x, -z, y). The layout's local frame is (X forward, Y up, Z left); local -> Unity is
 (-z, y, x), hence local -> Blender is (z, -x, y). A worm instance has columns (-B(R), -B(F), B(U)) * scale.
@@ -237,10 +237,6 @@ def main():
     _state["meshes"] = meshes
     _state["keep"] = set(m.name for m in meshes.values())
     _state["slots"] = L.Slots(L.GOLDEN_SEED)
-
-    with open(os.path.join(build, "mass_layout_golden.json"), "w", encoding="utf8", newline="\n") as fh:
-        json.dump(L.golden(), fh, indent=1)
-        fh.write("\n")
 
     T0 = 17.3
     # rest: one frame and a 4 frame sequence 1 s apart

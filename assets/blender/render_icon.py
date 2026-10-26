@@ -1,7 +1,7 @@
 """Thunderstore icon (256x256) and banner (1024x256): the shipped worm heap (core + worm instances laid out by mass_layout.py,
 n = 10) + a few big worms on a dark misty ground.
 
-Uses the exported .glb files and PNG textures from assets/build, so run it after make_worm/make_mass.
+Uses the exported .glb files and PNG textures from assets/build, so run it after make_worm.py and the other asset scripts (tools/build-assets.ps1 order).
 Run: blender --background --python render_icon.py
 """
 import os

@@ -12,6 +12,7 @@ namespace MistWorms
 
         // Localization tokens of the mass (spec §4.3).
         public const string MassNameToken = "$mw_mass";
+        public const string NestNameToken = "$mw_nest";
         public const string MassCountToken = "$mw_mass_count";   // "{0} ({1})": name, number of worms
 
         // Status effect applied to an engulfed player (spec §6.2).
