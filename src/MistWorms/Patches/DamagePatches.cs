@@ -29,6 +29,9 @@ namespace MistWorms.Patches
                     WormBite.Register();
                     Mass.MassEngulf.Register();
                     Drops.PoolRpc.Register();
+#if MW_DEV
+                    Dev.ServerOwnDev.Register();   // the dev RPCs of the serverown mode (decision 220); inert in Release (not compiled)
+#endif
                 }
                 catch (Exception e) { Plugin.LogException("DamagePatches.GameStart", e); }
             }

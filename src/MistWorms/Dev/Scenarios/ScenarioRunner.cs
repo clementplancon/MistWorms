@@ -88,6 +88,8 @@ namespace MistWorms.Dev.Scenarios
                     MistWorms.Colony.MineSeeder.Suppressed = false;
                     MistWorms.Colony.WormColony.DevPassiveWake = true;
                     MistWorms.Colony.WormColony.DevSpawnInterval = 0f;
+                    MistWorms.Colony.WormColony.DevMeasureAlloc = false;
+                    try { MistWorms.Dev.ServerOwnDev.ReleaseIfActive(); } catch (Exception) { }
                     try { s_errors?.End(); } catch (Exception) { }
                     result.DurationSeconds = Time.realtimeSinceStartup - began;
                     result.Status = ScenarioResult.Errored;
@@ -204,6 +206,7 @@ namespace MistWorms.Dev.Scenarios
             MistWorms.Colony.MineSeeder.Suppressed = false;
             MistWorms.Colony.WormColony.DevPassiveWake = true;
             MistWorms.Colony.WormColony.DevSpawnInterval = 0f;
+            MistWorms.Colony.WormColony.DevMeasureAlloc = false;
             List<string> logErrors = s_errors.End();
             result.DurationSeconds = Time.realtimeSinceStartup - start;
 
@@ -213,12 +216,19 @@ namespace MistWorms.Dev.Scenarios
             ctx.Assert("no_mod_errors_in_log", logErrors.Count == 0, 0, logErrors.Count);
             foreach (string line in logErrors) result.AddLog("log error: " + line);
 
+            try { MistWorms.Dev.ServerOwnDev.ReleaseIfActive(); }   // a serverown request left open by a scenario that was cut goes back to the server
+            catch (Exception e) { Plugin.Log.LogWarning("[Scenario] serverown release: " + e.Message); }
+
             if (error != null)
             {
                 result.Status = ScenarioResult.Errored;
                 result.Error = error.ToString();
                 // Warning, not error: the run is already marked and must not trip the next run's listener.
                 Plugin.Log.LogWarning($"[Scenario] {result.Id} threw: {error}");
+            }
+            else if (result.SkipReason != null && result.FailedCount == 0)
+            {
+                result.Status = ScenarioResult.Skipped;   // a precondition the session cannot meet: neither passed nor failed
             }
             else
             {

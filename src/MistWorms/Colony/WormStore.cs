@@ -39,6 +39,7 @@ namespace MistWorms.Colony
         public readonly bool[] alive;
         public readonly ushort[] generation;      // bumped on every reuse of the slot (proxies, phase 3B)
         public readonly int[] proxyIndex;         // pool index of the hit proxy attached to the slot, -1 = none (owned by ProxyManager)
+        public readonly ushort[] netId;           // identity of the worm on the network (phase 8): never 0 while alive, unique among the living, see NetIdTable
 
         // ---- movement and wandering
         public readonly Vector3[] home;
@@ -87,6 +88,23 @@ namespace MistWorms.Colony
 
         private readonly int[] _free;
         private int _freeCount;
+        private readonly NetIdTable _netIds = new NetIdTable();
+        private readonly ushort[] _freed;
+        private int _freedCount;
+
+        /// <summary>Network ids of the worms freed since the last <see cref="ClearFreed"/>, in order (the owner tells its peers; room for twice the store, then <see cref="FreedOverflow"/>).</summary>
+        public ushort[] FreedIds => _freed;
+        public int FreedCount => _freedCount;
+        public bool FreedOverflow { get; private set; }
+
+        public void ClearFreed()
+        {
+            _freedCount = 0;
+            FreedOverflow = false;
+        }
+
+        /// <summary>The slot of the living worm with this network id, or -1.</summary>
+        public int FindByNetId(int id) => _netIds.Find(id);
 
         public WormStore(int capacity)
         {
@@ -112,6 +130,8 @@ namespace MistWorms.Colony
             alive = new bool[capacity];
             generation = new ushort[capacity];
             proxyIndex = new int[capacity];
+            netId = new ushort[capacity];
+            _freed = new ushort[capacity * 2];
 
             home = new Vector3[capacity];
             den = new Vector3[capacity];
@@ -159,11 +179,16 @@ namespace MistWorms.Colony
             _freeCount = capacity;
         }
 
-        /// <summary>Takes a free slot and resets it; returns -1 when the store is full.</summary>
-        public int Alloc(Vector3 position, float headingRad, WormState initialState, float health, float now)
+        /// <summary>
+        /// Takes a free slot and resets it; returns -1 when the store is full. The worm gets the next network id (the owner), or <paramref name="forcedNetId"/> when it is not 0 (a mirror
+        /// gives its worms the id the owner chose); -1 is also returned when that id is already taken.
+        /// </summary>
+        public int Alloc(Vector3 position, float headingRad, WormState initialState, float health, float now, int forcedNetId = 0)
         {
             if (_freeCount == 0) return -1;
+            if (forcedNetId != 0 && _netIds.Find(forcedNetId) >= 0) return -1;
             int i = _free[--_freeCount];
+            netId[i] = forcedNetId != 0 ? _netIds.Register(forcedNetId, i) : _netIds.Assign(i);
 
             unchecked { generation[i]++; }
             alive[i] = true;
@@ -261,6 +286,13 @@ namespace MistWorms.Colony
         {
             if ((uint)i >= (uint)Capacity || !alive[i]) return;
             if (poolIndex[i] >= 0) { Pools.Release(poolIndex[i]); poolIndex[i] = -1; }
+            if (netId[i] != 0)
+            {
+                if (_freedCount < _freed.Length) _freed[_freedCount++] = netId[i];
+                else FreedOverflow = true;
+                _netIds.Release(netId[i]);
+                netId[i] = 0;
+            }
             alive[i] = false;
             state[i] = (byte)WormState.Dead;
             AliveCount--;

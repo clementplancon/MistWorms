@@ -9,6 +9,24 @@ namespace MistWorms.Colony
     /// <summary>Debug-only handles on the waking, the calm and the pools of a colony (S14, S14b, state dumps). Not compiled into a Release build.</summary>
     internal sealed partial class WormColony
     {
+        /// <summary>
+        /// Dev (S11): while true the owner's update (simulation, sounds, snapshot, network send) is measured by the rise of the managed heap around it, summed in <see cref="DevAllocBytes"/> over
+        /// <see cref="DevAllocFrames"/> frames, all colonies. The heap of the whole game is noisy (see P4_MassPerf), so this reads the rise inside the colony's own update only; a collection inside
+        /// the update hides a part of it (the number can only be too low, and the scenario logs the collections).
+        /// </summary>
+        public static bool DevMeasureAlloc;
+        public static long DevAllocBytes;
+        public static int DevAllocFrames;
+
+        /// <summary>
+        /// Dev (S11): the part of the rise that falls inside the vanilla damage call of a strike (<c>WormBite.SendToPlayer</c> / <c>HitCreature</c> / <c>HitStructure</c>: the routed RPC, its parameter
+        /// array, the <c>HitData</c>, <c>Character.Damage</c>), over <see cref="DevVanillaCalls"/> calls. It is taken out of <see cref="DevAllocBytes"/>, which is the mod's own code (decision 229).
+        /// </summary>
+        public static long DevVanillaBytes;
+        public static int DevVanillaCalls;
+
+        public static void DevResetAlloc() { DevAllocBytes = 0L; DevAllocFrames = 0; DevVanillaBytes = 0L; DevVanillaCalls = 0; }
+
         /// <summary>Wakes group <paramref name="k"/> as an alert would, without the chain (owner only). Returns the sleeping worms woken.</summary>
         public int DevWakeGroup(int k) => IsOwner && _gAwake != null ? WakeGroup(k, Time.time) : 0;
 

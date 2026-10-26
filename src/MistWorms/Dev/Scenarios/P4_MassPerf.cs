@@ -315,7 +315,7 @@ namespace MistWorms.Dev.Scenarios
         /// A mass of MassCount at <paramref name="anchor"/>, or when there is no floor there (an edge, a rock): at 0.8, 0.6 and 0.45 of its distance from the player,
         /// each time on the same ray and then 25 and 50 degrees to either side. A spawn whose floor is more than 2.5 m from the player's is thrown away. Logged.
         /// </summary>
-        private static WritheMassState SpawnRobust(ScenarioContext ctx, string tag, Player player, Vector3 anchor)
+        internal static WritheMassState SpawnRobust(ScenarioContext ctx, string tag, Player player, Vector3 anchor)
         {
             Vector3 origin = player.transform.position;
             Vector3 toAnchor = anchor - origin;

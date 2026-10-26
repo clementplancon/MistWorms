@@ -100,6 +100,7 @@ namespace MistWorms.Colony
         /// <summary>Instantiates a colony at <paramref name="position"/> with its box; null if the prefab is not registered.</summary>
         public static WormColony Create(Vector3 position, ColonyKind kind, Vector3 boxCenter, Vector3 boxHalfSize)
         {
+            if (!ColonyRegistry.ServerMayHost) return null;   // a dedicated server creates no colony
             GameObject prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(MWNames.ColonyPrefab) : null;
             if (prefab == null)
             {
@@ -185,7 +186,8 @@ namespace MistWorms.Colony
             _grid = new SpatialGrid(capacity);
             _rng = new System.Random(Environment.TickCount ^ GetInstanceID());
             _dropRng = WormDrops.NewRng(GetInstanceID());
-            _nview.Register<int, int, ZPackage>(MWNames.RpcWormHit, RPC_WormHit);
+            _nview.Register<int, ZPackage>(MWNames.RpcWormHit, RPC_WormHit);
+            InitNet(capacity);
             _nview.Register<ZDOID, int, Vector3, ZPackage, bool>(MWNames.RpcMassDissolve, RPC_MassDissolve);
             _nview.Register<int, Vector3, bool>(MWNames.RpcNestGone, RPC_NestGone);
             _nview.Register<ZPackage, Vector3>(MWNames.RpcSnapAbsorb, RPC_SnapAbsorb);
@@ -238,24 +240,59 @@ namespace MistWorms.Colony
                 if (!_initialized) return;
             }
             if (Disabled || !_configured || !_nview.IsValid()) return;
+            if (!ColonyRegistry.ServerMayHost) return;   // a dedicated server hosts no colony: it routes (spec §10.2, decision 215)
 
             if (!_nview.IsOwner())
             {
-                // Phase 8: deltas + dead reckoning. Until then only the owner simulates and non owners show nothing.
+                // Not the owner: the worms are not simulated here, they are the mirror of what the owner sends (spec §11.3, phase 8).
+                _mirrorMode = true;
                 _wakeAdopted = false;   // a later owner starts from the awake bits in the ZDO
-                if (_snapSettled) HandOffSnapshot();   // its worms are the new owner's, restored from mw_snap
+                if (_snapSettled) { HandOffSnapshot(); ResetNetSend(); _needKeyframe = true; }   // its worms are the new owner's, restored from mw_snap
                 if (_absorbQueue.Count > 0) ForwardAbsorbQueue();   // the snapshots of duplicate colonies it had not merged yet go to the new owner
+                try
+                {
+                    TickMirror(Time.time);
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogException("WormColony.TickMirror", e);
+                }
                 return;
             }
-            if (Frozen) return;
+            if (_mirrorMode)
+            {
+                // Just became the owner: the copy of the owner before us goes, the snapshot restores the real worms below.
+                _mirrorMode = false;
+                DropMirrorForOwnership();
+            }
+            if (Frozen)
+            {
+                try { TickNet(Time.time); }   // a frozen colony still shows its worms to the peers (and keeps them alive on their side)
+                catch (Exception e) { Plugin.LogException("WormColony.TickNet", e); }
+                return;
+            }
 
             try
             {
                 // The worms of a reloaded colony come back from mw_snap before anything else runs (spec §11.4).
                 if (!_snapSettled && !SettleSnapshot(Time.time)) return;
+#if MW_DEV
+                long heap0 = DevMeasureAlloc ? UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong() : 0L;
+                long vanilla0 = DevVanillaBytes;
+#endif
                 Tick();
                 UpdateIdleSounds(Time.time);
                 TickSnapshot(Time.time);
+                TickNet(Time.time);
+#if MW_DEV
+                if (DevMeasureAlloc)
+                {
+                    long rise = UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong() - heap0;
+                    rise -= DevVanillaBytes - vanilla0;   // the vanilla damage call is counted apart (DevVanillaBytes), not as the mod's
+                    if (rise > 0) DevAllocBytes += rise;
+                    DevAllocFrames++;
+                }
+#endif
             }
             catch (Exception e)
             {
@@ -304,7 +341,7 @@ namespace MistWorms.Colony
                 s.progressPos[i] = hit.point;
             }
             // Spread the first steps and de-synchronise the wandering and the crawl animation.
-            s.nextSimTime[i] = now + (i % 10) * 0.005f;
+            s.nextSimTime[i] = now + SimPhase(i);
             s.pauseUntil[i] = now + (float)_rng.NextDouble() * 2f;
             s.animTime[i] = (float)_rng.NextDouble() * 10f;
             _emptySince = -1f;
@@ -330,6 +367,7 @@ namespace MistWorms.Colony
             try
             {
                 WormEffects.PlayDeath(ref _deathFx, where + Vector3.up * 0.1f, Time.time);
+                if (!_mirrorMode) EmitNetEvent(DeltaEventType.Death, where + Vector3.up * 0.1f, SessionUid);   // the peers near play it too (this one just did)
                 WormDrops.DropFor(_dropRng, where);
                 WormDrops.DropPoolRest(_killPool, where + Vector3.up * 0.3f);   // a free worm hands out its own pool, floor of quantity + carry, the fraction is lost: the loot pool (spec §7.3).
             }
@@ -433,6 +471,7 @@ namespace MistWorms.Colony
         public Vector3 InterpolatedPos(int i, float now)
         {
             WormStore s = Store;
+            if (_mirrorMode) return s.pos[i];   // the mirror already puts the slot where it is shown (WormMirror.Tick)
             float interval = s.simInterval[i];
             float t = interval > 1e-4f ? Mathf.Clamp01((now - s.lastSimTime[i]) / interval) : 1f;
             return Vector3.Lerp(s.prevPos[i], s.pos[i], t);

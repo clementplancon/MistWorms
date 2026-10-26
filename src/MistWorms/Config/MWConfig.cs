@@ -566,11 +566,15 @@ namespace MistWorms.Config
             private const string S = nameof(Network);
             public static ConfigEntry<float> SyncRate;
             public static ConfigEntry<float> SnapshotInterval;
+            public static ConfigEntry<float> SyncRadius;
 
             internal static void Bind()
             {
                 SyncRate = Synced(S, nameof(SyncRate), 5f,
                     "Rate in Hz of worm delta updates sent to nearby peers while worms are active.", F(1f, 20f));
+                // range chosen: the peers farther than this from the box of a colony are sent nothing (spec §18).
+                SyncRadius = Synced(S, nameof(SyncRadius), 120f,
+                    "Distance in metres from the box of a colony within which a peer is sent its worms (a peer farther away is sent nothing).", F(30f, 300f));
                 SnapshotInterval = Synced(S, nameof(SnapshotInterval), 5f,
                     "Seconds between full colony snapshots written to the ZDO when something changed.", F(1f, 60f));
             }

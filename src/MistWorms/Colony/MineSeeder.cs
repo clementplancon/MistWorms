@@ -117,6 +117,7 @@ namespace MistWorms.Colony
                     StepRoutine();
                     return;
                 }
+                if (!ColonyRegistry.ServerMayHost) return;   // a dedicated server seeds and claims nothing (decision 215)
                 float now = Time.unscaledTime;
                 if (now < s_nextPoll) return;
                 s_nextPoll = now + PollInterval;

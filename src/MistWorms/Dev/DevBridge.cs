@@ -27,7 +27,6 @@ namespace MistWorms.Dev
         // Routes the spec defines whose behaviour depends on systems built in later phases (§16).
         private static readonly Dictionary<string, int> PlannedRoutes = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            { "/perf", 8 },
         };
 
         private static readonly ConcurrentQueue<PendingRequest> s_queue = new ConcurrentQueue<PendingRequest>();
@@ -231,6 +230,10 @@ namespace MistWorms.Dev
                     req.RequireMethod("GET");
                     reply.Body = Status();
                     return null;
+                case "/perf":
+                    req.RequireMethod("GET");
+                    reply.Body = Perf();
+                    return null;
                 case "/console":
                     req.RequireMethod("POST");
                     return ConsoleRoute(req, reply);
@@ -363,6 +366,7 @@ namespace MistWorms.Dev
                 { "owner", isServer },
                 { "peers", znet != null ? znet.GetPeerConnections() : 0 },
                 { "colonies", Colony.ColonyRegistry.All.Count },
+                { "net", ColonyDev.NetTotals() },
                 { "fps", Host.AverageFps },
                 { "gameTime", znet != null ? (object)znet.GetTimeSeconds() : null },
                 { "day", EnvMan.instance != null ? (object)EnvMan.instance.GetDay() : null },
@@ -374,6 +378,48 @@ namespace MistWorms.Dev
                 { "devcommands", Terminal.m_cheat },
                 { "scenario", ScenarioRunner.CurrentId },
                 { "ready", IsReady(player) },
+            };
+        }
+
+        /// <summary>
+        /// <c>GET /perf</c> (spec §15.3, phase 8): the frame rate, the simulation cost and the network counters of each colony loaded on this peer. The owner of a colony reports what it sends
+        /// (bytes per second over 10 s, payload of <c>MW_Delta</c> times the number of recipients), a peer that does not own it what it receives and the CPU time of its mirror.
+        /// The render block is the last rendered frame (decision 222); S11 and P4_MassPerf average it over their frames.
+        /// </summary>
+        private static Dictionary<string, object> Perf()
+        {
+            var colonies = new List<object>();
+            foreach (Colony.WormColony c in Colony.ColonyRegistry.All)
+            {
+                if (c == null) continue;
+                colonies.Add(new Dictionary<string, object>
+                {
+                    { "zdoid", c.ZdoId.ToString() },
+                    { "owner", c.IsOwner },
+                    { "alive", c.Store != null ? c.Store.AliveCount : 0 },
+                    { "simMs", new Dictionary<string, object> { { "last", c.LastSimMs }, { "avg", c.AvgSimMs }, { "max", c.MaxSimMs } } },
+                    { "net", ColonyDev.NetJson(c) },
+                });
+            }
+            Render.WormRenderer.FrameStats rs = Render.WormRenderer.Last;
+            return new Dictionary<string, object>
+            {
+                { "fps", Host.AverageFps },
+                { "net", ColonyDev.NetTotals() },
+                {
+                    // The last rendered frame: the flipbook renderer (nests, free worms when the GPU path is off) and the GPU rope colony (masses and free worms) added. S11 averages these over its frames.
+                    "render", new Dictionary<string, object>
+                    {
+                        { "frame", Render.WormRenderer.LastFrame },
+                        { "cpuMs", rs.CpuMs + Render.Gpu.GpuWormHost.LastMs },
+                        { "flipbookCpuMs", rs.CpuMs }, { "hostMs", Render.Gpu.GpuWormHost.LastMs }, { "hostAvgMs", Render.Gpu.GpuWormHost.AvgMs },
+                        { "drawCalls", rs.DrawCalls + Render.Gpu.GpuWormHost.DrawCalls }, { "hostCalls", Render.Gpu.GpuWormHost.DrawCalls },
+                        { "instances", rs.Instances }, { "dropped", rs.Dropped },
+                        { "triangles", rs.Triangles + Render.Gpu.GpuWormHost.Triangles }, { "hostWorms", Render.Gpu.GpuWormHost.DrawnWorms },
+                    }
+                },
+                { "colonies", colonies },
+                { "gc", new Dictionary<string, object> { { "collections0", GC.CollectionCount(0) }, { "totalMemory", GC.GetTotalMemory(false) } } },
             };
         }
 

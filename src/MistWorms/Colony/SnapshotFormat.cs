@@ -40,6 +40,14 @@ namespace MistWorms.Colony
         public static void PutFloat(byte[] b, int at, float v) => PutInt(b, at, new FloatBits { F = v }.I);
 
         public static float GetFloat(byte[] b, int at) => new FloatBits { I = GetInt(b, at) }.F;
+
+        public static void PutLong(byte[] b, int at, long v)
+        {
+            PutInt(b, at, (int)v);
+            PutInt(b, at + 4, (int)(v >> 32));
+        }
+
+        public static long GetLong(byte[] b, int at) => (uint)GetInt(b, at) | ((long)GetInt(b, at + 4) << 32);
     }
 
     /// <summary>

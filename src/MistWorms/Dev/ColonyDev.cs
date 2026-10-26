@@ -247,6 +247,61 @@ namespace MistWorms.Dev
             return n;
         }
 
+        // ---------------------------------------------------------------- network (phase 8)
+
+        /// <summary>The network counters of one colony: bytes sent (payload x recipients) and received per second over 10 s, packets, keyframes, events, and the CPU time of the mirror.</summary>
+        public static Dictionary<string, object> NetJson(WormColony c)
+        {
+            WormMirror m = c.Mirror;
+            return new Dictionary<string, object>
+            {
+                { "role", c.IsMirror ? "mirror" : (c.IsOwner ? "owner" : "none") },
+                { "recipients", c.NetRecipients },
+                { "sentBytesPerSec", c.NetBytesSentPerSecond }, { "sentBytes", c.NetBytesSent }, { "sentPackets", c.NetPacketsSent },
+                { "keyframes", c.NetKeyframesSent }, { "eventsSent", c.NetEventsSent },
+                { "receivedBytesPerSec", c.NetBytesReceivedPerSecond }, { "receivedBytes", c.NetBytesReceived }, { "receivedPackets", c.NetPacketsReceived },
+                { "eventsPlayed", c.NetEventsPlayed }, { "eventsEchoed", c.NetEventsEchoed }, { "badPackets", c.NetBadPackets },
+                { "sendMs", new Dictionary<string, object> { { "avg", c.NetSendAvgMs }, { "max", c.NetSendMaxMs } } },
+                {
+                    "mirror", new Dictionary<string, object>
+                    {
+                        { "alive", c.IsMirror && c.Store != null ? c.Store.AliveCount : 0 },
+                        { "ms", new Dictionary<string, object> { { "last", c.MirrorLastMs }, { "avg", c.MirrorAvgMs }, { "max", c.MirrorMaxMs } } },
+                        { "packets", m != null ? m.Packets : 0 }, { "ignored", m != null ? m.Ignored : 0 }, { "resets", m != null ? m.Resets : 0 },
+                        { "created", m != null ? m.Created : 0 }, { "removed", m != null ? m.RemovedByPacket : 0 }, { "droppedStale", m != null ? m.DroppedStale : 0 },
+                        { "refused", m != null ? m.Refused : 0 },
+                    }
+                },
+                { "plannedHandOffs", c.PlannedHandOffs },
+            };
+        }
+
+        /// <summary>The sums over the colonies loaded on this peer (the owner side sends, the mirror side receives and spends CPU).</summary>
+        public static Dictionary<string, object> NetTotals()
+        {
+            double sent = 0, received = 0;
+            float mirrorMs = 0f, mirrorMax = 0f, sendMs = 0f;
+            long sentBytes = 0, receivedBytes = 0;
+            int owners = 0, mirrors = 0;
+            foreach (WormColony c in ColonyRegistry.All)
+            {
+                if (c == null) continue;
+                sent += c.NetBytesSentPerSecond;
+                received += c.NetBytesReceivedPerSecond;
+                sentBytes += c.NetBytesSent;
+                receivedBytes += c.NetBytesReceived;
+                sendMs += c.NetSendAvgMs;
+                if (c.IsMirror) { mirrors++; mirrorMs += c.MirrorAvgMs; mirrorMax = Mathf.Max(mirrorMax, c.MirrorMaxMs); }
+                else if (c.IsOwner) owners++;
+            }
+            return new Dictionary<string, object>
+            {
+                { "sentBytesPerSec", sent }, { "receivedBytesPerSec", received }, { "sentBytes", sentBytes }, { "receivedBytes", receivedBytes },
+                { "mirrorMsAvg", mirrorMs }, { "mirrorMsMax", mirrorMax }, { "sendMsAvg", sendMs },
+                { "ownedColonies", owners }, { "mirroredColonies", mirrors },
+            };
+        }
+
         // ---------------------------------------------------------------- state
 
         public static Dictionary<string, object> ColonyJson(WormColony c, bool includeWorms)
@@ -290,6 +345,7 @@ namespace MistWorms.Dev
                 { "byState", byState },
                 { "simMs", new Dictionary<string, object> { { "last", c.LastSimMs }, { "avg", c.AvgSimMs }, { "max", c.MaxSimMs }, { "steps", c.LastSimSteps } } },
                 { "proxies", ProxiedWorms(c) },
+                { "net", NetJson(c) },
                 { "seeded", c.Seeded },
                 { "nests", new Dictionary<string, object> { { "loaded", c.NestsLoaded }, { "eggsLaid", c.EggsLaid }, { "wormsReleased", c.WormsReleased }, { "totalAlive", c.TotalAlive } } },
                 {

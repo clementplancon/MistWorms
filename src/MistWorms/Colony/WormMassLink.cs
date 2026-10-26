@@ -450,7 +450,7 @@ namespace MistWorms.Colony
             s.massRef[i] = _masses[k].Id;
             s.absorbFrom[i] = p;
             SetState(i, WormState.Absorbing, now);
-            s.nextSimTime[i] = now;
+            s.nextSimTime[i] = now + SimPhase(i);
             _masses[k].Pending++;
             _massLoad[k]++;
             return true;
@@ -709,7 +709,7 @@ namespace MistWorms.Colony
                 s.wanderGoal[slot] = landing;
                 s.leapHeight[slot] = LeapHeightMin + (float)_rng.NextDouble() * (LeapHeightMax - LeapHeightMin);
                 s.stateTime[slot] = 0f;
-                s.nextSimTime[slot] = now;
+                s.nextSimTime[slot] = now;   // a leap is stepped at once (0.05 s steps); the carry of the frame cap spreads a big burst
                 DissolvedWorms++;
 #if MW_DEV
                 DissolveStarts.Add(from);

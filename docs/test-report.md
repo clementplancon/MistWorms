@@ -1,0 +1,32 @@
+# MistWorms - in-game test report
+
+Not generated yet: `py tools/vh.py scenario-all` writes the table of scenarios above the line below and keeps everything under it.
+The result of `py tools/vh.py s17` (server, client, refusal of a client without the mod) is in `docs/s17-summary.json`.
+
+<!-- manual-checklist -->
+
+## Check-list du test réel à 2 joueurs (phase 8)
+
+Le harnais ne peut faire jouer qu'un client contre le serveur dédié (une seconde instance de Valheim ne démarre pas sur le même compte Steam, décision 218). Ce test se fait à la main, par deux joueurs, et ne demande que les yeux.
+
+**Avant** : même profil de mods des deux côtés (code de profil r2modman), build `Release` ou `Profile` du mod, serveur dédié avec le mod et `Colony.AlertRadius` mis à une valeur inhabituelle (par exemple 37,5) dans `BepInEx/config/dev.pointvirgule.mistworms.cfg`. A et B sont les deux joueurs. Ouvrir la console du jeu n'est pas nécessaire ; garder `BepInEx/LogOutput.log` de chacun sous la main.
+
+| # | À faire | Ce qu'on doit voir | OK |
+| --- | --- | --- | --- |
+| 1 | B lance le jeu **sans** le mod et tente de rejoindre | refus à la connexion, message Jötunn qui nomme les mods manquants ; A et B avec le mod entrent | [ ] |
+| 2 | A et B ouvrent la configuration du mod (F1, Configuration Manager) | `Colony.AlertRadius` vaut la valeur du serveur chez les deux (pas la valeur par défaut de 25), et n'est pas modifiable par B | [ ] |
+| 3 | A entre dans une mine infestée, B le suit 30 s plus tard | B voit les mêmes vers, aux mêmes endroits (à 1 m près), qui marchent sans sauter ni se téléporter | [ ] |
+| 4 | A passe près d'un ver endormi, ou en frappe un | le ver et son groupe se réveillent au même moment chez A et chez B | [ ] |
+| 5 | B frappe un ver libre de l'épée | du sang vert **une seule fois** chez B (tout de suite), et chez A ; le ver meurt chez les deux après le même nombre de coups | [ ] |
+| 6 | Laisser un amas se former près de A et B | les deux voient le même amas, le même nom « Amas grouillant (n) » avec le même n ; un coup de B fait baisser n chez A aussi | [ ] |
+| 7 | Se laisser engloutir par un amas (A), B regarde | B voit l'amas collé à A, A a l'effet Infesté ; B peut frapper l'amas ; A se détache en sprintant, B voit l'amas se détacher | [ ] |
+| 8 | B détruit un nid | l'éclaboussure d'œufs et le son chez A et chez B, le nid disparaît chez les deux, les vers du nid sortent | [ ] |
+| 9 | A (propriétaire de la colonie) s'éloigne de la mine de plus de 100 m, B reste dedans | les vers continuent de bouger chez B sans à-coup ni disparition : la colonie est passée à B | [ ] |
+| 10 | Tout le monde sort de la mine, attendre 1 min, rentrer | les vers dorment (immobiles, posés), aucun amas, pas de doublon | [ ] |
+| 11 | B se déconnecte, attend 30 s et se reconnecte près des vers | B retrouve les vers à leur place (pas d'amas ni de ver en double) | [ ] |
+| 12 | A quitte brutalement (Alt+F4) pendant que des vers sont éveillés | chez B les vers reprennent et bougent dans les 10 s ; au plus quelques secondes de progrès perdues | [ ] |
+| 13 | Mêlée de 100 vers ou plus autour de A et B | pas de chute de FPS visible chez B ; noter les FPS de A et de B : ______ / ______ | [ ] |
+| 14 | Arrêter le serveur proprement, le relancer, rentrer dans la mine | la mine garde ses nids et ses vers (instantané `mw_snap`) | [ ] |
+| 15 | Relire `BepInEx/LogOutput.log` de A, de B et du serveur | aucune ligne `[Error` venant de MistWorms ; noter les `[Warning` inattendus | [ ] |
+
+**À noter en cas d'écart** : le numéro du point, qui était propriétaire de la colonie (le premier dans la mine, sauf passation), l'heure dans le journal, et une capture si le défaut se voit.

@@ -293,7 +293,7 @@ namespace MistWorms.Colony
             s.goalTime[i] = 0f;
             s.pauseUntil[i] = now + delay;
             s.nextSenseTime[i] = now + delay;
-            s.nextSimTime[i] = now + delay;
+            s.nextSimTime[i] = now + delay + SimPhase(i);
             s.lastActive[i] = now;
             s.nextGroundTime[i] = 0f;
         }

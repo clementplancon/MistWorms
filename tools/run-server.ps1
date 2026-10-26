@@ -7,31 +7,61 @@
   The process runs without a console window; BepInEx writes BepInEx/LogOutput.log, raw stdout/stderr
   go to BepInEx/server-console.log and BepInEx/server-console.err.log. Prints the server PID.
   -Stop sends Ctrl+C first (the server saves the world on Ctrl+C) and kills it after a timeout.
+  -ConfigFile <path> starts the server with that MistWorms .cfg (phase 8-2, S17: a synced admin-only key
+  the client must see). BepInEx offers no clean per-process path for a plugin config, so the file of the
+  server (BepInEx/config/dev.pointvirgule.mistworms.cfg) is saved aside as <file>.mwbackup, replaced, and
+  restored by -Stop (or -RestoreConfig, or by the next start: a crash never leaves the test file in
+  place for good). The other .cfg files of the server (SkyWhale, BepInEx) are never touched.
 .EXAMPLE
   tools/run-server.ps1
+  tools/run-server.ps1 -ConfigFile C:\Users\me\s17.cfg
   tools/run-server.ps1 -Stop
+  tools/run-server.ps1 -RestoreConfig
 #>
 param(
     [string]$World = 'MWServer',
     [string]$Password = 'mwdev123',
     [int]$Port = 2456,
     [switch]$Stop,
-    [int]$StopTimeoutSeconds = 30
+    [int]$StopTimeoutSeconds = 30,
+    [string]$ConfigFile = '',
+    [switch]$RestoreConfig
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 $serverName = 'MistWormsDev'
 $exe = Join-Path $DevServerDir 'valheim_server.exe'
 $bepDir = Join-Path $DevServerDir 'BepInEx'
+$cfgPath = Join-Path $bepDir 'config\dev.pointvirgule.mistworms.cfg'
+$cfgBackup = "$cfgPath.mwbackup"
+$cfgNone = "$cfgPath.mwnone"      # marker: the server had no MistWorms .cfg before the test file was put there
+
+# Puts the real MistWorms .cfg of the server back (idempotent: nothing to do when no test file is in place).
+function Restore-MistWormsConfig {
+    if (Test-Path $cfgBackup) {
+        Move-Item -Force $cfgBackup $cfgPath
+        Write-Step 'MistWorms .cfg of the server restored'
+    } elseif (Test-Path $cfgNone) {
+        Remove-Item -Force $cfgNone
+        if (Test-Path $cfgPath) { Remove-Item -Force $cfgPath }
+        Write-Step 'MistWorms test .cfg removed (the server had none)'
+    }
+}
 
 function Get-ServerProcess {
     Get-Process -Name 'valheim_server' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -and $_.Path.StartsWith($DevServerDir, [StringComparison]::OrdinalIgnoreCase) }
 }
 
+if ($RestoreConfig) {
+    if (Get-ServerProcess) { throw 'The server is running: stop it first (tools/run-server.ps1 -Stop restores the .cfg by itself).' }
+    Restore-MistWormsConfig
+    return
+}
+
 if ($Stop) {
     $procs = @(Get-ServerProcess)
-    if (-not $procs) { Write-Host 'Local server is not running.'; return }
+    if (-not $procs) { Write-Host 'Local server is not running.'; Restore-MistWormsConfig; return }
     foreach ($p in $procs) {
         Write-Step "Stopping valheim_server (PID $($p.Id))"
         # AttachConsole needs a process without its own console, so the Ctrl+C is sent from a helper.
@@ -54,8 +84,10 @@ exit 0
         } else {
             Write-Warning "Graceful stop failed or timed out after $StopTimeoutSeconds s; killing (unsaved progress is lost)."
             Stop-Process -Id $p.Id -Force
+            Start-Sleep -Seconds 2
         }
     }
+    Restore-MistWormsConfig
     return
 }
 
@@ -70,6 +102,16 @@ if ($running) {
     Write-Warning "Local server already running (PID $($running.Id -join ', ')). Use -Stop first."
     Write-Output $running[0].Id
     return
+}
+
+if ($ConfigFile) {
+    if (-not (Test-Path $ConfigFile)) { throw "-ConfigFile $ConfigFile not found." }
+    Restore-MistWormsConfig     # a backup left by a crashed run holds the real file: put it back before saving it again
+    if (Test-Path $cfgPath) { Copy-Item -Force $cfgPath $cfgBackup } else { New-Item -ItemType File -Force $cfgNone | Out-Null }
+    Copy-Item -Force $ConfigFile $cfgPath
+    Write-Step "MistWorms .cfg of the server replaced by $ConfigFile (the original is kept as $cfgBackup, restored by -Stop)"
+} else {
+    Restore-MistWormsConfig     # an ordinary start never runs on a leftover test file
 }
 
 $serverArgs = "-nographics -batchmode -name $serverName -port $Port -world $World -password $Password -public 0"

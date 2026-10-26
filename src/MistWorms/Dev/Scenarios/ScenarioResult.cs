@@ -27,6 +27,7 @@ namespace MistWorms.Dev.Scenarios
         public const string Passed = "passed";
         public const string Failed = "failed";
         public const string Errored = "error";
+        public const string Skipped = "skipped";
 
         private const int MaxLogLines = 500;
 
@@ -38,6 +39,8 @@ namespace MistWorms.Dev.Scenarios
         public readonly List<string> Shots = new List<string>();
         public readonly List<string> Log = new List<string>();
         public string Error;
+        /// <summary>Why the scenario did not run (status <see cref="Skipped"/>): a precondition it cannot meet here, not a failure.</summary>
+        public string SkipReason;
         public DateTime StartedAt = DateTime.Now;
         public float DurationSeconds;
 
@@ -71,6 +74,7 @@ namespace MistWorms.Dev.Scenarios
             { "shots", Shots },
             { "log", Log },
             { "error", Error },
+            { "skipReason", SkipReason },
             { "startedAt", StartedAt },
             { "durationSeconds", DurationSeconds },
         };

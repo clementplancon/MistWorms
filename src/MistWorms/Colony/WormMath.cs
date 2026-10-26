@@ -190,6 +190,15 @@ namespace MistWorms.Colony
         /// <summary>Speed limit of a worm following another: the leader's last speed plus 5 %, but never below <paramref name="minSpeed"/>.</summary>
         public static float FileSpeedCap(float leaderSpeed, float minSpeed) => Math.Max(leaderSpeed * FileSpeedMargin, minSpeed);
 
+        /// <summary>Number of distinct start phases of the simulation steps (decision 227).</summary>
+        public const int PhaseSlots = 20;
+
+        /// <summary>
+        /// Fixed phase of the simulation steps of worm <paramref name="slot"/>: its index modulo <see cref="PhaseSlots"/> times a slot of one <paramref name="interval"/> (seconds, the near step).
+        /// Added to the first step of a worm at creation, restoration and waking, so that a wave of worms born together does not step in the same frame (spec 11.1).
+        /// </summary>
+        public static float SimPhase(int slot, float interval) => (slot % PhaseSlots) * (interval / PhaseSlots);
+
         /// <summary>Simulation rate in Hz: sleeping worms 2 Hz, others near or far from the closest player (spec §11.1).</summary>
         public static float SimRate(bool sleeping, float nearestPlayerSqr, float nearRate, float farRate)
         {

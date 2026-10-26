@@ -77,7 +77,10 @@ namespace MistWorms.Colony
         public static int ColliderOverflows, StructureOverflows, Unreachable, Blacklisted;
 #endif
 
-        private static int PieceMask => LayerMask.GetMask(VanillaNames.LayerPiece, VanillaNames.LayerPieceNonsolid);
+        private static int s_pieceMask;
+
+        /// <summary>Cached: <c>LayerMask.GetMask</c> allocates its string array at each call, and the overflow scan runs every time in a crowded mine.</summary>
+        private static int PieceMask => s_pieceMask != 0 ? s_pieceMask : (s_pieceMask = LayerMask.GetMask(VanillaNames.LayerPiece, VanillaNames.LayerPieceNonsolid));
 
         private static int StructureMask
         {

@@ -78,7 +78,7 @@ namespace MistWorms.Colony
 
             if (_nview.IsValid() && _nview.IsOwner())
             {
-                ApplyWormHit(i, hit.Clone());
+                ApplyWormHit(i, hit.Clone(), SessionUid);
                 if (show) WormEffects.PlayHit(ref _hitFx, where, Time.time);
                 return;
             }
@@ -88,21 +88,28 @@ namespace MistWorms.Colony
                 return;
             }
 
-            var pkg = new ZPackage();
-            hit.Serialize(ref pkg);
-            _nview.InvokeRPC(MWNames.RpcWormHit, i, (int)generation, pkg);
+            // A peer that does not own the colony: the slot is private to this peer (it is a slot of the mirror), the worm is named by its network id (phase 8).
+            // The owner applies the hit and tells the other peers by an event; this peer plays the blood itself, below, and ignores that event.
+            ushort id = Store.netId[i];
+            if (id != 0)
+            {
+                var pkg = new ZPackage();
+                hit.Serialize(ref pkg);
+                _nview.InvokeRPC(MWNames.RpcWormHit, (int)id, pkg);
+            }
             if (show) WormEffects.PlayHit(ref _hitFx, where, Time.time);
         }
 
-        private void RPC_WormHit(long sender, int index, int generation, ZPackage pkg)
+        private void RPC_WormHit(long sender, int netId, ZPackage pkg)
         {
             try
             {
-                if (!_initialized || !_nview.IsValid() || !_nview.IsOwner()) return;
-                if (Store == null || generation < 0 || generation > ushort.MaxValue || !Store.IsAlive(index, (ushort)generation)) return;
+                if (!_initialized || !_nview.IsValid() || !_nview.IsOwner() || Store == null) return;
+                int index = Store.FindByNetId(netId);   // no allocation: an indexed table
+                if (index < 0) return;                   // the worm died or was absorbed since the peer saw it
                 var hit = new HitData();
                 hit.Deserialize(ref pkg);
-                ApplyWormHit(index, hit);
+                ApplyWormHit(index, hit, sender);
             }
             catch (Exception e)
             {
@@ -116,7 +123,7 @@ namespace MistWorms.Colony
         /// the health. Not reproduced, on purpose (decisions.md 48): backstab, stagger bonus, weak spots, dodge, PvP, New Game+ armor,
         /// and fire/poison/spirit as damage over time (they hit at once, like every other type, spec S03).
         /// </summary>
-        private void ApplyWormHit(int i, HitData hit)
+        private void ApplyWormHit(int i, HitData hit, long playedBy)
         {
             WormStore s = Store;
             if (Disabled || !s.alive[i]) return;
@@ -149,6 +156,7 @@ namespace MistWorms.Colony
 
             Vector3 point = hit.m_point == Vector3.zero ? pos + Vector3.up * 0.1f : hit.m_point;
             if (DamageText.instance != null) DamageText.instance.ShowText(modifier, point, shown, false);
+            EmitNetEvent(DeltaEventType.Hit, point, playedBy);   // the other peers near play the blood; the one that landed the hit (playedBy) already did
 
             s.hp[i] -= damage;
             if (s.hp[i] <= 0f)
@@ -225,6 +233,9 @@ namespace MistWorms.Colony
                         dir = dir.sqrMagnitude > 1e-6f ? dir.normalized : forward;
                         // A player's owner applies the bite (durability rule); a creature or a structure takes a plain attackerless hit (decision 20)
                         // after the "last worm hit" registry was written on the peer that owns it (spec §7.4).
+#if MW_DEV
+                        long vanilla0 = DevMeasureAlloc ? UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong() : 0L;
+#endif
                         switch (target.Kind)
                         {
                             case TargetKind.Player:
@@ -237,12 +248,20 @@ namespace MistWorms.Colony
                                 landed = WormBite.HitCreature(target.Character, closest, dir, ZdoId, i, s.generation[i]);
                                 break;
                         }
+#if MW_DEV
+                        if (DevMeasureAlloc)
+                        {
+                            long rise = UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong() - vanilla0;
+                            if (rise > 0) DevVanillaBytes += rise;
+                            DevVanillaCalls++;
+                        }
+#endif
                     }
                 }
             }
 #if MW_DEV
             _frameStrikeBiteMs += (System.Diagnostics.Stopwatch.GetTimestamp() - t1) * 1000f / System.Diagnostics.Stopwatch.Frequency;
-            if (landed && Store.targetKind[i] != (byte)TargetKind.Player) Plugin.Log.LogInfo($"[Worm] {i} struck its {(TargetKind)Store.targetKind[i]} target");
+            if (landed && !DevMeasureAlloc && Store.targetKind[i] != (byte)TargetKind.Player) Plugin.Log.LogInfo($"[Worm] {i} struck its {(TargetKind)Store.targetKind[i]} target");
             if (landed) StrikesLanded++;
             else StrikesMissed++;
 #endif

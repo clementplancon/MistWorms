@@ -286,7 +286,7 @@ namespace MistWorms.Colony
             if (!_initialized || !_nview.IsValid()) return;
             if (_nview.IsOwner())
             {
-                ReceiveNestGone(index, position, byPlayer);
+                ReceiveNestGone(index, position, byPlayer, SessionUid);
                 return;
             }
             _nview.InvokeRPC(MWNames.RpcNestGone, index, position, byPlayer);
@@ -297,7 +297,7 @@ namespace MistWorms.Colony
             try
             {
                 if (!_initialized || !_nview.IsValid() || !_nview.IsOwner()) return;
-                ReceiveNestGone(index, position, byPlayer);
+                ReceiveNestGone(index, position, byPlayer, sender);
             }
             catch (Exception e)
             {
@@ -305,13 +305,18 @@ namespace MistWorms.Colony
             }
         }
 
-        private void ReceiveNestGone(int index, Vector3 position, bool byPlayer)
+        private void ReceiveNestGone(int index, Vector3 position, bool byPlayer, long playedBy)
         {
             NestsDestroyed++;
             if (!MWConfig.General.Enabled.Value || Disabled) return;
 
             // The killing blow of a player is never seen in the ZDO of the nest (it is gone with it): the nest owner says so. The group wakes, as for any hit (spec §5.1).
             if (byPlayer && _gAwake != null) OnPlayerHit(position, index, Time.time);
+
+            // The burst: the nest owner played it (playedBy). The peers near the colony play it from the event; the colony owner, when it is not the nest owner, plays it here.
+            Vector3 burstAt = position + Vector3.up * 0.2f;
+            if (playedBy != SessionUid && !Application.isBatchMode) WormEffects.PlayNestBurst(burstAt);
+            EmitNetEvent(DeltaEventType.NestDestroyed, burstAt, playedBy);
 
             // Active worms, no drop (nothing falls out of a nest). The cap applies: a full mine releases nothing (spec §8.2).
             int wanted = MWConfig.Nest.ReleaseOnDestroy.Value;

@@ -52,7 +52,9 @@ namespace MistWorms
         public const string ZdoMassStreamWidth = "mw_sw";      // float: width of the ribbon while the Stream bit is set (spec §4.7)
 
         // RPC names (spec §11.3). Part of the wire protocol: never rename after release.
-        public const string RpcWormHit = "MW_WormHit";         // ZNetView RPC to the colony owner: int slot, int generation, ZPackage HitData
+        public const string RpcWormHit = "MW_WormHit";         // ZNetView RPC to the colony owner: int netId of the worm (WormStore.netId, phase 8: a slot is private to a peer), ZPackage HitData
+        public const string RpcKeyReq = "MW_KeyReq";           // ZNetView RPC from a peer to the colony owner, no argument: send me a keyframe (phase 8, decision 225)
+        public const string RpcDelta ="MW_Delta";             // routed RPC from the colony owner to each remote player within Network.SyncRadius: ZPackage (DeltaFormat: worms, events; spec §11.3, phase 8)
         public const string RpcWormBite = "MW_WormBite";       // routed RPC to the owner of the bitten player: ZDOID, durability, health damage, point, dir
         public const string RpcMassBite = "MW_MassBite";       // routed RPC to the owner of the engulfed player: ZDOID target, ZDOID mass, durability P, health damage, int worms, Vector3 dir
         public const string RpcMassParry = "MW_MassParry";     // routed RPC to the owner of a mass: ZDOID mass (its tick was parried perfectly)

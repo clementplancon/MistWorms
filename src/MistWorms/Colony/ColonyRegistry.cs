@@ -8,6 +8,22 @@ namespace MistWorms.Colony
     {
         private static readonly List<WormColony> s_all = new List<WormColony>();
 
+#if MW_DEV
+        /// <summary>
+        /// Dev: a dedicated server hosts colonies after all (the <c>serverown</c> mode of the pass 8-2: the server claims the colony of the dev site and simulates it, which makes the
+        /// client a real non owner). The extension point of <see cref="ServerMayHost"/>, set by <c>Dev.ServerOwnDev</c> (the <c>own</c> request of the pass 8-2, decisions 220 and 221) and cleared by <c>release</c>.
+        /// </summary>
+        public static bool DevServerOwn;
+#else
+        public const bool DevServerOwn = false;
+#endif
+
+        /// <summary>
+        /// False on a dedicated server (spec §10.2, decision 215): it creates, seeds, claims and simulates no colony, it only routes the network objects, as vanilla does for creatures.
+        /// Checked by <see cref="WormColony.Create"/>, <see cref="MineSeeder.Pump"/> and <c>WormColony.Update</c>.
+        /// </summary>
+        public static bool ServerMayHost => DevServerOwn || ZNet.instance == null || !ZNet.instance.IsDedicated();
+
         /// <summary>Do not add or remove while iterating; copy first if a loop may destroy a colony.</summary>
         public static List<WormColony> All => s_all;
 

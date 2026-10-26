@@ -13,6 +13,7 @@ using Xunit.Abstractions;
 namespace MistWorms.Tests
 {
     /// <summary>The layout worker (phase 4B-3): same result as the direct evaluation, no deadlock when masses come and go, no allocation, cost figures.</summary>
+    [Collection("allocation")]   // alone (decision 227): the allocation counter it reads is process wide
     public class MassWorkerTests
     {
         private readonly ITestOutputHelper _out;

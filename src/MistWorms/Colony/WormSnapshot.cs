@@ -83,6 +83,7 @@ namespace MistWorms.Colony
         {
             _snapSettled = true;
             _snapNext = now + MWConfig.Network.SnapshotInterval.Value;
+            NetSettled();   // phase 8: the worms have new network ids, everybody near gets a keyframe
         }
 
         /// <summary>
@@ -245,6 +246,27 @@ namespace MistWorms.Colony
         }
 
         // ------------------------------------------------------------------ ownership
+
+        /// <summary>
+        /// Prefix of <c>ZDO.SetOwner</c> (see <see cref="Patches.OwnerPatches"/>): the owner of a colony ZDO is about to give it away (<c>ZDOMan.ReleaseNearbyZDOS</c>, which only the
+        /// server runs: it fires on the server or host peer when it owns the colony; a remote owner is told afterwards by <c>SetOwnerInternal</c>, see decision 216). The snapshot is written now, before the switch, so the next owner restores what is alive and not what was there up to
+        /// <c>Network.SnapshotInterval</c> ago (spec §11.4, phase 8, decision 216). Inert for any other ZDO and on a peer that does not own it.
+        /// </summary>
+        public static void OnOwnerLeaving(ZDO zdo)
+        {
+            if (zdo == null || !zdo.IsOwner() || zdo.GetPrefab() != s_colonyHash) return;
+            WormColony colony = ColonyRegistry.FindById(zdo.m_uid);
+            if (colony == null || !colony._snapSettled) return;
+            if (colony.WriteSnapshot()) Plugin.Log.LogInfo($"[Snapshot] colony {colony.ZdoId}: ownership is leaving this peer, snapshot written first");
+            colony.NoteHandOffWritten();
+        }
+
+        private static readonly int s_colonyHash = MWNames.ColonyPrefab.GetStableHashCode();
+
+        /// <summary>Planned hand-offs that wrote the snapshot just before the switch, since this colony object was created.</summary>
+        public int PlannedHandOffs { get; private set; }
+
+        private void NoteHandOffWritten() => PlannedHandOffs++;
 
         /// <summary>
         /// This peer was the owner and is not any more: its worms are the next owner's (it restores them from the last snapshot, up to Network.SnapshotInterval old),

@@ -108,6 +108,18 @@ namespace MistWorms.Dev.Scenarios
             return ok;
         }
 
+        /// <summary>
+        /// Marks the scenario as skipped with <paramref name="reason"/> (a precondition it cannot meet in this session, for instance S17 outside a dedicated server): the runner reports the status
+        /// <c>skipped</c>, which is neither a pass nor a failure. The scenario should <c>yield break</c> right after.
+        /// </summary>
+        public void Skip(string reason)
+        {
+            _result.SkipReason = reason;
+            Log($"SKIPPED: {reason}");
+        }
+
+        public bool Skipped => _result.SkipReason != null;
+
         public void Log(string message)
         {
             string line = $"[{Elapsed,7:0.00}s] {message}";

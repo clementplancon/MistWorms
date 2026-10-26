@@ -149,9 +149,13 @@ namespace MistWorms.Bites
         }
 
         /// <summary>The worm behind a strike (colony, slot, generation) as a package: the routed RPC is at its six parameter limit (decision 141).</summary>
+        private static readonly ZPackage s_tag = new ZPackage();
+
+        /// <summary>One package reused: <c>InvokeRoutedRPC</c> copies its bytes into the routed message before it returns (decision 227).</summary>
         private static ZPackage WormTag(ZDOID colony, int slot, int generation)
         {
-            var pkg = new ZPackage();
+            ZPackage pkg = s_tag;
+            pkg.Clear();
             pkg.Write(colony);
             pkg.Write(slot);
             pkg.Write(generation);

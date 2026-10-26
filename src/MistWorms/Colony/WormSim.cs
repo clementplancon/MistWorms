@@ -58,6 +58,18 @@ namespace MistWorms.Colony
         private readonly int[] _neighborIdx = new int[NeighborQueryCount];
         private readonly float[] _neighborSqr = new float[NeighborQueryCount];
         private bool _warmed;
+        private int _simCursor;   // first slot of the next frame's walk: where the last one stopped when it ran out of budget (no starvation)
+
+        /// <summary>
+        /// Steps one frame may run (decision 227). A hitch makes every worm overdue at once and, with next = now + interval, they stayed in lockstep for good:
+        /// 400 steps in one frame (7 ms). The rest is carried to the next frames, from where the walk stopped. 160 steps cover 400 near worms at 20 Hz from 50 fps up.
+        /// </summary>
+        internal const int MaxStepsPerFrame = 160;
+        private const int MinStepsPerFrame = 8;           // below this the time budget does not stop the walk
+        private const double MaxStepBudgetMs = 2.0;       // time of the walk above which the rest is carried (the cost of a strike is not predictable)
+
+        /// <summary>First step of worm <paramref name="i"/> after <c>now</c>: its own phase inside one near interval (creation, restoration, waking).</summary>
+        private static float SimPhase(int i) => WormMath.SimPhase(i, 1f / Mathf.Max(0.1f, MWConfig.Performance.SimRateNear.Value));
         private readonly ApproachRanks _approach = new ApproachRanks();
 
         // ------------------------------------------------------------------ colony tick
@@ -85,12 +97,23 @@ namespace MistWorms.Colony
             float nearRate = MWConfig.Performance.SimRateNear.Value;
             float farRate = MWConfig.Performance.SimRateFar.Value;
             int steps = 0;
+            int highWater = s.HighWater;
+            int first = _simCursor < highWater ? _simCursor : 0;
+            long budgetEnd = start + (long)(MaxStepBudgetMs * Stopwatch.Frequency / 1000.0);
+            _simCursor = 0;
 
-            for (int i = 0; i < s.HighWater; i++)
+            for (int n = 0; n < highWater; n++)
             {
+                int i = first + n;
+                if (i >= highWater) i -= highWater;
                 if (!s.alive[i] || now < s.nextSimTime[i]) continue;
                 var state = (WormState)s.state[i];
                 if (state == WormState.Absorbed) continue;
+                if (steps >= MaxStepsPerFrame || (steps >= MinStepsPerFrame && Stopwatch.GetTimestamp() > budgetEnd))
+                {
+                    _simCursor = i;   // due, not stepped: it opens the next frame, which is what keeps the carry fair
+                    break;
+                }
 
                 float dt = Mathf.Min(now - s.lastSimTime[i], MaxStepDt);
                 float rate = WormMath.SimRate(state == WormState.Sleeping, NearestPlayerSqr(s.pos[i]), nearRate, farRate);
