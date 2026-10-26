@@ -599,7 +599,7 @@ namespace MistWorms.Dev.Scenarios
                     if (!sk.LastFromCache && sk.Selected) spikes.Add((float)sk.SpikeUncachedMs);
                 }
                 GpuMassDev.Clear();
-                yield return ctx.WaitSteps(10);
+                yield return ctx.WaitFrames(10);
             }
             float median = spikes.Count > 0 ? Median(spikes) : float.MaxValue;
             ctx.Assert("skin_selection_first_spike_median", spikes.Count == SpikeRuns && median <= 4.0, $"<= 4 ms at the first engulf of a mesh, median of {SpikeRuns} passes after a warm-up pass", spikes.Count == SpikeRuns ? $"{median:0.00} ms (passes {Join(spikes)}; warm-up {warm})" : $"only {spikes.Count} of {SpikeRuns} passes were first selections");

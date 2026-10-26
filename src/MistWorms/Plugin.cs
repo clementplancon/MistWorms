@@ -132,12 +132,12 @@ namespace MistWorms
         }
 
         /// <summary>
-        /// Logs an exception from a patch or simulation step without letting it escape into vanilla code. Once per context: a catch that sits in an
+        /// Logs an exception from a patch or simulation step without letting it escape into vanilla code. Once per context and exception type: a catch that sits in an
         /// Update or a Tick would otherwise write to the log every frame. The repeats are only counted (<see cref="SuppressedExceptions"/>).
         /// </summary>
         internal static void LogException(string context, Exception e)
         {
-            if (!s_loggedSites.Add(context)) { SuppressedExceptions++; return; }
+            if (!s_loggedSites.Add(context + "|" + (e != null ? e.GetType().FullName : "null"))) { SuppressedExceptions++; return; }
             Log?.LogError($"[{context}] {e}");
         }
 

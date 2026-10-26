@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using BepInEx.Configuration;
 using MistWorms.Config;
@@ -27,18 +28,40 @@ namespace MistWorms.Tests
             return null;
         }
 
+        private static string RequireRepoRoot()
+        {
+            string root = FindRepoRoot();
+            Assert.True(root != null, "MistWorms.sln not found above " + AppDomain.CurrentDomain.BaseDirectory);
+            return root;
+        }
+
+        /// <summary>
+        /// MWConfig.Bind is static and returns at once when it already holds a ConfigFile: forget it so that the defaults read here come from this test's own binding,
+        /// whatever ran before (the tests do not run in parallel, see the assembly attribute of MassWorkerTests).
+        /// </summary>
+        private static void ResetMWConfig()
+        {
+            const BindingFlags f = BindingFlags.NonPublic | BindingFlags.Static;
+            Type t = typeof(MWConfig);
+            FieldInfo cfg = t.GetField("_cfg", f), entries = t.GetField("Entries", f), order = t.GetField("_order", f);
+            Assert.True(cfg != null && entries != null && order != null, "MWConfig fields _cfg / Entries / _order not found");
+            cfg.SetValue(null, null);
+            entries.FieldType.GetMethod("Clear").Invoke(entries.GetValue(null), null);
+            order.SetValue(null, 0);
+        }
+
         private static readonly Regex KeyRx = new Regex(@"`([A-Za-z]+)\.([A-Za-z]+)`");
 
         [Fact]
         public void ReadmeDefaultsMatchConfigDefaults()
         {
-            string root = FindRepoRoot();
-            if (root == null) return;
+            string root = RequireRepoRoot();
             string readme = Path.Combine(root, "thunderstore", "README.md");
-            if (!File.Exists(readme)) return;
+            Assert.True(File.Exists(readme), "thunderstore/README.md not found at " + readme);
 
             string tmp = Path.Combine(Path.GetTempPath(), "mw-readme-" + Guid.NewGuid().ToString("N") + ".cfg");
             var cfg = new ConfigFile(tmp, false);
+            ResetMWConfig();
             MWConfig.Bind(cfg);
 
             var defaults = new Dictionary<string, object>();
@@ -81,8 +104,9 @@ namespace MistWorms.Tests
         [Fact]
         public void ManifestVersionMatchesPluginAndNoDraftMarkerRemains()
         {
-            string root = FindRepoRoot();
-            if (root == null) return;
+            string root = RequireRepoRoot();
+            foreach (string need in new[] { "manifest.json", "README.md", "CHANGELOG.md" })
+                Assert.True(File.Exists(Path.Combine(root, "thunderstore", need)), "thunderstore/" + need + " not found");
             string manifest = File.ReadAllText(Path.Combine(root, "thunderstore", "manifest.json"));
             Match m = Regex.Match(manifest, "\"version_number\"\\s*:\\s*\"([^\"]+)\"");
             Assert.True(m.Success);

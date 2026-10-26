@@ -36,12 +36,9 @@ Shader "MistWorms/WormRope"
         half _Glossiness, _BumpScale, _RimPower;
         float4 _TexScale;
 
-        // 16 bytes per worm and 192 bytes per mass: the layouts of WormData and MassParams in WormSim.compute (GpuWormTypes.cs).
+        // 16 bytes per worm and 208 bytes per mass: the layouts of WormData and MassParams in WormSim.compute (GpuWormTypes.cs).
         struct WormData { uint mass; uint seed; float speed; float phase; };
-        struct MassParams
-        {
-            float4 origin; float4 center; float4 heading; float4 shape; float4 motion; float4 sleeve; uint4 ranges; float4 gridRect; float4 skin; float4 side; float4 plan; float4 plan2;
-        };
+        #include "WormMassParams.hlsl"
 
         #ifdef UNITY_PROCEDURAL_INSTANCING_ENABLED
         StructuredBuffer<float4> _Nodes;

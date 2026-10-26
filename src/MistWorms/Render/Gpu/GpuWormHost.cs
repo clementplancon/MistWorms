@@ -96,6 +96,25 @@ namespace MistWorms.Render.Gpu
         public float TargetHeight, SurfaceArea;
 
         public float GridExtent => 2f * (Radius + 0.6f);
+
+        /// <summary>
+        /// Square the height grid and the obstacle maps cover (world x, z of the sample (0, 0) and side length). Around the mass alone it is <see cref="GridExtent"/>; while the pseudopod is active it
+        /// grows toward the target to take in the whole net (the net, its tip and its waves; the full length, so that the rectangle does not lag behind while the net grows). No allocation.
+        /// </summary>
+        public void GridFrame(out Vector2 min, out float extent)
+        {
+            float h = GridExtent * 0.5f;
+            float x0 = Center.x - h, x1 = Center.x + h, z0 = Center.z - h, z1 = Center.z + h;
+            if (Pseudo.w > 0f && PseudoFull > 0f)
+            {
+                float reach = WormSimConst.ArmStart * Radius + PseudoFull + 0.4f;
+                float tx = Center.x + PseudoDirX * reach, tz = Center.z + PseudoDirZ * reach;
+                if (tx < x0) x0 = tx; if (tx > x1) x1 = tx;
+                if (tz < z0) z0 = tz; if (tz > z1) z1 = tz;
+            }
+            extent = Mathf.Max(x1 - x0, z1 - z0);
+            min = new Vector2((x0 + x1) * 0.5f - extent * 0.5f, (z0 + z1) * 0.5f - extent * 0.5f);
+        }
     }
 
     /// <summary>
@@ -569,7 +588,8 @@ namespace MistWorms.Render.Gpu
         public static void SetFlatEnvironment(GpuMass m, float y)
         {
             for (int i = 0; i < m.Heights.Length; i++) m.Heights[i] = y - m.Origin.y;
-            UploadEnvironment(m, 0, new Vector2(m.Center.x - m.GridExtent * 0.5f, m.Center.z - m.GridExtent * 0.5f), m.GridExtent / (WormSimConst.HeightN - 1));
+            m.GridFrame(out Vector2 gmin, out float gext);
+            UploadEnvironment(m, 0, gmin, gext / (WormSimConst.HeightN - 1));
         }
 
         internal static GpuMassParams BuildParams(GpuMass m, bool simulated)

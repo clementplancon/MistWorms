@@ -136,8 +136,8 @@ namespace MistWorms.Render.Gpu
         private void ScheduleHeights(GpuMass m)
         {
             int slot = m.Slot, hn = WormSimConst.HeightN, baseIndex = slot * RaysPerMass;
-            float extent = m.GridExtent, spacing = extent / (hn - 1);
-            Vector2 min = new Vector2(m.Center.x - extent * 0.5f, m.Center.z - extent * 0.5f);
+            m.GridFrame(out Vector2 min, out float extent);
+            float spacing = extent / (hn - 1);
             float cy = m.Center.y;
             float yTop = cy + RayMaxHeight;
             var qTerrain = new QueryParameters(_terrainMask, false, QueryTriggerInteraction.Ignore, false);
