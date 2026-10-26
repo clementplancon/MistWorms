@@ -28,7 +28,6 @@ namespace MistWorms.Dev.Scenarios
         private const float ClipSeconds = 4.5f;
         private const float FormationClipSeconds = 5f;
         private const float TriggerDelay = 0.6f;
-        private const float CameraEdgeGap = 2f, CameraHeight = 1.2f;   // the camera 2 m from the edge of the action, 1.2 m up, looking at its centre
         private const int FormationWorms = 12;
         private const int BigCount = 15, SmallCount = 10;
         private const float FormationRing = 2.2f;
@@ -132,7 +131,7 @@ namespace MistWorms.Dev.Scenarios
         private IEnumerator Formation(ScenarioContext ctx, WormColony colony, Vector3 anchor)
         {
             ClearMineCreatures(ctx);
-            Frame(ctx, anchor, FormationRing + 0.5f + CameraEdgeGap, Vector3.forward);
+            Frame(ctx, anchor, 0.75f * FormationRing, Vector3.forward);       // the worms start on a ring of 2.2 m and slide in: the inner three quarters of it are framed
             yield return ctx.WaitFrames(10);
             yield return ctx.Shot("formation_0_before");
 
@@ -184,7 +183,7 @@ namespace MistWorms.Dev.Scenarios
             if (visual == null || !visual) { ctx.Assert("mass_alive_before_the_clip", false, "the mass still stands", "gone (see the mass death log)"); yield break; }
             // The action runs from the far side of the mass to where the worm starts (3 m past its edge): the camera looks at the middle of it, from the side.
             float ra = Mathf.Max(0.3f, visual.ShownRadius);
-            Frame(ctx, visual.Root + visual.Left * 1.5f, ra + 1.5f + CameraEdgeGap, visual.Forward);
+            Frame(ctx, visual.Root + visual.Left * 1.5f, ra + 1.5f, visual.Forward);
             yield return ctx.Shot("absorption_0_before");
 
             int absorbed0 = colony.WormsAbsorbed;
@@ -242,7 +241,7 @@ namespace MistWorms.Dev.Scenarios
             float rBig = MassMath.Radius(BigCount), rSmall = MassMath.Radius(SmallCount);
             float touching = 0.93f * (rBig + rSmall);
             // Framed on the point where the two heaps meet, wide enough for both.
-            Frame(ctx, visual.Root - visual.Left * (0.5f * touching), 0.5f * (rBig + touching + rSmall) + CameraEdgeGap, visual.Forward);
+            Frame(ctx, visual.Root - visual.Left * (0.5f * touching), 0.5f * (rBig + touching + rSmall), visual.Forward);
             yield return ctx.Shot("fusion_0_before");
             DevBridge.Host.StartCoroutine(Later(TriggerDelay, () =>
             {
@@ -281,7 +280,7 @@ namespace MistWorms.Dev.Scenarios
             yield return ctx.WaitFrames(30);
             if (visual == null || !visual) { ctx.Assert("mass_alive_before_the_clip", false, "the mass still stands", "gone (see the mass death log)"); yield break; }
             // Framed before the hit: the heap and the 1.5 m the worms leap.
-            Frame(ctx, visual.Root, Mathf.Max(0.3f, visual.ShownRadius) + 1.5f + CameraEdgeGap, visual.Forward);
+            Frame(ctx, visual.Root, Mathf.Max(0.3f, visual.ShownRadius) + 1.5f, visual.Forward);
             yield return ctx.Shot("dissolution_0_before");
 
             int dissolved0 = colony.DissolvedWorms;
@@ -302,14 +301,19 @@ namespace MistWorms.Dev.Scenarios
 
         // ------------------------------------------------------------------ helpers
 
-        /// <summary>Camera <paramref name="horizontal"/> metres from <paramref name="center"/> along <paramref name="dir"/> (another side when blocked), 1.2 m up, looking at the centre of the action; fill light on.</summary>
-        private static void Frame(ScenarioContext ctx, Vector3 center, float horizontal, Vector3 dir)
+        /// <summary>
+        /// Camera along <paramref name="dir"/> from <paramref name="center"/> (another side when blocked), 20 degrees above it, looking at the centre of the action; fill light on. The
+        /// distance comes from the radius of the action <paramref name="zone"/> (the mass and what comes to it) and the field of view (D12): the action takes <paramref name="fraction"/>
+        /// (60 % by default: a wide action in a 16:9 image) of the height of the image.
+        /// </summary>
+        private static void Frame(ScenarioContext ctx, Vector3 center, float zone, Vector3 dir, float fraction = 0.6f)
         {
             Vector3 look = center + Vector3.up * 0.3f;
             int mask = VisualScenario.CameraMask();
-            float zone = Mathf.Max(0.5f, horizontal - CameraEdgeGap);
+            zone = Mathf.Max(0.5f, zone);
+            ScenarioContext.Orbit(ScenarioContext.FitFlat(zone, 0.5f, 20f, fraction), 20f, out float horizontal, out float up);
             Vector3 flat = new Vector3(dir.x, 0f, dir.z).normalized;
-            Vector3 pos = center + flat * horizontal + Vector3.up * CameraHeight;
+            Vector3 pos = center + flat * horizontal + Vector3.up * up;
             bool found = false;
             // A side qualifies when the camera is in the open and sees the centre of the action AND the edge of the zone all around it (a bump of the
             // ground between the camera and the action hid a whole clip): 8 sides, then 0.6 m higher.
@@ -318,7 +322,7 @@ namespace MistWorms.Dev.Scenarios
                 {
                     int step = (k + 1) / 2 * (k % 2 == 0 ? 1 : -1);
                     Vector3 side = Quaternion.AngleAxis(step * 45f, Vector3.up) * flat;
-                    Vector3 c = center + side * horizontal + Vector3.up * (CameraHeight + lift * 0.6f);
+                    Vector3 c = center + side * horizontal + Vector3.up * (up + lift * 0.6f);
                     if (Physics.CheckSphere(c, 0.4f, mask, QueryTriggerInteraction.Ignore) || Physics.Linecast(c, look, mask, QueryTriggerInteraction.Ignore)) continue;
                     bool seesZone = true;
                     for (int e = 0; e < 4 && seesZone; e++)

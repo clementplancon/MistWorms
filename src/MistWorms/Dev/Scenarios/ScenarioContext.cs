@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using MistWorms.Render.Gpu;
 using UnityEngine;
 
 namespace MistWorms.Dev.Scenarios
@@ -107,6 +108,19 @@ namespace MistWorms.Dev.Scenarios
             Log($"{(ok ? "PASS" : "FAIL")} {name}: expected={Format(expected)} actual={Format(actual)}");
             return ok;
         }
+
+        /// <summary>
+        /// An observation of the environment (the vanilla stairs of a mine, a navmesh built on request): logged with its outcome, never recorded as an assertion, so it cannot fail the
+        /// run (D11). Returns <paramref name="ok"/>.
+        /// </summary>
+        public bool Note(string name, bool ok, object expected = null, object actual = null)
+        {
+            Log($"ENV (non blocking) {(ok ? "ok" : "not met")} {name}: expected={Format(expected)} actual={Format(actual)}");
+            return ok;
+        }
+
+        /// <summary>True when the masses of the scenario are drawn by the GPU colony (the default); false with force_cpu=1, without compute, or with <c>Performance.GpuWorms = Off</c>.</summary>
+        public static bool GpuMasses => MistWorms.Mass.GpuMassBridge.Available;
 
         /// <summary>
         /// Marks the scenario as skipped with <paramref name="reason"/> (a precondition it cannot meet in this session, for instance S17 outside a dedicated server): the runner reports the status
@@ -311,6 +325,58 @@ namespace MistWorms.Dev.Scenarios
             return item;
         }
 
+        // ---------------------------------------------------------------- framing of the captures (D12)
+
+        /// <summary>Share of the height of the image the subject of a capture takes: 40 to 60 %, 50 % by default.</summary>
+        public const float FrameFraction = 0.5f, FrameFractionMin = 0.4f, FrameFractionMax = 0.6f;
+
+        /// <summary>Vertical field of view of the game camera (degrees); 65 when there is no camera yet.</summary>
+        public static float VerticalFov()
+        {
+            Camera cam = Utils.GetMainCamera();
+            return cam != null && cam.fieldOfView > 10f ? cam.fieldOfView : 65f;
+        }
+
+        private static float Aspect()
+        {
+            Camera cam = Utils.GetMainCamera();
+            return cam != null && cam.aspect > 0.5f ? cam.aspect : 16f / 9f;
+        }
+
+        /// <summary>
+        /// Distance from the camera to the centre of a roundish subject (a group of worms, a nest) of bounding radius <paramref name="radius"/> for which its diameter takes
+        /// <paramref name="fraction"/> of the height of the image: the silhouette of a sphere of radius R at distance d spans tan(asin(R / d)) / tan(fov / 2) of the half height.
+        /// </summary>
+        public static float FitSphere(float radius, float fraction = FrameFraction)
+        {
+            float tanHalf = Mathf.Tan(VerticalFov() * 0.5f * Mathf.Deg2Rad);
+            float half = Mathf.Atan(Mathf.Clamp(fraction, 0.1f, 0.95f) * tanHalf);
+            return Mathf.Max(radius / Mathf.Sin(half), radius * 1.05f);
+        }
+
+        /// <summary>
+        /// The same for a flat subject (a mass on the ground, a row of worms, a player wrapped by a mass) of footprint radius <paramref name="radius"/> and height <paramref name="height"/>,
+        /// seen from <paramref name="elevationDeg"/> above the horizon: what the image shows is the height foreshortened plus the footprint foreshortened, 2 r sin(e) + h cos(e),
+        /// which takes <paramref name="fraction"/> of its height. Never closer than what keeps the footprint within 90 % of the width of the image.
+        /// </summary>
+        public static float FitFlat(float radius, float height, float elevationDeg, float fraction = FrameFraction)
+        {
+            float tanHalf = Mathf.Tan(VerticalFov() * 0.5f * Mathf.Deg2Rad);
+            float e = elevationDeg * Mathf.Deg2Rad;
+            float shown = 2f * radius * Mathf.Sin(e) + height * Mathf.Cos(e);
+            float byHeight = shown / (2f * Mathf.Clamp(fraction, 0.1f, 0.95f) * tanHalf);
+            float byWidth = radius / (0.9f * tanHalf * Aspect());
+            return Mathf.Max(Mathf.Max(byHeight, byWidth), radius * 1.05f);
+        }
+
+        /// <summary>Splits a camera distance into the horizontal distance and the height above the subject centre for an elevation angle.</summary>
+        public static void Orbit(float distance, float elevationDeg, out float horizontal, out float height)
+        {
+            float e = elevationDeg * Mathf.Deg2Rad;
+            horizontal = distance * Mathf.Cos(e);
+            height = distance * Mathf.Sin(e);
+        }
+
         // ---------------------------------------------------------------- waiting
 
         /// <summary>Waits real seconds (unaffected by time scale or pause).</summary>
@@ -329,6 +395,18 @@ namespace MistWorms.Dev.Scenarios
                 yield return null;
                 waited += Time.deltaTime;
             }
+        }
+
+        /// <summary>
+        /// Waits <paramref name="steps"/> simulation steps of the GPU colony (<see cref="GpuWormHost.StepIndex"/>, 1/60 s each, whatever the frame rate), not seconds or frames: what a
+        /// scenario expects of the simulation (settled, formed, arrived) is a number of steps. Gives up after <paramref name="timeoutSeconds"/> real seconds (logged; the step counter does
+        /// not advance while the host is off or the game is paused).
+        /// </summary>
+        public IEnumerator WaitSteps(int steps, float timeoutSeconds = 60f)
+        {
+            uint start = GpuWormHost.StepIndex;
+            yield return WaitUntil(() => GpuWormHost.StepIndex - start >= (uint)steps, timeoutSeconds);
+            if (LastWaitTimedOut) Log($"WaitSteps({steps}): only {GpuWormHost.StepIndex - start} steps in {timeoutSeconds:0} s");
         }
 
         public IEnumerator WaitFrames(int frames)

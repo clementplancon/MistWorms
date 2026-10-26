@@ -20,8 +20,10 @@ namespace MistWorms.Dev.Scenarios
     internal sealed class V08_BloodHit : IDevScenario
     {
         private const float SpawnDistance = 1.2f;
-        private const float CameraDistance = 1.0f;      // horizontal, beside the worm (as in V07)
-        private const float CameraHeight = 0.6f;
+        // Camera beside the worm, from its radius and the field of view (D12): the worm (0.3 m) and the burst around it take 50 % of the height of the image, dive of 30 degrees.
+        private const float SubjectRadius = 0.35f;
+        private static float CameraDistance { get { ScenarioContext.Orbit(ScenarioContext.FitSphere(SubjectRadius), 30f, out float h, out _); return h; } }
+        private static float CameraHeight { get { ScenarioContext.Orbit(ScenarioContext.FitSphere(SubjectRadius), 30f, out _, out float u); return u; } }
         private const float RaiseStep = 0.1f;
         private const int MaxRaises = 25;
         private const float FlatTolerance = 0.15f;      // open ground only: height spread allowed at 1.5 m and 3 m around the spot

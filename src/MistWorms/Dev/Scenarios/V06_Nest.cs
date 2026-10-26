@@ -12,7 +12,7 @@ namespace MistWorms.Dev.Scenarios
 {
     /// <summary>
     /// V06 (spec §15.5, §12.4, phase 7-1): the nest as a world object, in the infested mine (parameter where=open for the open ground). A nest is placed in
-    /// front of the player and captured from 1 m and from 3 m; then it takes a lethal hit and the destruction is captured at +0.05, +0.2 and +0.5 s. Assertions:
+    /// front of the player and captured close and wide (60 % then 40 % of the height of the image); then it takes a lethal hit and the destruction is captured at +0.05, +0.2 and +0.5 s. Assertions:
     /// the renderer draws the mound, the destruction effect is a local copy with no ZNetView and a sound, the nest and its ZDO are gone, the worms are
     /// released and nothing is dropped. The look of the captures is judged by eye.
     /// </summary>
@@ -125,13 +125,15 @@ namespace MistWorms.Dev.Scenarios
                 if (!ctx.Assert("nest_placed", nest != null, true, nest != null ? $"nest {nest.Index} in {how} colony" : "failed")) yield break;
                 yield return ctx.WaitFrames(5);
 
-                // ---- from 1 m and from 3 m
+                // ---- close and wide: the nest (a mound of about 0.7 m radius) at 60 % then 40 % of the height of the image, the camera computed from its radius and the field of view (D12)
                 Vector3 look = spot + Vector3.up * 0.25f;
                 int worldMask = LayerMask.GetMask("terrain", "static_solid", "Default", "Default_small", "piece");
-                yield return Frame(ctx, "1m", spot + toCamera * 1f + Vector3.up * 0.45f, look);
-                yield return Frame(ctx, "3m", spot + toCamera * 3f + Vector3.up * 0.9f, look);
-                // The line to the nest, from where the 3 m camera really is. The nest itself does not count, nor does the flat stuff lying on the floor (a dvergr slime puddle).
-                Vector3 cam3 = spot + toCamera * 3f + Vector3.up * 0.9f;
+                NestPose(true, out float closeH, out float closeUp);
+                NestPose(false, out float wideH, out float wideUp);
+                yield return Frame(ctx, "close", spot + toCamera * closeH + Vector3.up * closeUp, look);
+                yield return Frame(ctx, "wide", spot + toCamera * wideH + Vector3.up * wideUp, look);
+                // The line to the nest, from where the wide camera really is. The nest itself does not count, nor does the flat stuff lying on the floor (a dvergr slime puddle).
+                Vector3 cam3 = spot + toCamera * wideH + Vector3.up * wideUp;
                 RaycastHit[] hits = Physics.RaycastAll(cam3, look - cam3, (look - cam3).magnitude, worldMask, QueryTriggerInteraction.Ignore);
                 string blocker = null;
                 foreach (RaycastHit h in hits)
@@ -143,7 +145,7 @@ namespace MistWorms.Dev.Scenarios
                 }
                 ctx.Assert("camera_has_a_clear_line", blocker == null, "clear", blocker ?? "clear");
 
-                // ---- destruction, from 3 m
+                // ---- destruction, from the wide camera
                 Vector3 where3 = nest.transform.position;
                 int itemsBefore = ItemsNear(where3);
                 int released = colony.WormsReleased;
@@ -194,8 +196,8 @@ namespace MistWorms.Dev.Scenarios
         }
 
         /// <summary>
-        /// A flat floor about 3.5 m from the player in the direction nearest to the player's facing, clear of walls and with a free camera on one side at 1 m
-        /// (45 cm up) and at 3 m (90 cm up). <paramref name="toCamera"/> is the horizontal direction from the nest to the cameras.
+        /// A flat floor about 3.5 m from the player in the direction nearest to the player's facing, clear of walls and with a free camera on one side at the close distance
+        /// and at the wide one (see NestPose). <paramref name="toCamera"/> is the horizontal direction from the nest to the cameras.
         /// </summary>
         private static bool ChooseSpot(Vector3 origin, Vector3 forward, out Vector3 spot, out Vector3 toCamera)
         {
@@ -204,6 +206,8 @@ namespace MistWorms.Dev.Scenarios
             face = face.sqrMagnitude > 1e-4f ? face.normalized : Vector3.forward;
             int mask = LayerMask.GetMask("terrain", "static_solid", "Default", "Default_small", "piece");
             int noFloor = 0, steep = 0, crowded = 0, camBlocked = 0, camNoView = 0;
+            NestPose(true, out float nearH, out float nearUp);
+            NestPose(false, out float farH, out float farUp);
 
             for (int k = 0; k < Directions; k++)
             {
@@ -218,8 +222,8 @@ namespace MistWorms.Dev.Scenarios
                 for (int side = 0; side < 8; side++)
                 {
                     Vector3 away = Quaternion.Euler(0f, side * 45f, 0f) * -dir;
-                    Vector3 near = floor.point + away * 1f + Vector3.up * 0.45f;
-                    Vector3 far = floor.point + away * 3f + Vector3.up * 0.9f;
+                    Vector3 near = floor.point + away * nearH + Vector3.up * nearUp;
+                    Vector3 far = floor.point + away * farH + Vector3.up * farUp;
                     if (Physics.CheckSphere(near, 0.15f, mask, QueryTriggerInteraction.Ignore) || Physics.CheckSphere(far, 0.3f, mask, QueryTriggerInteraction.Ignore)) { camBlocked++; continue; }
                     if (Physics.Linecast(near, look, mask, QueryTriggerInteraction.Ignore) || Physics.Linecast(far, look, mask, QueryTriggerInteraction.Ignore)) { camNoView++; continue; }
                     spot = floor.point;
@@ -234,6 +238,15 @@ namespace MistWorms.Dev.Scenarios
         }
 
         private static string LastRejects = "";
+
+        private const float NestRadius = 0.7f;      // the mound (the clear sphere of ChooseSpot is 0.7 m)
+
+        /// <summary>Horizontal distance and height over the nest of the close camera (the nest takes 60 % of the height of the image, dive of 30 degrees) and of the wide one (40 %, dive of 35 degrees).</summary>
+        private static void NestPose(bool close, out float horizontal, out float height)
+        {
+            float elevation = close ? 30f : 35f;
+            ScenarioContext.Orbit(ScenarioContext.FitSphere(NestRadius, close ? 0.6f : 0.4f), elevation, out horizontal, out height);
+        }
 
         /// <summary>A floor point in one of the loaded rooms of the mine, closest to the player first, from which <see cref="ChooseSpot"/> succeeds (a grid of 2 m over each room).</summary>
         private static IEnumerator FindRoomSpot(ScenarioContext ctx, Player player, Action<bool, Vector3> done)

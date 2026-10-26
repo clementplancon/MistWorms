@@ -239,6 +239,31 @@ namespace MistWorms.Render.Gpu
         /// <summary>True when the last selection came from the cache.</summary>
         public bool LastFromCache { get; private set; }
 
+#if MW_DEV
+        /// <summary>Dev (V14): empties the caches of the meshes and of the sets, so that the next selection reads the meshes and chooses the anchors again (the first engulf of a mesh).</summary>
+        internal static void DevClearCaches() { s_meshData.Clear(); s_sets.Clear(); }
+
+        /// <summary>
+        /// Dev (V14): forgets the selection of this sampler (not the caches): the next call selects again, from the cache when the set is in it. A job still running is dropped
+        /// (its identifier is stale). The spike counters are reset.
+        /// </summary>
+        internal void DevForget()
+        {
+            _set = null;
+            _root = null;
+            _signature = 0;
+            _uploadedTo = null;
+            _pendingTask = null;
+            _pendingJob = null;
+            _selectId++;
+            _usedCount = 0;
+            ResetSpike();
+        }
+
+        /// <summary>Dev (V14): true while the worker still chooses the anchors.</summary>
+        internal bool DevSelectionPending => _pendingTask != null;
+#endif
+
         private static MeshData DataOf(Mesh mesh)
         {
             int id = mesh.GetInstanceID();

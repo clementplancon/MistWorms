@@ -18,13 +18,32 @@ namespace MistWorms.Dev.Scenarios
     /// submission included), no managed allocation in steady state, no node under the ground the simulation used, no node inside the obstacle, parity within a millimetre,
     /// and the wrapped capsule covered over at least 60 % of its height times the engulf parameter. The visual judgement is made on the captures.
     /// Run it with tools/build.ps1 -Configuration Profile. Parameters: frames (scale of the measured windows, default 1), engulf (target fraction, default 1).
+    ///
+    /// Reproducibility (D-V14, no threshold was relaxed to get it). Three runs of the same code failed on three different assertions, each at a limit value; what varied from run to run was
+    /// the setting, not the code. So: (1) one fixed site: the last good site of the session is forgotten and the search starts from the start temple of the world, the player facing a
+    /// fixed way, and the compare and rock sites are searched again from that same site; (2) the block of the low obstacle is turned toward the approach and the mass is walked exactly
+    /// to its middle; (3) every wait of the simulation is a number of steps (<see cref="GpuWormHost.StepIndex"/>, 1/60 s each) and not seconds or frames; (4) the measures that one window
+    /// leaves noisy (volume of the mass at rest, nodes on the flanks of an obstacle, first selection of the anchors) are the median of several windows, the safety checks (no node under the
+    /// ground or inside an obstacle) the worst of them; (5) the first selection of the anchors is measured after a warm-up pass: the very first pass of a session pays the JIT of the
+    /// selection code and the first dispatch of the skinning kernel, which is neither the cost of an engulf nor what the 4 ms budget is about (the budget is the main thread cost of reading
+    /// the meshes of a target seen for the first time and of taking the result); the warm-up pass is logged, not judged. Captures are framed on the subject (40 to 60 % of the height of the
+    /// image, <see cref="ScenarioContext.FitFlat"/>), not from fixed distances.
     /// </summary>
     internal sealed class V14_GpuMassSandbox : IDevScenario
     {
         private static readonly int[] Counts = { 50, 200 };
+        // legacy captures (V12, V15 still call Shots with a distance list): 1, 3 and 10 m
         private static readonly float[] Distances = { 1f, 3f, 10f };
         private static readonly float[] Heights = { 0.35f, 0.9f, 2.4f };
-        private const int Warm = 120, Window = 300;
+        // framed captures: close (60 % of the height of the image, low), fit (50 %) and wide (40 %, high)
+        private static readonly float[] ShotFractions = { 0.6f, 0.5f, 0.4f };
+        private static readonly float[] ShotElevations = { 12f, 25f, 40f };
+        private static readonly string[] ShotNames = { "close", "fit", "wide" };
+        private const int Warm = 120;                      // simulation steps (2 s of the colony): what a mass needs to settle after it is created or stopped
+        private const int Window = 300;                    // frames, for the main thread cost (a cost per frame is measured in frames)
+        private const int RestSettleSteps = 240;           // a mass at rest: 4 s of simulation before the first look
+        private const int Windows = 5, WindowGapSteps = 30;   // median of 5 snapshots, half a second of simulation apart
+        private const int SpikeRuns = 3;                   // measured passes of the first selection (after one warm-up pass)
         private static readonly uint[] FormationMarks = { 60, 90, 120, 150, 180, 210 };      // steps (1 s to 3.5 s) at which the sleeve is read back
         private const float FormedLimit = 3.5f;            // seconds: 80 % of the steady state in game (2.5 s in the editor check, SimCheck)
         private const double BudgetMs = 0.25;
@@ -67,9 +86,14 @@ namespace MistWorms.Dev.Scenarios
                 Player player = Player.m_localPlayer;
                 player.SetGodMode(true);
                 yield return ctx.WaitFrames(3);
-                // flat, open ground, more than 1 m above the water, nothing but terrain within 25 m
+                // flat, open ground, more than 1 m above the water, nothing but terrain within 25 m. The same site on every run: the last good site of the session is forgotten and the
+                // search starts from the start temple, the player facing north (the heading of every mass and of the approach to the obstacles comes from it)
+                DevWorld.ResetLastGoodSite();
+                yield return GoToFixedOrigin(ctx);
                 yield return ctx.MoveToOpenGround(25f, p => !NearBuilt(p, BuiltClearance) && !NearWater(p, WaterClearance));
                 if (!ctx.LastOpenGround.Found) yield break;
+                Vector3 fixedSite = ctx.LastOpenGround.Spot;
+                ctx.Log($"fixed site {fixedSite.ToString("0.0")} (search from the start temple, level within {ctx.LastOpenGround.Deviation:0.00} m)");
                 player = Player.m_localPlayer;
                 player.SetGodMode(true);
                 ctx.Console($"{VanillaNames.CmdTimeOfDay} 0.5");
@@ -90,19 +114,26 @@ namespace MistWorms.Dev.Scenarios
 
                 Vector3 fwd = player.transform.forward; fwd.y = 0f; fwd = fwd.sqrMagnitude > 1e-4f ? fwd.normalized : Vector3.forward;
                 Vector3 side = Vector3.Cross(Vector3.up, fwd);
+                ctx.Log($"heading {fwd.ToString("0.00")}");
+
+                // ---------------------------------------------------------------- first selection of the anchors, median of SpikeRuns passes after a warm-up pass
+                yield return SelectionSpike(ctx);
+                player = Player.m_localPlayer;
+                if (player == null) yield break;
 
                 foreach (int n in Counts)
                 {
                     string tag = "n" + n;
                     float r = GpuMassDev.RadiusOf(n);
+                    float domeH = 0.45f * r;
 
                     // ---------------------------------------------------------------- at rest
                     S18_GroupCoherence.ClearCreatures(ctx, player);
                     ctx.Console($"mw_gpumass {n} still");
                     ctx.Assert($"{tag}_rest_spawned", GpuMassDev.Mass != null, "a phantom mass", GpuMassDev.Mass != null);
                     if (GpuMassDev.Mass == null) yield break;
-                    yield return ctx.WaitFrames(Warm + 60);
-                    yield return Shots(ctx, $"{tag}_rest", () => GpuMassDev.Mass.Center, side, fwd, 0.3f * r);
+                    yield return ctx.WaitSteps(RestSettleSteps);
+                    yield return FramedShots(ctx, $"{tag}_rest", () => GpuMassDev.Mass.Center, side, fwd, 0.3f * r, r, domeH);
                     yield return Measure(ctx, $"{tag}_rest", window);
                     yield return CheckGround(ctx, $"{tag}_rest");
                     yield return CheckVolume(ctx, $"{tag}_rest", r);
@@ -110,9 +141,12 @@ namespace MistWorms.Dev.Scenarios
                     // ---------------------------------------------------------------- walking 6 m (the clip films the walk, the camera follows the mass)
                     ctx.Console($"mw_gpumass {n} walk {WalkDistance.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}");
                     GpuWormHost.ResetStats();
-                    Vector3 walkSide = ClearSide(new[] { GpuMassDev.Mass.Center, GpuMassDev.WalkTarget }, side, 3f, 1.2f, null, ctx);
-                    DevCamera.Free(GpuMassDev.Mass.Center + walkSide * 3f + Vector3.up * 1.2f, GpuMassDev.Mass.Center);
-                    DevCamera.Provider = new FollowCam(() => GpuMassDev.Mass != null ? GpuMassDev.Mass.Center : Vector3.zero, walkSide, 3f, 1.2f, 0.25f).Pose;
+                    // the camera follows the mass framed on it (the radius of the subject is the mass, the walk is 6 m: the mass stays the subject)
+                    float walkD = ScenarioContext.FitFlat(r, domeH, 20f);
+                    ScenarioContext.Orbit(walkD, 20f, out float walkH, out float walkUp);
+                    Vector3 walkSide = ClearSide(new[] { GpuMassDev.Mass.Center, GpuMassDev.WalkTarget }, side, walkH, walkUp, null, ctx);
+                    DevCamera.Free(GpuMassDev.Mass.Center + walkSide * walkH + Vector3.up * walkUp, GpuMassDev.Mass.Center);
+                    DevCamera.Provider = new FollowCam(() => GpuMassDev.Mass != null ? GpuMassDev.Mass.Center : Vector3.zero, walkSide, walkH, walkUp, 0.25f).Pose;
                     if (n == 50 || n == 200) yield return ctx.Clip($"walk_{tag}", 5f);
                     yield return ctx.WaitUntil(() => GpuMassDev.Arrived, 30f);
                     ctx.Assert($"{tag}_walk_arrived", GpuMassDev.Arrived, "arrived within 30 s", GpuMassDev.Arrived ? "yes" : "no");
@@ -120,15 +154,16 @@ namespace MistWorms.Dev.Scenarios
                     ctx.Log($"{tag} walking: main thread {walkMs:0.0000} ms/frame mean over {GpuWormHost.Frames} frames, max {GpuWormHost.MaxMs:0.000}; sub-steps last frame {GpuWormHost.LastSubSteps}");
                     ctx.Assert($"{tag}_walk_main_thread_budget", walkMs <= BudgetMs, $"<= {BudgetMs} ms/frame (mean)", walkMs.ToString("0.0000"));
                     DevCamera.Provider = null;
-                    yield return ctx.WaitFrames(Warm);
-                    yield return Shots(ctx, $"{tag}_walk", () => GpuMassDev.Mass.Center, side, fwd, 0.3f * r);
+                    yield return ctx.WaitSteps(Warm);
+                    yield return FramedShots(ctx, $"{tag}_walk", () => GpuMassDev.Mass.Center, side, fwd, 0.3f * r, r, domeH);
                     yield return CheckGround(ctx, $"{tag}_walk");
 
                     // ---------------------------------------------------------------- wrapping the player
                     DevCamera.Follow();
                     S18_GroupCoherence.ClearCreatures(ctx, player);
                     GpuMassDev.EngulfTarget = engulf;
-                    if (GpuMassDev.Env != null) GpuMassDev.Env.Skin.ResetSpike();
+                    // the selection of the anchors starts again at every engulf, from the cache the warm-up filled: its spike is the one of an engulf of a target already known
+                    if (GpuMassDev.Env != null) GpuMassDev.Env.DevForgetSkins();
                     ctx.Console($"mw_gpumass {n} engulfplayer");
                     ctx.Assert($"{tag}_engulf_spawned", GpuMassDev.Mass != null && GpuMassDev.Target != null, "a phantom mass and the player capsule", GpuMassDev.Mass != null);
                     if (GpuMassDev.Mass == null || GpuMassDev.Target == null) yield break;
@@ -161,19 +196,24 @@ namespace MistWorms.Dev.Scenarios
                         ctx.Assert($"{tag}_anchors_centred_on_the_player", offCentre <= 0.15f, "centre of the anchors within 15 cm of the centre of the capsule", $"{offCentre * 100f:0} cm");
                     }
                     ctx.Assert($"{tag}_skin_area", GpuMassDev.Env.Skin.MeshArea >= 1f && GpuMassDev.Mass.SurfaceArea >= 1f, "baked mesh area and surface the anchors stand for >= 1 m2", $"{GpuMassDev.Env.Skin.MeshArea:0.00} m2 / {GpuMassDev.Mass.SurfaceArea:0.00} m2");
+                    // the subject of the captures of an engulf is the player and the sleeve of worms on him: a body of 1.8 m with the pile of the mass at its feet
+                    float bodyR = Mathf.Max(r, 0.35f);
+                    float bodyH = Mathf.Max(GpuMassDev.Target.bounds.size.y, 1.2f);
                     if (n == 200)
                     {
                         // the clip starts with the mass: it films the rise around the player
-                        Vector3 engulfSide = ClearSide(new[] { GpuMassDev.Target.bounds.center }, side, 2.6f, 0.4f, null, ctx);
-                        DevCamera.Free(GpuMassDev.Target.bounds.center + engulfSide * 2.6f + Vector3.up * 0.4f, GpuMassDev.Target.bounds.center);
-                        DevCamera.Provider = new FollowCam(() => GpuMassDev.Target != null ? GpuMassDev.Target.bounds.center : Vector3.zero, engulfSide, 2.6f, 0.4f, 0f).Pose;
+                        float engulfD = ScenarioContext.FitFlat(bodyR, bodyH, 10f);
+                        ScenarioContext.Orbit(engulfD, 10f, out float engulfH, out float engulfUp);
+                        Vector3 engulfSide = ClearSide(new[] { GpuMassDev.Target.bounds.center }, side, engulfH, engulfUp, null, ctx);
+                        DevCamera.Free(GpuMassDev.Target.bounds.center + engulfSide * engulfH + Vector3.up * engulfUp, GpuMassDev.Target.bounds.center);
+                        DevCamera.Provider = new FollowCam(() => GpuMassDev.Target != null ? GpuMassDev.Target.bounds.center : Vector3.zero, engulfSide, engulfH, engulfUp, 0f).Pose;
                         yield return ctx.Clip($"engulf_{tag}", 5f);
                         DevCamera.Provider = null;
-                        yield return ctx.WaitFrames((int)(3f * 60f));
+                        yield return ctx.WaitSteps(3 * 60);
                     }
-                    else yield return ctx.WaitFrames((int)((GpuMassDev.EngulfRamp + 4f) * 60f));
-                    yield return Shots(ctx, $"{tag}_engulf", () => GpuMassDev.Target.bounds.center, side, fwd, 0f);
-                    // the cost is measured with the camera at 1.5 m: LOD0 and the shadows are what is paid for
+                    else yield return ctx.WaitSteps((int)((GpuMassDev.EngulfRamp + 4f) * 60f));
+                    yield return FramedShots(ctx, $"{tag}_engulf", () => GpuMassDev.Target.bounds.center, side, fwd, 0f, bodyR, bodyH);
+                    // the cost is measured with the camera at 1.5 m (not a capture: a fixed distance, LOD0 and the shadows are what is paid for)
                     {
                         Vector3 cc = GpuMassDev.Target.bounds.center;
                         DevCamera.Free(cc + ClearSide(new[] { cc }, side, 1.5f, 0.5f, null, ctx) * 1.5f + Vector3.up * 0.5f, cc);
@@ -191,9 +231,10 @@ namespace MistWorms.Dev.Scenarios
                         {
                             GpuSkinSampler sk = GpuMassDev.Env.Skin;
                             ctx.Log($"{tag} selection of the anchors: {(sk.LastFromCache ? "from the cache" : "chosen on a worker thread")}; {sk.SpikeBreakdown}; meshes cached {GpuSkinSampler.CachedMeshes}, sets cached {GpuSkinSampler.CachedSets}");
-                            // two distinct budgets: the first engulf of a mesh (meshes read, anchors chosen on the worker, result taken) 4 ms, an engulf with the anchors in the cache 2 ms
-                            if (sk.LastFromCache) ctx.Assert($"{tag}_skin_selection_cached_spike", sk.SpikeCachedMs <= 2.0, "<= 2 ms at the start of an engulf whose anchors are in the cache", $"{sk.SpikeCachedMs:0.00} ms");
-                            else ctx.Assert($"{tag}_skin_selection_first_spike", sk.SpikeUncachedMs <= 4.0, "<= 4 ms at the first engulf of a mesh", $"{sk.SpikeUncachedMs:0.00} ms");
+                            // two distinct budgets: the first engulf of a mesh (meshes read, anchors chosen on the worker, result taken) 4 ms, judged once, on the median of the passes of SelectionSpike
+                            // (the thresholds are the same as before); an engulf with the anchors in the cache 2 ms, judged here at every engulf (the warm-up filled the cache, the sampler was made to forget)
+                            ctx.Assert($"{tag}_skin_selection_from_the_cache", sk.LastFromCache, "the selection of an engulf after the warm-up comes from the cache", sk.LastFromCache ? "from the cache" : "chosen again");
+                            ctx.Assert($"{tag}_skin_selection_cached_spike", sk.SpikeCachedMs <= 2.0, "<= 2 ms at the start of an engulf whose anchors are in the cache", $"{sk.SpikeCachedMs:0.00} ms");
                         }
                     }
                     double engulfMs = GpuWormHost.AvgMs;
@@ -217,7 +258,7 @@ namespace MistWorms.Dev.Scenarios
                     // The player stops and the sleeve settles for 2 s before the final readback: a worm within 4 cm of a leg that walks is a matter of the phase of the stride and of the speed the
                     // ground allows (r7 71 %, r8 52 % of the n50 sleeve on two sites, 81 % earlier; the left leg alone held 101 of 246 worms in one and 59 of 242 in the other).
                     DevInput.Release();
-                    yield return ctx.WaitGame(2f);
+                    yield return ctx.WaitSteps(Warm);
                     GpuMassDev.NodeSnapshot nodes = GpuMassDev.RequestNodes(GpuMassDev.Mass);
                     yield return ctx.WaitUntil(() => nodes.Done, 10f);
                     ctx.Assert($"{tag}_readback_ok", nodes.Done && !nodes.Error, "nodes read back", nodes.Done ? (nodes.Error ? "error" : "ok") : "timed out");
@@ -278,8 +319,9 @@ namespace MistWorms.Dev.Scenarios
                 // ---------------------------------------------------------------- GPU worms next to a flipbook worm, same light, same frame (white balance of the rope shader)
                 // The player has walked while wrapped (and may stand on a slope, in the water or against a tree): back to open ground first, then the first free direction.
                 DevCamera.Follow();
-                yield return ctx.MoveToOpenGround(25f, p => !NearBuilt(p, BuiltClearance) && !NearWater(p, WaterClearance));
-                ctx.Log("compare site: " + (ctx.LastOpenGround.Found ? ctx.LastOpenGround.Spot.ToString() : "no open ground (" + ctx.LastOpenGround.Error + "), the player stays where he is"));
+                // back to the fixed site (the player has walked while wrapped: where he stands is not the same on every run)
+                yield return ReturnToSite(ctx, fixedSite);
+                ctx.Log("compare site: the fixed site " + fixedSite.ToString("0.0"));
                 player = Player.m_localPlayer;
                 if (player == null) yield break;
                 player.SetGodMode(true);
@@ -310,16 +352,21 @@ namespace MistWorms.Dev.Scenarios
                         frozen = true;
                         Vector3 flipPos = colony.Store.pos[slot];
                         GpuMassDev.Spawn(1, GpuMassDev.GhostMode.Still, 0f, out string how, new Vector3(mid.x + side.x * 0.35f, flipPos.y, mid.z + side.z * 0.35f));
-                        yield return ctx.WaitFrames(Warm * 2);
+                        yield return ctx.WaitSteps(Warm * 2);
                         Vector3 target = flipPos + side * 0.35f + Vector3.up * 0.02f;
-                        // the camera looks across the pair, from the side the line of the pair is seen at 90 degrees; another angle when something is in the way
-                        Vector3 across = ClearSide(new[] { target }, -fwd, 0.9f, 0.35f, null, ctx);
-                        DevCamera.Free(target + across * 0.9f + Vector3.up * 0.35f, target);
+                        // the camera looks across the pair, from the side the line of the pair is seen at 90 degrees; another angle when something is in the way.
+                        // The pair is 0.7 m wide and low: framed at 50 % then 60 % of the height of the image (a worm is 0.3 m long)
+                        float pairD = ScenarioContext.FitFlat(0.5f, 0.1f, 25f, 0.5f);
+                        ScenarioContext.Orbit(pairD, 25f, out float pairH, out float pairUp);
+                        Vector3 across = ClearSide(new[] { target }, -fwd, pairH, pairUp, null, ctx);
+                        DevCamera.Free(target + across * pairH + Vector3.up * pairUp, target);
                         yield return ctx.WaitFrames(20);
-                        yield return ctx.Shot("compare_flipbook_left_gpu_right_1m");
-                        DevCamera.Free(target + across * 0.3f + Vector3.up * 0.15f, target);
+                        yield return ctx.Shot("compare_flipbook_left_gpu_right_fit");
+                        float pairD2 = ScenarioContext.FitFlat(0.5f, 0.1f, 15f, 0.6f);
+                        ScenarioContext.Orbit(pairD2, 15f, out float pairH2, out float pairUp2);
+                        DevCamera.Free(target + across * pairH2 + Vector3.up * pairUp2, target);
                         yield return ctx.WaitFrames(20);
-                        yield return ctx.Shot("compare_flipbook_left_gpu_right_30cm");
+                        yield return ctx.Shot("compare_flipbook_left_gpu_right_close");
                         ctx.Console("mw_freeze off");
                         frozen = false;
                         ctx.Console("mw_kill");
@@ -329,6 +376,9 @@ namespace MistWorms.Dev.Scenarios
                 DevCamera.Follow();
                 bool onRockSite = false;
                 var rockSite = new OpenGroundResult();
+                // the rock site is searched from the fixed site, with nothing remembered: the same rock on every run
+                yield return ReturnToSite(ctx, fixedSite);
+                DevWorld.ResetLastGoodSite();
                 yield return DevWorld.MoveToOpenGround(3f, p => !NearBuilt(p, BuiltClearance) && !NearWater(p, WaterClearance) && FindRock(p, 6f, 16f) != null, rockSite, ctx.Log);
                 ctx.Assert("rock_site_found", rockSite.Found, "flat ground with a vanilla rock 6 to 16 m away", rockSite.Found ? rockSite.Spot.ToString() : rockSite.Error);
                 onRockSite = rockSite.Found;
@@ -343,9 +393,10 @@ namespace MistWorms.Dev.Scenarios
                     string tag = "n" + n;
                     float r = GpuMassDev.RadiusOf(n);
 
-                    // a low obstacle: a flat block lower than 0.6 x the height of the dome of the mass, which the mass covers
+                    // a low obstacle: a flat block lower than 0.6 x the height of the dome of the mass, which the mass covers. The block is turned toward the approach (its 1.6 m face
+                    // across the way of the mass, its 1 m depth along it), so that the crossing does not depend on how a block aligned on the axes of the world meets the heading
                     float lowH = 0.5f * 0.45f * r;
-                    placed = PlaceBlock(player.transform.position + fwd * 7f, new Vector3(1.6f, lowH, 1.0f), "MW_V14_Low");
+                    placed = PlaceBlock(player.transform.position + fwd * 7f, new Vector3(1.6f, lowH, 1.0f), "MW_V14_Low", Quaternion.LookRotation(fwd, Vector3.up));
                     yield return CrossObstacle(ctx, player, fwd, tag + "_low", n, placed.GetComponent<Collider>(), lowH, false, n == 200);
                     DestroyPlaced(placed);
                     placed = null;
@@ -357,7 +408,7 @@ namespace MistWorms.Dev.Scenarios
                     string kind = rock != null ? "vanilla rock " + rock.transform.root.name : null;
                     if (rock == null)
                     {
-                        placed = PlaceBlock(player.transform.position + fwd * 8f, new Vector3(1.6f, 1.5f, 1.0f), "MW_V14_High");
+                        placed = PlaceBlock(player.transform.position + fwd * 8f, new Vector3(1.6f, 1.5f, 1.0f), "MW_V14_High", Quaternion.LookRotation(fwd, Vector3.up));
                         rock = placed.GetComponent<Collider>();
                         kind = "solid block 1.6 x 1.5 x 1 m";
                     }
@@ -457,6 +508,101 @@ namespace MistWorms.Dev.Scenarios
                 CheckLod(ctx, $"{name}_{Distances[k]:0}m");
                 yield return ctx.Shot($"{name}_{Distances[k]:0}m");
             }
+        }
+
+        /// <summary>
+        /// Three captures framed on the subject (a flat mass, a worm pair, a player wrapped by the sleeve): <c>close</c> (60 % of the height of the image, low), <c>fit</c> (50 %) and
+        /// <c>wide</c> (40 %, from higher up), each at the distance <see cref="ScenarioContext.FitFlat"/> gives for the footprint <paramref name="radius"/> and the height
+        /// <paramref name="height"/> of the subject and the field of view of the game camera. The line to the subject is checked against the scenery like <see cref="Shots"/> does.
+        /// </summary>
+        internal static IEnumerator FramedShots(ScenarioContext ctx, string name, Func<Vector3> look, Vector3 side, Vector3 fwd, float lift, float radius, float height, Collider ignore = null)
+        {
+            for (int k = 0; k < ShotNames.Length; k++)
+            {
+                float d = ScenarioContext.FitFlat(radius, height, ShotElevations[k], ShotFractions[k]);
+                ScenarioContext.Orbit(d, ShotElevations[k], out float horizontal, out float up);
+                Vector3 c = look();
+                Vector3 target = c + Vector3.up * lift;
+                Vector3 aim = c + Vector3.up * Mathf.Max(lift, 0.3f);
+                Vector3 away = (side - 0.25f * fwd).normalized;
+                Vector3 cam = target + away * horizontal + Vector3.up * up;
+                bool clear = false;
+                foreach (float angle in Angles)
+                {
+                    Vector3 candidate = target + Quaternion.AngleAxis(angle, Vector3.up) * away * horizontal + Vector3.up * up;
+                    if (Blocked(candidate, aim, ignore)) continue;
+                    cam = candidate;
+                    clear = true;
+                    break;
+                }
+                if (!clear) ctx.Log($"capture {name} {ShotNames[k]}: the view is blocked from every angle, shot taken anyway");
+                DevCamera.Free(cam, target);
+                yield return ctx.WaitFrames(20);
+                CheckLod(ctx, $"{name}_{ShotNames[k]}");
+                ctx.Log($"capture {name}_{ShotNames[k]}: subject r {radius:0.00} m x {height:0.00} m, camera {d:0.00} m away at {ShotElevations[k]:0} degrees, aimed for {ShotFractions[k] * 100f:0} % of the height of the image");
+                yield return ctx.Shot($"{name}_{ShotNames[k]}");
+            }
+        }
+
+        /// <summary>The same player teleport to the point every run starts from: the start temple of the world, facing north, high enough to land.</summary>
+        private static IEnumerator GoToFixedOrigin(ScenarioContext ctx)
+        {
+            Vector3 o = DevWorld.FixedSearchOrigin();
+            float h = WorldGenerator.instance != null ? WorldGenerator.instance.GetHeight(o.x, o.z) : o.y;
+            float water = ZoneSystem.instance != null ? ZoneSystem.instance.m_waterLevel : 0f;
+            var outcome = new TeleportOutcome();
+            yield return DevWorld.TeleportPlayer(new Vector3(o.x, Mathf.Max(h, water) + 2f, o.z), Quaternion.identity, true, 60f, outcome);
+            ctx.Log(outcome.Ok ? $"fixed origin of the site search: {o.x:0},{o.z:0}" : "the teleport to the fixed origin failed (" + outcome.Error + "): the search starts where the player is");
+        }
+
+        /// <summary>The player back on the fixed site (the heading of the player is kept: it is the one the site was found with).</summary>
+        private static IEnumerator ReturnToSite(ScenarioContext ctx, Vector3 site)
+        {
+            Player p = Player.m_localPlayer;
+            if (p == null) yield break;
+            var outcome = new TeleportOutcome();
+            yield return DevWorld.TeleportPlayer(site + Vector3.up * 0.1f, Quaternion.identity, Vector3.Distance(p.transform.position, site) > 64f, 60f, outcome);
+            if (!outcome.Ok) { ctx.Log("could not return to the fixed site: " + outcome.Error); yield break; }
+            yield return new WaitForSecondsRealtime(1f);          // physics and the player settle on the floor (as DevWorld.MoveToOpenGround does)
+            Player q = Player.m_localPlayer;
+            if (q != null) q.SetGodMode(true);
+            if (q != null) S18_GroupCoherence.ClearCreatures(ctx, q);
+        }
+
+        /// <summary>
+        /// The first selection of the anchors of a mesh, measured. Each pass wraps the player with a phantom mass of 10 units after the caches of the meshes and of the sets were emptied
+        /// and every sampler made to forget its selection: the main thread reads the meshes, starts the worker, then takes its result. Pass 0 is the warm-up: the first pass of a session also
+        /// pays the JIT of the selection code and the first dispatch of the skinning kernel (shader), which is not the cost of reading the meshes of a new target; it is logged and not judged.
+        /// The budget (4 ms, unchanged) is judged on the median of the <see cref="SpikeRuns"/> passes that follow. Leaves the caches filled (the engulfs after it select from the cache).
+        /// </summary>
+        private static IEnumerator SelectionSpike(ScenarioContext ctx)
+        {
+            var spikes = new List<float>();
+            string warm = "none";
+            for (int pass = 0; pass <= SpikeRuns; pass++)
+            {
+                if (!GpuMassDev.Spawn(10, GpuMassDev.GhostMode.EngulfPlayer, 0f, out string how))
+                {
+                    ctx.Assert("skin_selection_warm_pass_spawned", false, "a phantom mass wrapping the player", how);
+                    yield break;
+                }
+                GpuSkinSampler.DevClearCaches();
+                GpuMassDev.Env.DevForgetSkins();
+                yield return ctx.WaitUntil(() => GpuMassDev.Env.Skin.Selected && !GpuMassDev.Env.Skin.DevSelectionPending, 10f);
+                yield return ctx.WaitSteps(30);
+                GpuSkinSampler sk = GpuMassDev.Env.Skin;
+                string line = $"{sk.SpikeUncachedMs:0.00} ms ({(sk.LastFromCache ? "from the cache: not a first selection" : "first selection")}; {sk.SpikeBreakdown})";
+                if (pass == 0) { warm = line; ctx.Log("skin selection, warm-up pass (JIT and first dispatch included, not judged): " + line); }
+                else
+                {
+                    ctx.Log($"skin selection, pass {pass} of {SpikeRuns}: {line}");
+                    if (!sk.LastFromCache && sk.Selected) spikes.Add((float)sk.SpikeUncachedMs);
+                }
+                GpuMassDev.Clear();
+                yield return ctx.WaitSteps(10);
+            }
+            float median = spikes.Count > 0 ? Median(spikes) : float.MaxValue;
+            ctx.Assert("skin_selection_first_spike_median", spikes.Count == SpikeRuns && median <= 4.0, $"<= 4 ms at the first engulf of a mesh, median of {SpikeRuns} passes after a warm-up pass", spikes.Count == SpikeRuns ? $"{median:0.00} ms (passes {Join(spikes)}; warm-up {warm})" : $"only {spikes.Count} of {SpikeRuns} passes were first selections");
         }
 
         private static readonly float[] Angles = { 0f, 45f, -45f, 90f, -90f, 135f, -135f, 180f };
@@ -559,23 +705,35 @@ namespace MistWorms.Dev.Scenarios
         /// <summary>The mass at rest keeps its volume: a dome on the grid, not a carpet.</summary>
         private static IEnumerator CheckVolume(ScenarioContext ctx, string tag, float r)
         {
-            GpuMassDev.NodeSnapshot snap = GpuMassDev.RequestNodes(GpuMassDev.Mass);
-            yield return ctx.WaitUntil(() => snap.Done, 10f);
-            if (!snap.Done || snap.Error) { ctx.Assert($"{tag}_volume", false, "nodes read back", "failed"); yield break; }
-            var heights = new List<float>();
-            var radii = new List<float>();
-            Vector3 c = GpuMassDev.Mass.Center - snap.Origin;
-            foreach (Vector4 n in snap.Nodes)
+            // the median of Windows snapshots half a second of simulation apart: one snapshot of a mass still shifting gave an extent of 0.96 m (2.06 r) on one run and 0.41 m on the next
+            var tops = new List<float>();
+            var r90s = new List<float>();
+            var medians = new List<float>();
+            for (int w = 0; w < Windows; w++)
             {
-                heights.Add(n.y - snap.GroundAt(n) - WormSimConst.Radius);
-                radii.Add(new Vector2(n.x - c.x, n.z - c.z).magnitude);
+                if (w > 0) yield return ctx.WaitSteps(WindowGapSteps);
+                GpuMassDev.NodeSnapshot snap = GpuMassDev.RequestNodes(GpuMassDev.Mass);
+                yield return ctx.WaitUntil(() => snap.Done, 10f);
+                if (!snap.Done || snap.Error) continue;
+                var heights = new List<float>();
+                var radii = new List<float>();
+                Vector3 c = GpuMassDev.Mass.Center - snap.Origin;
+                foreach (Vector4 n in snap.Nodes)
+                {
+                    heights.Add(n.y - snap.GroundAt(n) - WormSimConst.Radius);
+                    radii.Add(new Vector2(n.x - c.x, n.z - c.z).magnitude);
+                }
+                heights.Sort();
+                radii.Sort();
+                tops.Add(heights[heights.Count - 1]);
+                medians.Add(heights[heights.Count / 2]);
+                r90s.Add(radii[(int)(radii.Count * 0.9f)]);
             }
-            heights.Sort();
-            radii.Sort();
-            float top = heights[heights.Count - 1], median = heights[heights.Count / 2], r90 = radii[(int)(radii.Count * 0.9f)];
-            ctx.Log($"{tag} volume: highest node {top:0.00} m ({top / r:0.00} r) above the ground, median {median:0.00} m, 90% of the nodes within {r90:0.00} m ({r90 / r:0.00} r)");
-            ctx.Assert($"{tag}_volume_height", top >= 0.30f * r, $">= {0.30f * r:0.00} m (0.30 r) above the ground", top.ToString("0.00"));
-            ctx.Assert($"{tag}_volume_extent", r90 <= 1.3f * r, $"90% of the nodes within {1.3f * r:0.00} m (1.3 r)", r90.ToString("0.00"));
+            if (tops.Count == 0) { ctx.Assert($"{tag}_volume", false, "nodes read back", "failed"); yield break; }
+            float top = Median(tops), median = Median(medians), r90 = Median(r90s);
+            ctx.Log($"{tag} volume, median of {tops.Count} snapshots: highest node {top:0.00} m ({top / r:0.00} r) above the ground (each {Join(tops)}), median node {median:0.00} m, 90% of the nodes within {r90:0.00} m ({r90 / r:0.00} r) (each {Join(r90s)})");
+            ctx.Assert($"{tag}_volume_height", top >= 0.30f * r, $">= {0.30f * r:0.00} m (0.30 r) above the ground, median of {tops.Count} snapshots", top.ToString("0.00"));
+            ctx.Assert($"{tag}_volume_extent", r90 <= 1.3f * r, $"90% of the nodes within {1.3f * r:0.00} m (1.3 r), median of {r90s.Count} snapshots", r90.ToString("0.00"));
         }
 
         internal static float HorizontalDistance(Vector3 a, Vector3 b) => new Vector2(a.x - b.x, a.z - b.z).magnitude;
@@ -628,12 +786,13 @@ namespace MistWorms.Dev.Scenarios
 
         /// <summary>A stone piece (or a plain solid block when the prefab is not there) of 2 x 1 x 0.6 m standing on the ground at <paramref name="pos"/>.</summary>
         /// <summary>A solid block of the given size standing on the ground at <paramref name="pos"/> (the low and the fallback high obstacle).</summary>
-        internal static GameObject PlaceBlock(Vector3 pos, Vector3 size, string name)
+        internal static GameObject PlaceBlock(Vector3 pos, Vector3 size, string name, Quaternion? rotation = null)
         {
             pos.y = GroundOf(pos, pos.y);
             GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
             cube.name = name;
             cube.transform.localScale = size;
+            cube.transform.rotation = rotation ?? Quaternion.identity;
             cube.transform.position = pos + Vector3.up * (size.y * 0.5f);
             int layer = LayerMask.NameToLayer(VanillaNames.LayerStaticSolid);
             if (layer >= 0) cube.layer = layer;
@@ -652,23 +811,30 @@ namespace MistWorms.Dev.Scenarios
             Bounds b = obst.bounds;
             Vector3 toPlayer = player.transform.position - b.center; toPlayer.y = 0f;
             toPlayer = toPlayer.sqrMagnitude > 1e-3f ? toPlayer.normalized : -fwd;
-            float reach = Mathf.Abs(toPlayer.x) * b.extents.x + Mathf.Abs(toPlayer.z) * b.extents.z;
+            // a block of this scenario is turned toward the approach: its measures are taken in its own frame (face across the way, depth along it), a rock keeps its box of the world
+            bool oriented = obst.gameObject.name.StartsWith("MW_V14_", StringComparison.Ordinal);
+            Vector3 half = oriented ? obst.transform.localScale * 0.5f : b.extents;
+            float reach = oriented ? half.z : Mathf.Abs(toPlayer.x) * b.extents.x + Mathf.Abs(toPlayer.z) * b.extents.z;
             Vector3 start = b.center + toPlayer * (reach + r + 2.5f);
             start.y = GroundOf(start, player.transform.position.y);
             float bare = GroundOf(b.center, start.y);                // the bare ground under the obstacle (the site can slope: the ground at the start is not the one at the obstacle)
             Vector3 far = b.center - toPlayer * (reach + 2f);
             far.y = GroundOf(far, bare);
-            float camDist = Mathf.Max(3f, reach + 2.5f);
-            Vector3 camSide = ClearSide(new[] { start, b.center, far }, Vector3.Cross(Vector3.up, toPlayer), camDist, 1.4f, obst, ctx);
-            float over = Mathf.Max(0.35f * Mathf.Min(b.extents.x, b.extents.z), 0.4f);       // the centre is over the obstacle when it is this close to its middle
-            ctx.Log($"{tag} crossing: bounds {b.size.x:0.0} x {b.size.y:0.0} x {b.size.z:0.0} m, from {start.ToString("0.0")} to {far.ToString("0.0")}");
+            // framed on the mass (and on the flank of the rock it goes round: the camera stays clear of it), 40 to 60 % of the height of the image
+            float subjectR = r + (high ? 0.6f * reach : 0f), subjectH = Mathf.Max(0.45f * r, high ? 0.5f * obstH : 0f);
+            float crossD = ScenarioContext.FitFlat(subjectR, subjectH, 25f);
+            ScenarioContext.Orbit(crossD, 25f, out float camDist, out float camUp);
+            Vector3 camSide = ClearSide(new[] { start, b.center, far }, Vector3.Cross(Vector3.up, toPlayer), camDist, camUp, obst, ctx);
+            // the centre is over the obstacle when it is this close to its middle (the block: walked to the middle itself and stopped there; a rock cannot be reached, the mass is held against it)
+            float over = Mathf.Max(0.35f * Mathf.Min(half.x, half.z), 0.4f);
+            ctx.Log($"{tag} crossing: bounds {b.size.x:0.0} x {b.size.y:0.0} x {b.size.z:0.0} m{(oriented ? " (block turned toward the approach)" : string.Empty)}, from {start.ToString("0.0")} to {far.ToString("0.0")}; camera {crossD:0.0} m");
 
             if (clip)
             {
                 GpuMassDev.Spawn(n, GpuMassDev.GhostMode.Still, 0f, out _, start);
-                yield return ctx.WaitFrames(Warm);
-                DevCamera.Free(start + camSide * camDist + Vector3.up * 1.4f, start + Vector3.up * 0.4f);
-                DevCamera.Provider = new FollowCam(() => GpuMassDev.Mass != null ? GpuMassDev.Mass.Center : b.center, camSide, camDist, 1.4f, 0.4f).Pose;
+                yield return ctx.WaitSteps(Warm);
+                DevCamera.Free(start + camSide * camDist + Vector3.up * camUp, start + Vector3.up * 0.4f);
+                DevCamera.Provider = new FollowCam(() => GpuMassDev.Mass != null ? GpuMassDev.Mass.Center : b.center, camSide, camDist, camUp, 0.4f).Pose;
                 GpuMassDev.WalkTo(far);
                 yield return ctx.WaitUntil(() => HorizontalDistance(GpuMassDev.Mass.Center, b.center) < reach + 3f, 40f);
                 yield return ctx.Clip("cross_" + tag, 6f);
@@ -678,27 +844,44 @@ namespace MistWorms.Dev.Scenarios
 
             // the measured crossing
             GpuMassDev.Spawn(n, GpuMassDev.GhostMode.Still, 0f, out _, start);
-            yield return ctx.WaitFrames(Warm);
-            GpuMassDev.WalkTo(far);
-            yield return ctx.WaitUntil(() => HorizontalDistance(GpuMassDev.Mass.Center, b.center) < over, 60f, $"{tag}_centre_over_the_obstacle");
-            GpuMassDev.WalkTo(GpuMassDev.Mass.Center);                 // stop where it is
-            yield return ctx.WaitFrames(Warm * 2);
-            Vector3 look2 = Vector3.Lerp(GpuMassDev.Mass.Center, b.center, 0.5f) + Vector3.up * 0.3f;
-            yield return Shots(ctx, $"{tag}_over", () => look2, camSide, toPlayer, 0f, obst);
-
-            GpuMassDev.NodeSnapshot snap = GpuMassDev.RequestNodes(GpuMassDev.Mass);
-            yield return ctx.WaitUntil(() => snap.Done, 10f);
-            if (snap.Done && !snap.Error)
+            yield return ctx.WaitSteps(Warm);
+            if (!high)
             {
-                int total = snap.Nodes.Length, onTop = 0, flank = 0, foot = 0, inside = 0, near = 0, nearSide = 0, farSide = 0, sampled = 0;
-                float highestNear = 0f, topNode = float.MinValue;
-                int mask = LayerMask.GetMask(VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, VanillaNames.LayerDefaultSmall, VanillaNames.LayerPiece);
-                float upOn = Mathf.Min(0.3f, 0.5f * obstH), upFlank = Mathf.Min(0.1f, 0.25f * obstH);
+                // a block is walked to its middle and the mass stops exactly there (the arrival is the stop of the ghost): the same position on every run, not wherever the mass coasts to
+                GpuMassDev.WalkTo(new Vector3(b.center.x, bare, b.center.z));
+                yield return ctx.WaitUntil(() => GpuMassDev.Arrived, 60f, $"{tag}_centre_over_the_obstacle");
+            }
+            else
+            {
+                GpuMassDev.WalkTo(far);
+                yield return ctx.WaitUntil(() => HorizontalDistance(GpuMassDev.Mass.Center, b.center) < over, 60f, $"{tag}_centre_over_the_obstacle");
+                GpuMassDev.WalkTo(GpuMassDev.Mass.Center);                 // stop where it is
+            }
+            yield return ctx.WaitSteps(Warm * 2);
+            Vector3 look2 = Vector3.Lerp(GpuMassDev.Mass.Center, b.center, 0.5f) + Vector3.up * 0.3f;
+            yield return FramedShots(ctx, $"{tag}_over", () => look2, camSide, toPlayer, 0f, subjectR, subjectH, obst);
+
+            // median of Windows snapshots half a second of simulation apart (one snapshot of a mass that is still shifting gave 12.7 % then 20 % of nodes on the flanks)
+            int mask = LayerMask.GetMask(VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, VanillaNames.LayerDefaultSmall, VanillaNames.LayerPiece);
+            float upOn = Mathf.Min(0.3f, 0.5f * obstH), upFlank = Mathf.Min(0.1f, 0.25f * obstH);
+            var pTops = new List<float>(); var pFlanks = new List<float>(); var pFoots = new List<float>(); var pNears = new List<float>();
+            float pInWorst = 0f, lowestOverall = float.MaxValue, highestNode = float.MinValue;
+            int belowTotal = 0, taken = 0, sampledLast = 0, sideLast = 0, farLast = 0;
+            for (int w = 0; w < Windows; w++)
+            {
+                if (w > 0) yield return ctx.WaitSteps(WindowGapSteps);
+                GpuMassDev.NodeSnapshot snap = GpuMassDev.RequestNodes(GpuMassDev.Mass);
+                yield return ctx.WaitUntil(() => snap.Done, 10f);
+                if (!snap.Done || snap.Error) continue;
+                int total = snap.Nodes.Length, onTop = 0, flank = 0, foot = 0, inside = 0, near = 0, sampled = 0, sideCount = 0, farCount = 0;
                 for (int i = 0; i < total; i++)
                 {
                     Vector3 p = new Vector3(snap.Nodes[i].x + snap.Origin.x, snap.Nodes[i].y + snap.Origin.y, snap.Nodes[i].z + snap.Origin.z);
-                    topNode = Mathf.Max(topNode, p.y);
-                    float e = Mathf.Max(Mathf.Abs(p.x - b.center.x) / Mathf.Max(b.extents.x, 0.1f), Mathf.Abs(p.z - b.center.z) / Mathf.Max(b.extents.z, 0.1f));
+                    highestNode = Mathf.Max(highestNode, p.y);
+                    Vector3 d = p - b.center;
+                    float e = oriented
+                        ? Mathf.Max(Mathf.Abs(Vector3.Dot(d, obst.transform.right)) / Mathf.Max(half.x, 0.1f), Mathf.Abs(Vector3.Dot(d, obst.transform.forward)) / Mathf.Max(half.z, 0.1f))
+                        : Mathf.Max(Mathf.Abs(d.x) / Mathf.Max(b.extents.x, 0.1f), Mathf.Abs(d.z) / Mathf.Max(b.extents.z, 0.1f));
                     float up = p.y - bare;
                     if (e < 1f && up > upOn) onTop++;
                     if (e >= 0.6f && e < 1.2f && up > upFlank) flank++;
@@ -706,26 +889,28 @@ namespace MistWorms.Dev.Scenarios
                     if (i % 7 != 0) continue;
                     sampled++;
                     if (Physics.CheckSphere(p, 0.004f, mask, QueryTriggerInteraction.Ignore)) inside++;
+                    if (Vector3.Dot(d, toPlayer) > 0f) sideCount++; else farCount++;
                     bool close = false;
                     foreach (Collider c in Physics.OverlapSphere(p, 0.05f, mask, QueryTriggerInteraction.Ignore)) if (c == obst) { close = true; break; }
-                    if (!close) continue;
-                    near++;
-                    highestNear = Mathf.Max(highestNear, up);
-                    if (Vector3.Dot(p - b.center, toPlayer) > 0f) nearSide++; else farSide++;
+                    if (close) near++;
                 }
-                float pTop = 100f * onTop / total, pFlank = 100f * flank / total, pFoot = 100f * foot / total, pIn = 100f * inside / Mathf.Max(1, sampled), pNear = 100f * near / Mathf.Max(1, sampled);
-                int sideCount = 0, farCount = 0;
-                for (int i = 0; i < total; i += 7)
-                {
-                    Vector3 p = new Vector3(snap.Nodes[i].x + snap.Origin.x, snap.Nodes[i].y + snap.Origin.y, snap.Nodes[i].z + snap.Origin.z);
-                    if (Vector3.Dot(p - b.center, toPlayer) > 0f) sideCount++; else farCount++;
-                }
-                ctx.Log($"{tag} mid crossing: {pTop:0.0}% over the obstacle, {pFlank:0.0}% on the flanks, {pFoot:0.0}% at the foot, {pNear:0.0}% within 5 cm of its surface, " +
-                        $"{100f * sideCount / Mathf.Max(1, sampled):0}% on the near side and {100f * farCount / Mathf.Max(1, sampled):0}% on the far side, {pIn:0.00}% of {sampled} sampled nodes touching a collider; highest node {topNode:0.00} m, obstacle {b.max.y:0.00} m");
+                pTops.Add(100f * onTop / total); pFlanks.Add(100f * flank / total); pFoots.Add(100f * foot / total); pNears.Add(100f * near / Mathf.Max(1, sampled));
+                pInWorst = Mathf.Max(pInWorst, 100f * inside / Mathf.Max(1, sampled));
+                int below;
+                lowestOverall = Mathf.Min(lowestOverall, snap.LowestAboveGround(out below));
+                belowTotal += below;
+                taken++;
+                sampledLast = sampled; sideLast = sideCount; farLast = farCount;
+            }
+            if (taken > 0)
+            {
+                float pTop = Median(pTops), pFlank = Median(pFlanks), pFoot = Median(pFoots), pNear = Median(pNears);
+                ctx.Log($"{tag} mid crossing, median of {taken} snapshots: {pTop:0.0}% over the obstacle (each {Join(pTops)}), {pFlank:0.0}% on the flanks (each {Join(pFlanks)}), {pFoot:0.0}% at the foot, {pNear:0.0}% within 5 cm of its surface (each {Join(pNears)}), " +
+                        $"{100f * sideLast / Mathf.Max(1, sampledLast):0}% on the near side and {100f * farLast / Mathf.Max(1, sampledLast):0}% on the far side (last), worst {pInWorst:0.00}% of the sampled nodes touching a collider; highest node {highestNode:0.00} m, obstacle {b.max.y:0.00} m");
                 if (!high)
                 {
-                    ctx.Assert($"{tag}_cross_nodes_on_the_obstacle", pTop >= 25f, $">= 25% of the nodes over the obstacle (above {upOn:0.00} m over the bare ground)", pTop.ToString("0.0"));
-                    ctx.Assert($"{tag}_cross_nodes_on_the_flanks", pFlank >= 15f, ">= 15% of the nodes on the flanks", pFlank.ToString("0.0"));
+                    ctx.Assert($"{tag}_cross_nodes_on_the_obstacle", pTop >= 25f, $">= 25% of the nodes over the obstacle (above {upOn:0.00} m over the bare ground), median of {taken} snapshots", pTop.ToString("0.0"));
+                    ctx.Assert($"{tag}_cross_nodes_on_the_flanks", pFlank >= 15f, $">= 15% of the nodes on the flanks, median of {taken} snapshots", pFlank.ToString("0.0"));
                     // no "at the foot" assertion: stopped with its centre over the block, a mass about as wide as the block (n50: 0.9 m for 1.6 x 1.0) is entirely on it; the foot is not a place to measure here
                 }
                 else
@@ -733,22 +918,37 @@ namespace MistWorms.Dev.Scenarios
                     // going round a high obstacle is the work of the AI of the mass (V12_MassEnvelop); the ghost walks straight at it and is only held against it
                     // 10 % before the nodes slid along the face; measured 2.5 % (n200) once they do: the mass is held against the rock and flows past its flank, the leading nodes only touch it.
                     // 1 % keeps a margin of 2.5 on the measure and still fails a mass that goes through (0 %) or keeps away; judge the captures {tag}_high_over_*.
-                    ctx.Assert($"{tag}_cross_nodes_against_the_surface", pNear >= 1f, ">= 1% of the nodes within 5 cm of the obstacle", pNear.ToString("0.0"));
+                    ctx.Assert($"{tag}_cross_nodes_against_the_surface", pNear >= 1f, $">= 1% of the nodes within 5 cm of the obstacle, median of {taken} snapshots", pNear.ToString("0.0"));
                 }
-                ctx.Assert($"{tag}_cross_no_node_in_the_obstacle", pIn < 2f, "< 2% of the sampled nodes touching the obstacle", pIn.ToString("0.00"));
-                int below;
-                float lowest = snap.LowestAboveGround(out below);
-                ctx.Assert($"{tag}_cross_no_node_under_ground", below == 0, "no node under the ground the simulation used", $"lowest margin {lowest * 1000f:0.0} mm, {below} below");
+                ctx.Assert($"{tag}_cross_no_node_in_the_obstacle", pInWorst < 2f, $"< 2% of the sampled nodes touching the obstacle, worst of {taken} snapshots", pInWorst.ToString("0.00"));
+                ctx.Assert($"{tag}_cross_no_node_under_ground", belowTotal == 0, $"no node under the ground the simulation used, {taken} snapshots", $"lowest margin {lowestOverall * 1000f:0.0} mm, {belowTotal} below");
             }
+            else ctx.Assert($"{tag}_cross_readback_ok", false, "nodes read back", "none of the snapshots");
 
             // down the other side: the objective beyond the obstacle is reached
             GpuMassDev.WalkTo(far);
             yield return ctx.WaitUntil(() => GpuMassDev.Arrived, 40f);
-            yield return ctx.WaitFrames(Warm * 2);
+            yield return ctx.WaitSteps(Warm * 2);
             float miss = HorizontalDistance(GpuMassDev.Mass.Center, far);
             ctx.Assert($"{tag}_cross_reaches_the_objective", GpuMassDev.Arrived && miss < 0.6f, "the centre reaches the objective 2 m beyond the obstacle (< 0.6 m)", $"{miss:0.00} m");
             Vector3 look3 = Vector3.Lerp(GpuMassDev.Mass.Center, b.center, 0.5f) + Vector3.up * 0.3f;
-            yield return Shots(ctx, $"{tag}_after", () => look3, camSide, toPlayer, 0f, obst);
+            yield return FramedShots(ctx, $"{tag}_after", () => look3, camSide, toPlayer, 0f, subjectR, subjectH, obst);
+        }
+
+        private static float Median(List<float> v)
+        {
+            if (v.Count == 0) return 0f;
+            var sorted = new List<float>(v);
+            sorted.Sort();
+            int m = sorted.Count / 2;
+            return sorted.Count % 2 == 1 ? sorted[m] : 0.5f * (sorted[m - 1] + sorted[m]);
+        }
+
+        private static string Join(List<float> v)
+        {
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < v.Count; i++) sb.Append(i > 0 ? "/" : "").Append(v[i].ToString("0.0", System.Globalization.CultureInfo.InvariantCulture));
+            return sb.ToString();
         }
 
         private static GameObject PlaceStone(Vector3 pos, ref string kind)

@@ -8,6 +8,7 @@ using MistWorms.Config;
 using MistWorms.Dev.Preview;
 using MistWorms.Mass;
 using MistWorms.Render;
+using MistWorms.Render.Gpu;
 using UnityEngine;
 
 namespace MistWorms.Dev.Scenarios
@@ -35,7 +36,6 @@ namespace MistWorms.Dev.Scenarios
         private const float MeasureSeconds = 5f;           // twice the former window: steady-state samples only (see Snap.Steady)
         private const float ApproachAfterSeconds = 35f;
         private const float ClipSeconds = 5f;
-        private const float FollowGap = 3f, FollowHeight = 1.4f;       // clips: 3 m from the edge, 1.4 m up, three quarters front
 
         public string Name => "V10_MassMoving";
 
@@ -172,6 +172,11 @@ namespace MistWorms.Dev.Scenarios
             mass.SetTarget(player.GetZDOID());
             visual.ProbeEnabled = true;
             yield return ctx.Wait(0.7f);                 // settles on the floor, the layout of the first frames
+            // D9: on the GPU path the colony draws the mass (its twin is made a few frames after the visual is active). The probe of the layout worker (flux, border and arm of the CPU layout,
+            // tread ratio, poured worms) exists only on the CPU path: there those criteria are judged as before; on the GPU path they are not, and the movement is judged on the nodes of the colony.
+            if (ScenarioContext.GpuMasses) yield return ctx.WaitUntil(() => visual.Gpu != null, 5f);
+            bool gpuPath = visual.GpuDriven;
+            ctx.Log($"{tag}: render path {(gpuPath ? "GPU colony" : "CPU layout")}");
             mass.FreezeAI = false;
             ai.DevGoal = goalFar;
             float distance0 = Vector3.Distance(start, far);
@@ -209,14 +214,23 @@ namespace MistWorms.Dev.Scenarios
             const float ShortBaseline = 0.05f;        // a poured worm lies still for only a quarter of a second: its pairs are taken closer
             float tm = Time.time;
             // Back and forth until the treadmill and the poured worms are sampled, then straight to the player: the arm is measured on the approach.
-            float armSeenAt = -1f, steadySpeedSum = 0f;
+            float armSeenAt = -1f, steadySpeedSum = 0f, approachAt = -1f;
             bool approaching = false;
-            while (Time.time - tm < 100f && mass != null && !(approaching && armSeenAt >= 0f && Time.time - armSeenAt > 1f))
+            int gpuSteady = 0;
+            float gpuLastTime = -1f, gpuWorstLag = 0f;
+            GpuMassDev.NodeSnapshot gpuPending = null;
+            Vector3 gpuRootAtRequest = default;
+            bool gpuSteadyAtRequest = false;
+            var gpuArm = new List<float>();
+            while (Time.time - tm < 100f && mass != null && !(approaching && (gpuPath ? (Utils.DistanceXZ(mass.transform.position, player.transform.position) < r + 4f || Time.time - approachAt > 15f) : (armSeenAt >= 0f && Time.time - armSeenAt > 1f))))
             {
-                bool enough = (Time.time - tm >= MeasureSeconds && tread.Count >= 300 && poured.Count >= 30) || Time.time - tm >= ApproachAfterSeconds;   // the arm is measured with the player within r + 4 m: the approach starts at the latest after this long
+                bool enough = gpuPath
+                    ? Time.time - tm >= MeasureSeconds + 3f
+                    : (Time.time - tm >= MeasureSeconds && tread.Count >= 300 && poured.Count >= 30) || Time.time - tm >= ApproachAfterSeconds;   // the arm is measured with the player within r + 4 m: the approach starts at the latest after this long
                 if (enough && !approaching)
                 {
                     approaching = true;
+                    approachAt = Time.time;
                     toFar = true;
                     ai.DevGoal = goalFar;
                 }
@@ -225,7 +239,48 @@ namespace MistWorms.Dev.Scenarios
                     toFar = !toFar;
                     ai.DevGoal = toFar ? goalFar : goalNear;
                 }
-                MassJob job = visual.Job;
+                if (gpuPath && visual.Gpu != null)
+                {
+                    // GPU path: every 0.4 s the nodes of the colony are read back; at full speed in the free form the centroid of the nodes must stay with the root of the mass (a mass whose
+                    // ropes are left behind or run ahead would fail), and the reach of the nodes toward the player is logged (the arm is carried by the GPU with the pseudopod, D4)
+                    if (gpuPending != null && gpuPending.Done)
+                    {
+                        if (!gpuPending.Error && gpuPending.Worms > 0)
+                        {
+                            int count = gpuPending.Worms * WormSimConst.Nodes;
+                            float sx = 0f, sz = 0f;
+                            for (int q = 0; q < count; q++) { sx += gpuPending.Nodes[q].x + gpuPending.Origin.x; sz += gpuPending.Nodes[q].z + gpuPending.Origin.z; }
+                            Vector2 centroid = new Vector2(sx / count, sz / count);
+                            if (gpuSteadyAtRequest)
+                            {
+                                gpuSteady++;
+                                gpuWorstLag = Mathf.Max(gpuWorstLag, Vector2.Distance(centroid, new Vector2(gpuRootAtRequest.x, gpuRootAtRequest.z)));
+                            }
+                            Vector3 toT = player.transform.position - gpuRootAtRequest; toT.y = 0f;
+                            if (toT.magnitude < r + 4f && toT.sqrMagnitude > 1e-4f)
+                            {
+                                Vector3 tD = toT.normalized;
+                                float reachBeyond = 0f;
+                                for (int q = 0; q < count; q++)
+                                {
+                                    Vector3 rel = new Vector3(gpuPending.Nodes[q].x + gpuPending.Origin.x - gpuRootAtRequest.x, 0f, gpuPending.Nodes[q].z + gpuPending.Origin.z - gpuRootAtRequest.z);
+                                    float len = rel.magnitude;
+                                    if (len > 0.1f && Vector3.Dot(rel / len, tD) > 0.866f) reachBeyond = Mathf.Max(reachBeyond, len - r * 1.2f);
+                                }
+                                gpuArm.Add(reachBeyond);
+                            }
+                        }
+                        gpuPending = null;
+                    }
+                    if (gpuPending == null && Time.time - gpuLastTime > 0.4f)
+                    {
+                        gpuLastTime = Time.time;
+                        gpuRootAtRequest = visual.Root;
+                        gpuSteadyAtRequest = visual.Speed >= SteadyFraction * moveSpeed && visual.StreamK < 0.1f;
+                        gpuPending = GpuMassDev.RequestNodes(visual.Gpu);
+                    }
+                }
+                MassJob job = gpuPath ? null : visual.Job;
                 if (job != null && job.ReadyIdx >= 0)
                 {
                     MassOutput o = job.Out[job.ReadyIdx];
@@ -326,6 +381,17 @@ namespace MistWorms.Dev.Scenarios
             }
             if (mass == null) yield break;
 
+            if (gpuPath)
+            {
+                // tread ratio, poured worms, border front / rear and the arm of the layout are properties of the CPU layout (flux / border / body places): not judged here, see force_cpu=1.
+                // On the colony: the nodes stayed with the root of the mass at full speed (the criterion that fails a mass whose ropes are left behind or run ahead of it).
+                ctx.Log($"{tag}: GPU colony, {gpuSteady} readbacks at full speed in the free form, largest distance from the centroid of the nodes to the root {gpuWorstLag:0.00} m (r {r:0.00} m); " +
+                        $"reach of the nodes toward the player within r + 4 m: {(gpuArm.Count > 0 ? gpuArm.Count + " readbacks, largest " + MaxOf(gpuArm).ToString("0.00") + " m beyond 1.2 r (information: the pseudopod is carried by the GPU with D4, then this becomes a criterion)" : "not near enough")}");
+                ctx.Log($"{tag}: tread ratio, poured worms, border front / rear and arm of the CPU layout are not judged on the GPU path (force_cpu=1 judges them)");
+                ctx.Assert(tag + "_gpu_nodes_follow_the_root", gpuSteady >= 3 && gpuWorstLag <= r, "the centroid of the nodes stays within r of the root of the mass at full speed", $"{gpuWorstLag:0.00} m over {gpuSteady} readbacks");
+            }
+            else
+            {
             ctx.Log($"{tag}: classification over {steadySnapshots} of {snapshots} snapshots at full speed in the free form: flux places {fluxTotal}, on top (crawl, > 0.25 m up) {fluxTop}, poured (idle) {fluxIdle}; " +
                     $"pairs 0.2 s apart: matched {pairsSteady}, animation changed {pairsAnimMismatch}, too fast (went round its cycle) {pairsTooFast}; poured pairs {ShortBaseline} s apart {pouredPairs}");
             float vMean = steadySnapshots > 0 ? steadySpeedSum / steadySnapshots : (snapshots > 0 ? speedSum / snapshots : visual.Speed);      // cruising speed: the steady snapshots
@@ -348,13 +414,16 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert(tag + "_border_pulled_forward", front + rear > 0 && front >= factor * Math.Max(rear, 1) - 1, $"front border >= {factor:0.#} x rear border (isotropic = 1.0, measured per-second median 1.8 to 1.9 at n50)", $"front {front}, rear {rear}");
             }
             ctx.Assert(tag + "_arm_toward_target", armSeen && armExtension >= 0.3f && armRampNear > 0.5f, "a drawn worm >= 0.3 m beyond the footprint toward the player within r + 4 m", $"{(armSeen ? armExtension.ToString("0.00") : "none")} m, ramp {armRampNear:0.00} while near, distance now {Vector3.Distance(visual.Root, player.transform.position):0.0} m");
+            }
 
             // ---- captures: side, then front (the camera ahead of the mass, looking back at it)
+            // (D12: the camera distance comes from the radius of the mass and the field of view: the mass takes 50 % of the height of the image, from 20 degrees above)
             Vector3 side = Vector3.Cross(Vector3.up, visual.Forward);
-            AimAt(ctx, visual, side, r + FollowGap, FollowHeight);
+            ScenarioContext.Orbit(ScenarioContext.FitFlat(r, 0.45f * r, 20f), 20f, out float followH, out float followUp);
+            AimAt(ctx, visual, side, followH, followUp);
             yield return ctx.WaitFrames(5);
             yield return ctx.Shot(tag + "_side");
-            AimAt(ctx, visual, visual.Forward, r + FollowGap, FollowHeight);
+            AimAt(ctx, visual, visual.Forward, followH, followUp);
             yield return ctx.WaitFrames(5);
             yield return ctx.Shot(tag + "_front");
 
@@ -367,7 +436,7 @@ namespace MistWorms.Dev.Scenarios
             DevCamera.Provider = (out Vector3 p, out Vector3 look) =>
             {
                 // Three quarters front, 3 m from the edge, 1.4 m up, a clear view every frame (the last good position is kept when none is).
-                if (VisualScenario.ClipPose(visual, FollowGap, FollowHeight, out p, out look)) { lastPos = p; havePos = true; }
+                if (VisualScenario.ClipPose(visual, Mathf.Max(0.4f, followH - Mathf.Max(0.3f, visual.ShownRadius)), followUp, out p, out look)) { lastPos = p; havePos = true; }
                 else if (havePos) p = lastPos;
             };
             DevCamera.Free(visual.Root + Vector3.up * 3f, visual.Root);
@@ -395,6 +464,13 @@ namespace MistWorms.Dev.Scenarios
             public bool[] Ok;
             public byte[] Anim;
             public float[] Height;
+        }
+
+        private static float MaxOf(List<float> v)
+        {
+            float m = float.MinValue;
+            foreach (float x in v) m = Mathf.Max(m, x);
+            return m;
         }
 
         private static float Median(List<float> v)
