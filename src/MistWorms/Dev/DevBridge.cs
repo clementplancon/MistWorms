@@ -27,7 +27,6 @@ namespace MistWorms.Dev
         // Routes the spec defines whose behaviour depends on systems built in later phases (§16).
         private static readonly Dictionary<string, int> PlannedRoutes = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            { "/nest", 7 },
             { "/perf", 8 },
         };
 
@@ -257,6 +256,10 @@ namespace MistWorms.Dev
                 case "/gpumass":
                     req.RequireMethod("POST");
                     GpuMassRoute(req, reply);
+                    return null;
+                case "/nest":
+                    req.RequireMethod("POST");
+                    NestRoute(req, reply);
                     return null;
                 case "/mass-visual":
                     req.RequireMethod("GET");
@@ -499,6 +502,53 @@ namespace MistWorms.Dev
             };
         }
 
+        /// <summary>
+        /// {action = "place", distance = 2.5}: a nest on the floor in front of the player (colony created if needed). {action = "hit", index, damage = 1}: a hit of
+        /// blunt damage on the nest of that index. {action = "clear"}: every nest destroyed with no effect and no release. Replies with the nests.
+        /// </summary>
+        private static void NestRoute(BridgeRequest req, BridgeReply reply)
+        {
+            string action = (MiniJson.GetString(req.Body, "action") ?? "place").ToLowerInvariant();
+            var body = new Dictionary<string, object> { { "action", action } };
+            try
+            {
+                switch (action)
+                {
+                    case "place":
+                    {
+                        RequirePlayer();
+                        float distance = Mathf.Max(0.5f, MiniJson.GetFloat(req.Body, "distance", 2.5f));
+                        Colony.WormNest nest = NestDev.PlaceInFront(distance, out Colony.WormColony colony, out string how);
+                        body["nest"] = NestDev.Json(nest);
+                        body["colony"] = colony.ZdoId.ToString();
+                        body["colonyKind"] = colony.Kind.ToString();
+                        body["colonySource"] = how;
+                        break;
+                    }
+                    case "hit":
+                    {
+                        int index = MiniJson.GetInt(req.Body, "index", 0);
+                        Colony.WormNest nest = NestDev.Find(index) ?? throw new BridgeException(404, $"no loaded nest with index {index}");
+                        NestDev.Hit(nest, Mathf.Max(0f, MiniJson.GetFloat(req.Body, "damage", 1f)));
+                        break;
+                    }
+                    case "clear":
+                    {
+                        int cleared = 0;
+                        foreach (Colony.WormColony c in new List<Colony.WormColony>(Colony.ColonyRegistry.All))
+                            if (c != null) cleared += c.DestroyAllNests();
+                        body["cleared"] = cleared;
+                        break;
+                    }
+                    default:
+                        throw new BridgeException(400, $"unknown action '{action}' (place, hit, clear)");
+                }
+            }
+            catch (InvalidOperationException e) { throw new BridgeException(409, e.Message); }
+            body["nests"] = NestDev.StateJson();
+            reply.Body = body;
+        }
+
         /// <summary>{n, colony = true, freeze = false}: a writhing mass of n worms in front of the player, attached to the local colony (see MassDev).</summary>
         private static void MassRoute(BridgeRequest req, BridgeReply reply)
         {
@@ -622,6 +672,7 @@ namespace MistWorms.Dev
             {
                 { "colonies", colonies },
                 { "masses", MassDev.JsonList() },
+                { "nests", NestDev.StateJson() },
                 { "gpuWorms", GpuWorms.StateJson() },
                 { "gpuMass", GpuMassDev.StateJson() },
                 { "frozen", Colony.WormColony.Frozen },

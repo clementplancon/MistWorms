@@ -141,6 +141,8 @@ namespace MistWorms.Dev.Scenarios
             // The scenarios of the CPU layout of the masses (previews, lobes, flipbook instances) look at the fallback path: the GPU twin is off for them.
             MistWorms.Dev.DevSpawnBlock.Active = false;
             MistWorms.Mass.GpuMassBridge.ForceCpu = scenario is VisualScenario || scenario is V09_MassTransitions || scenario is V10_MassMoving || scenario is V11_MassEngulf || scenario is S08_MassStream;
+            // The mines the scenarios enter stay as they expect them (no nest, no sleeping worm): only S16 wants the lazy seeding.
+            MistWorms.Colony.MineSeeder.Suppressed = !(scenario is S16_MineSeed);
             IEnumerator body = null;
             try { body = scenario.Run(ctx); }
             catch (Exception e) { error = e; }
@@ -149,6 +151,7 @@ namespace MistWorms.Dev.Scenarios
             {
                 yield return SafeCoroutine.Run(body, e => error = e, () =>
                 {
+                    ctx.GuardTick();
                     if (Time.realtimeSinceStartup - start <= ctx.TimeoutSeconds) return false;
                     timedOut = true;
                     return true;
@@ -157,6 +160,8 @@ namespace MistWorms.Dev.Scenarios
 
             MistWorms.Mass.GpuMassBridge.ForceCpu = false;
             MistWorms.Dev.DevSpawnBlock.Active = false;
+            MistWorms.Colony.MineSeeder.Suppressed = false;
+            MistWorms.Colony.WormColony.DevSpawnInterval = 0f;
             List<string> logErrors = s_errors.End();
             result.DurationSeconds = Time.realtimeSinceStartup - start;
 

@@ -27,7 +27,8 @@ namespace MistWorms
             CommandManager.Instance.AddConsoleCommand(new MassEngulfCommand());
             CommandManager.Instance.AddConsoleCommand(new GpuWormsCommand());
             CommandManager.Instance.AddConsoleCommand(new GpuMassCommand());
-            CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_nest", "- place a worm nest in front of the player", 7));
+            CommandManager.Instance.AddConsoleCommand(new NestCommand());
+            CommandManager.Instance.AddConsoleCommand(new SeedCommand());
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_wake", "- wake every dormant group of the current mine", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_calm", "- send every active group of the current mine back to dormancy", 7));
             CommandManager.Instance.AddConsoleCommand(new StubCommand("mw_perf", "- print simulation/render/network timings", 8, cheat: false));
@@ -136,6 +137,53 @@ namespace MistWorms
 
                 int created = Dev.ColonyDev.Spawn(n, radius, state, force, out Colony.WormColony colony, out string how);
                 Print(context, $"mw_spawn: created {created}/{n} {state} worms in {how} colony {colony.ZdoId} (alive {colony.Store.AliveCount})");
+            }
+        }
+
+        private sealed class NestCommand : MWCommand
+        {
+            public override string Name => "mw_nest";
+            public override string Help => "[dev] [distance=2.5] - place a worm nest on the floor in front of the player, in the local colony (created if needed)";
+            public override bool IsCheat => true;
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                float distance = 2.5f;
+                if (args.Length > 0 && !float.TryParse(args[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out distance))
+                {
+                    Print(context, "usage: mw_nest [distance]");
+                    return;
+                }
+
+                Colony.WormNest nest = Dev.NestDev.PlaceInFront(UnityEngine.Mathf.Max(0.5f, distance), out Colony.WormColony colony, out string how);
+                Print(context, $"mw_nest: nest {nest.Index} at {nest.transform.position} (hp {nest.Health:0.#}) in {how} colony {colony.ZdoId} ({colony.NestsLoaded} nests, {colony.Store.AliveCount} worms)");
+            }
+        }
+
+        private sealed class SeedCommand : MWCommand
+        {
+            public override string Name => "mw_seed";
+            public override string Help => "[dev] [reset] - seeding state of the mine around the player; reset forgets the seeding (worms and nests removed, flag cleared) so the mine is seeded again";
+            public override bool IsCheat => true;
+
+            public override List<string> CommandOptionList() => new List<string> { "reset" };
+
+            protected override void Execute(string[] args, Terminal context)
+            {
+                Player player = Player.m_localPlayer;
+                Colony.WormColony colony = player != null ? Colony.ColonyRegistry.FindFor(player.transform.position) : null;
+                if (colony == null || colony.Kind != Colony.WormColony.ColonyKind.Mine)
+                {
+                    Print(context, "mw_seed: the player is not inside a mine colony");
+                    return;
+                }
+                if (args.Length > 0 && string.Equals(args[0], "reset", StringComparison.OrdinalIgnoreCase))
+                {
+                    int nests = Colony.MineSeeder.Reset(colony);
+                    Print(context, $"mw_seed: seeding forgotten ({nests} nests removed); the mine is seeded again within a second or two");
+                    return;
+                }
+                Print(context, $"mw_seed: seeded {colony.Seeded}, nests {colony.NestsLoaded}, worms {colony.Store.AliveCount}, seedings this session {Colony.MineSeeder.Runs}, planning {Colony.MineSeeder.Planning}, suppressed {Colony.MineSeeder.Suppressed}");
             }
         }
 

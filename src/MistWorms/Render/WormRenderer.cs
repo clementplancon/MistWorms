@@ -191,6 +191,7 @@ namespace MistWorms.Render
 
             for (int i = 0; i < _batches.Count; i++) _batches[i].List.Reset();
 
+            if (Gpu.GpuWormHost.FreeReady) Gpu.GpuWormHost.FreeBegin(_camPos);
             for (int i = _sources.Count - 1; i >= 0; i--)
             {
                 IWormRenderSource source = _sources[i];
@@ -206,6 +207,7 @@ namespace MistWorms.Render
                 }
             }
 
+            if (Gpu.GpuWormHost.FreeReady) Gpu.GpuWormHost.FreeEnd();
             _stats.Merged = BatchMerge.Apply(_mergeGroups, _fixedLists, DrawCallBudget, out int lost);
             _stats.Dropped += lost;
         }
@@ -434,6 +436,13 @@ namespace MistWorms.Render
             /// <summary>Per-instance culling. <paramref name="frame"/> is in the numbering of the effective LOD (see <see cref="FrameCount(WormAnim, WormLod)"/>).</summary>
             public void AddWorm(WormAnim anim, WormLod lod, int frame, in Matrix4x4 trs)
             {
+                // A free worm of the colony is a rope of the GPU colony when it is on (config, device, bundle): the pose of this flipbook frame, carried by this matrix.
+                if (MistWorms.Mass.GpuMassBridge.FreeActive)
+                {
+                    var pos = new Vector3(trs.m03, trs.m13, trs.m23);
+                    if ((pos - _r._camPos).sqrMagnitude > _r._renderDistance * _r._renderDistance || ClassifySphere(pos, 0.25f) == SphereVis.Outside) return;
+                    if (Gpu.GpuFreeWorms.TryAdd(anim, lod, frame, trs, _r._camPos)) return;
+                }
                 Batch[] frames = Frames(anim, lod);
                 if (frames == null || frames.Length == 0) return;
                 _r.Add(frames[Flipbook.Wrap(frame, frames.Length)], trs);

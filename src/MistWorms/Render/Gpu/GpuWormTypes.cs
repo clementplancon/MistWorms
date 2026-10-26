@@ -18,6 +18,8 @@ namespace MistWorms.Render.Gpu
         public const int MaxPrims = 24;                   // primitives per mass
         public const int HeightN = 16;                    // height grid, HeightN x HeightN samples per mass
         public const int MaxMasses = 8;
+        public const int FreeSlot = MaxMasses;            // the slot of the pool of free ropes (not a mass: its worms are written by the CPU each frame)
+        public const int FreeCapPerLod = 256;             // free ropes per level of detail
         public const int MaxAnchors = 512;                // skin anchors per mass (points of the baked surface of the engulfed target)
         public const int MassStride = 192;                // bytes of GpuMassParams
         public const int SideMapSize = 256;               // cells of one depth map (HeightN x HeightN)
@@ -58,10 +60,10 @@ namespace MistWorms.Render.Gpu
         public const float OrientK = 0.10f;               // pull of the nodes toward the line of the worm (tangent to the surface, up or diagonal)
         public const float LeashK = 0.07f;                // pull of the worm toward its place on the body
         public const float TransitK = 0.7f;               // pull of the head toward the next anchor of its path
-        public const float AdvanceRadius = 0.06f;         // the head is at the anchor of the path when it is this close
+        public const float AdvanceRadius = 0.12f;         // the head is at the anchor of the path when it is this close (1.5 anchor spacings: a head that must touch each anchor lost most of its time hopping)
         public const float FallTime = 2.5f;               // a worm that lets go falls for this long at most
         public const float SlideGain = 1.0f;              // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
-        public const float HopTime = 0.5f;                // a head that has not reached the anchor of its path in this time goes on to the next one
+        public const float HopTime = 0.2f;                // a head that has not reached the anchor of its path in this time goes on to the next one
         public const float BirthTime = 0.5f;              // a newborn worm grows from nothing in this time, a dying one shrinks to nothing in it
         public const float PendantShare = 0.08f;          // share of the worms of the sleeve that hang by one end
     }

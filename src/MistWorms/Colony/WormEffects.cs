@@ -107,7 +107,9 @@ namespace MistWorms.Colony
         private static readonly Slot s_massIdleC = new Slot("mass layer C", new[] { VanillaNames.SfxBlobIdle, VanillaNames.SfxTickIdle }, null);
         private static readonly Slot s_alertSound = new Slot("alert sound", new[] { VanillaNames.SfxBlobAlerted, VanillaNames.SfxTickAlerted }, null);
         private static readonly Slot s_formSound = new Slot("formation sound", new[] { VanillaNames.SfxTickAlerted }, null);
-        private static readonly Slot[] s_all = { s_hit, s_death, s_hitSound, s_deathSound, s_strikeSound, s_idleSound, s_massIdleA, s_massIdleB, s_massIdleC, s_alertSound, s_formSound };
+        // The destruction of a nest (decision 195): the egg splash of the vanilla egg, its sound included (a ZSFX inside the prefab), as a local copy without ZNetView.
+        private static readonly Slot s_nestBurst = new Slot("nest destruction effect", new[] { VanillaNames.FxEggSplash }, null);
+        private static readonly Slot[] s_all = { s_hit, s_death, s_hitSound, s_deathSound, s_strikeSound, s_idleSound, s_massIdleA, s_massIdleB, s_massIdleC, s_alertSound, s_formSound, s_nestBurst };
 
         private static GameObject s_holder;
         private static ZNetScene s_scene;   // prefabs belong to a session: resolve again when the scene is replaced
@@ -148,7 +150,7 @@ namespace MistWorms.Colony
         // an event of the animator; rendering callbacks: a worm landing). The Play* calls only note the request; `Pump`, called from the plugin's
         // Update, builds the templates (they need DestroyImmediate) and plays what is pending. A request older than PendingLife is dropped.
 
-        private enum Kind : byte { Hit, Death, Strike, Idle, MassA, MassB, MassC, Alert, Form }
+        private enum Kind : byte { Hit, Death, Strike, Idle, MassA, MassB, MassC, Alert, Form, NestBurst }
 
         private struct Pending
         {
@@ -209,6 +211,9 @@ namespace MistWorms.Colony
         {
             if (limiter.Allow(now)) Enqueue(Kind.Alert, position);
         }
+
+        /// <summary>A nest was destroyed: the egg splash and its sound, played by the peer that owns the nest (decision 195).</summary>
+        public static void PlayNestBurst(Vector3 position) => Enqueue(Kind.NestBurst, position);
 
         /// <summary>A mass is born (spec 12.3).</summary>
         public static void PlayForm(ref Limiter limiter, Vector3 position, float now)
@@ -274,6 +279,7 @@ namespace MistWorms.Colony
                     case Kind.MassC: SpawnSound(s_massIdleC, position, volume, pitch); break;
                     case Kind.Alert: SpawnSound(s_alertSound, position); break;
                     case Kind.Form: SpawnSound(s_formSound, position); break;
+                    case Kind.NestBurst: SpawnFx(s_nestBurst, position); break;
                     default: SpawnSound(s_idleSound, position); break;
                 }
             }

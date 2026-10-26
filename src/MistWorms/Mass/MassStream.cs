@@ -11,14 +11,14 @@ namespace MistWorms.Mass
         public const float ProbePeriod = 0.25f;       // seconds between two width probes
         public const float ProbeDistance = 2f;        // how far ahead the width is measured to enter the stream
         public const float FreeDistance = 3f;         // free path needed to get back to the dome
-        public const float EnterMargin = 0.2f;        // stream when the free width < 2 r + this
+        public const float EnterMargin = 0.5f;        // stream when the free width < 2 r + this: the dome of radius r is edged by worms 30 cm long (15 cm beyond it each side) and 20 cm of margin
         public const float WidthMargin = 0.1f;        // ribbon width = free width - this
         public const float MinRibbonWidth = 0.5f;
         public const float TransitionSeconds = 0.5f;  // dome <-> ribbon (render)
         public const int MaxChainSpheres = 6;         // preallocated hit spheres along the ribbon
         public const float SphereWidthFactor = 0.9f;  // chain sphere radius = this x half the ribbon width (as the dome sphere is 0.9 r)
 
-        /// <summary>The passage is too narrow for the dome: free width under 2 r + 0.2 m.</summary>
+        /// <summary>The passage is too narrow for the dome: free width under 2 r + 0.5 m.</summary>
         public static bool TooNarrow(float freeWidth, float radius) => freeWidth < 2f * radius + EnterMargin;
 
         /// <summary>

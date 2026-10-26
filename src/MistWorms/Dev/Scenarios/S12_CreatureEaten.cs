@@ -59,7 +59,7 @@ namespace MistWorms.Dev.Scenarios
                 if (where == "mine")
                 {
                     player.SetGodMode(true);
-                    yield return ctx.TpMineRetry();
+                    yield return ctx.TpMineRetry(keepCreatures: true);     // the Seeker of the mine is the meal
                     if (!ctx.LastTpMine.Ok) yield break;
                     yield return ctx.Wait(1f);
                     float rMax = MassMath.Radius(WormCount);

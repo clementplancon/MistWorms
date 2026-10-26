@@ -24,6 +24,7 @@ namespace MistWorms.Colony
 
         private const float MassTickInterval = 0.25f;       // spec §4.1: scans, formation
         private const float AbsorbSeconds = 0.5f;            // spec §3.3 Absorbing
+        private const float AbsorbSpeed = 4.5f;              // m/s: a worm pulled in from afar (a stalled one) takes longer than AbsorbSeconds
         private const float AbsorbMargin = 0.5f;             // r + 0.5 m
         private const float AbsorbMaxDy = 1.5f;
         private const float AbsorbRise = 0.15f;              // the arc of the climb, metres
@@ -297,6 +298,9 @@ namespace MistWorms.Colony
             if (stuck && toGoal.sqrMagnitude > 4f) TryRequestPath(i, target, now);
             if (stuck && toMass && mk >= 0 && WormGather.IsStalled(toGoal.magnitude, _masses[mk].R, 0f))
             {
+                // Still stalled after a 2 s try by the goal alone (directUntil was set): the worm is stuck for a reason of the terrain (a ledge, a prop it stands on, a pit). With a clear
+                // line to the mass, within StalledAbsorbReach, it is pulled in over the obstacle rather than waiting for ever.
+                if (s.directUntil[i] > 0f && TryBeginAbsorb(i, mk, now, WormGather.StalledAbsorbReach)) return;
                 // Waiting outside the reach of the mass for something that cannot come: for the next 2 s only the goal steers (avoidance and separation may cancel it).
                 s.directUntil[i] = now + GatherDirectSeconds;
                 GatherStalls++;
@@ -361,14 +365,18 @@ namespace MistWorms.Colony
 
             // The worms become the first of the heap: they leave the store and glide onto it (spec §12.4).
             _formPool.Clear();
+            _formNests.Clear();
             for (int j = 0; j < k; j++)
             {
                 int wi = _gatherIdx[_cluster[j]];
                 _seedBuf[j] = s.pos[wi];
                 if (s.poolIndex[wi] >= 0) _formPool.Merge(s.Pools.Get(s.poolIndex[wi]));
+                _formNests.Add(MassNestOf(wi), 1);
                 RemoveWorm(wi);
             }
             mass.GiveInitialPool(_formPool);
+            mass.GiveInitialNests(_formNests);
+            _formNests.Clear();
             _formPool.Clear();
             WritheMassVisual visual = mass.GetComponent<WritheMassVisual>();
             if (visual != null) visual.SeedArrivals(_seedBuf, k);
@@ -415,16 +423,24 @@ namespace MistWorms.Colony
             }
         }
 
-        /// <summary>The worm starts to climb onto mass <paramref name="k"/> when it touches its visible envelope (<see cref="WormGather.AbsorbReach"/>) and the mass has room.</summary>
-        private bool TryBeginAbsorb(int i, int k, float now)
+        /// <summary>
+        /// The worm starts to climb onto mass <paramref name="k"/> when it touches its visible envelope (<see cref="WormGather.AbsorbReach"/>) and the mass has room.
+        /// With <paramref name="farReach"/> (a stalled worm) the reach is that distance instead, and nothing solid may lie on the straight line to the mass.
+        /// </summary>
+        private bool TryBeginAbsorb(int i, int k, float now, float farReach = 0f)
         {
             WormStore s = Store;
             if (_masses[k].N + _masses[k].Pending >= MWConfig.Mass.MaxCount.Value) return false;
             Vector3 p = s.pos[i];
             Vector3 q = _masses[k].Pos;
             float dx = q.x - p.x, dz = q.z - p.z;
-            float reach = WormGather.AbsorbReach(_masses[k].R);
+            float reach = farReach > 0f ? farReach : WormGather.AbsorbReach(_masses[k].R);
             if (dx * dx + dz * dz > reach * reach || Mathf.Abs(q.y - p.y) > AbsorbMaxDy) return false;
+            if (farReach > 0f)
+            {
+                Vector3 lift = Vector3.up * WormPhysics.WallHeight;
+                if (Physics.Linecast(p + lift, q + lift, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore)) return false;
+            }
 
             s.massRef[i] = _masses[k].Id;
             s.absorbFrom[i] = p;
@@ -449,11 +465,12 @@ namespace MistWorms.Colony
 
             Vector3 mp = mass.transform.position;
             float r = _masses[mi].R;
-            float t = Mathf.Clamp01(s.stateTime[i] / AbsorbSeconds);
-            float e = t * t * (3f - 2f * t);
             Vector3 from = s.absorbFrom[i];
             Vector3 inward = from - mp;
             inward.y = 0f;
+            float run = Mathf.Max(AbsorbSeconds, inward.magnitude / AbsorbSpeed);      // 0.5 s within 2.2 m; longer for a worm pulled in from afar
+            float t = Mathf.Clamp01(s.stateTime[i] / run);
+            float e = t * t * (3f - 2f * t);
             inward = inward.sqrMagnitude > 1e-4f ? inward.normalized : Vector3.forward;
             Vector3 top = mp + inward * (AbsorbInside * r) + Vector3.up * (0.3f * r + 0.05f);
             Vector3 p = Vector3.Lerp(from, top, e);
@@ -470,7 +487,9 @@ namespace MistWorms.Colony
 
             if (t < 1f) return;
             MassPool donor = DonorPool(i);   // what the worm ate (and the reserve of the colony) goes into the mass with it
-            int accepted = mass.AddWorms(1, donor);
+            _oneNest.Clear();
+            _oneNest.Add(MassNestOf(i), 1);
+            int accepted = mass.AddWorms(1, donor, _oneNest);
             if (accepted == 0)
             {
                 EndAbsorb(i, now);     // the mass filled up or started to merge in the meantime
@@ -616,6 +635,8 @@ namespace MistWorms.Colony
             }
 
             PrepareDissolvePool(pool, n);
+            _dissolveNests.ReadTail(pool);        // the nests of origin of the worms of the heap: each released worm takes one back
+            _dissolveNests.FitTo(n);
             if (_releaseBuf == null || _releaseBuf.Length < n) _releaseBuf = new Vector3[n];
             int drawn = 0;
             WritheMassVisual visual = null;
@@ -669,6 +690,8 @@ namespace MistWorms.Colony
                 }
 
                 GiveDissolvedShare(slot);
+                int origin = _dissolveNests.TakeOne();
+                s.nestIndex[slot] = origin >= 0 && origin < NestCounts.None ? (short)origin : (short)-1;
                 s.fleeFrom[slot] = position;
                 s.subPhase[slot] = LeapPhase;
                 s.absorbFrom[slot] = from;

@@ -27,9 +27,11 @@ foreach ($t in 'worm_albedo', 'worm_gloss', 'worm_normal') {
 # compute shader and the real host in the editor (tools/check-shaders.ps1).
 $gen = Join-Path $project 'Assets\Editor\Generated'
 New-Item -ItemType Directory -Force $gen | Out-Null
-foreach ($f in 'GpuWormTypes', 'WormSimRef', 'GpuWormTube', 'GpuWormHost', 'GpuSkinAnchors', 'GpuSkinSet', 'GpuSkinMetrics', 'GpuSolidMaps') {
+foreach ($f in 'GpuWormTypes', 'WormSimRef', 'GpuWormTube', 'GpuWormHost', 'GpuSkinAnchors', 'GpuSkinSet', 'GpuSkinMetrics', 'GpuSolidMaps', 'GpuFreeWorms') {
     Copy-Item (Join-Path $RepoRoot "src\MistWorms\Render\Gpu\$f.cs") (Join-Path $gen "$f.cs") -Force
 }
+
+foreach ($a in 'GlbParser', 'JsonReader') { Copy-Item (Join-Path $RepoRoot "src\MistWorms\Assets\$a.cs") (Join-Path $gen "$a.cs") -Force }
 
 Write-Step 'Unity batchmode: BuildBundles.Build'
 $p = Start-Process -FilePath $Unity -Wait -PassThru -ArgumentList @(

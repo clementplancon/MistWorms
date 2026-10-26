@@ -157,23 +157,41 @@ namespace MistWorms.Dev.Scenarios
         /// <summary>Outcome of the last <see cref="MoveToOpenGround"/>.</summary>
         public OpenGroundResult LastOpenGround { get; private set; }
 
-        /// <summary>Enters the closest infested mine (spec §15.3) and records the "tp_mine" assertion; the player ends in god and ghost mode.</summary>
-        public IEnumerator TpMine()
+        /// <summary>
+        /// Enters the closest infested mine (spec §15.3) and records the "tp_mine" assertion; the player ends in god and ghost mode. The mine is generated with its own creatures
+        /// (spawners on while it loads); once inside, unless <paramref name="keepCreatures"/> (S12 feeds a Seeker to the masses), the creatures within 40 m are removed, the vanilla
+        /// spawners are silent and <see cref="GuardCreatures"/> keeps the area clear for the rest of the scenario: a Seeker or a Dvergr kills worms and masses, and a worm that senses one
+        /// (or a door of the town) gathers into a mass.
+        /// </summary>
+        public IEnumerator TpMine(bool keepCreatures = false)
         {
             var result = new TpMineResult();
             LastTpMine = result;
-            MistWorms.Dev.DevSpawnBlock.Active = false;       // the mines keep their own creatures
+            MistWorms.Dev.DevSpawnBlock.Active = false;       // the mines keep their own creatures while they load
+            GuardCreatures = false;
             yield return DevWorld.TpMine(result, Log);
             Assert("tp_mine", result.Ok, $"inside a mine within 90 s", result.Ok
                 ? (object)$"{result.Location}, {result.RoomCount} rooms, {result.Seconds:0.0} s"
                 : result.Error);
+            if (result.Ok && !keepCreatures) ClearMineCreatures();
+        }
+
+        private void ClearMineCreatures()
+        {
+            Player player = Player.m_localPlayer;
+            if (player == null) return;
+            MistWorms.Dev.DevSpawnBlock.Active = true;        // until the end of the scenario (the runner switches it off)
+            S18_GroupCoherence.ClearCreatures(this, player);
+            int wiped = ColonyDev.ClearMine(player);
+            if (wiped > 0) Log($"mine colony wiped: {wiped} worms and nests removed (an earlier seeding)");
+            GuardCreatures = true;
         }
 
         /// <summary>
         /// <see cref="TpMine"/> tried up to <paramref name="attempts"/> times (a teleport that does not finish in time is not final: the player is waited for and the door tried again);
         /// the single "tp_mine" assertion is recorded at the end.
         /// </summary>
-        public IEnumerator TpMineRetry(int attempts = 3)
+        public IEnumerator TpMineRetry(int attempts = 3, bool keepCreatures = false)
         {
             TpMineResult result = null;
             for (int k = 1; k <= attempts; k++)
@@ -189,13 +207,24 @@ namespace MistWorms.Dev.Scenarios
             Assert("tp_mine", result.Ok, $"inside a mine within 90 s (up to {attempts} attempts)", result.Ok
                 ? (object)$"{result.Location}, {result.RoomCount} rooms, {result.Seconds:0.0} s"
                 : result.Error);
+            if (result.Ok && !keepCreatures) ClearMineCreatures();
         }
 
         /// <summary>
-        /// Teleports the player onto flat open ground with <paramref name="clearRadius"/> metres of nothing around (see
-        /// <see cref="DevWorld.MoveToOpenGround"/>) and records the "open_ground_found" assertion. <paramref name="accept"/> adds a
-        /// scenario specific test on the candidate ground point.
+        /// While true the vanilla creatures within 40 m of the player are removed every half second (the runner calls <see cref="GuardTick"/> each frame). For the scenarios that count worms:
+        /// a poisonous blob that wanders in from beyond the one-off clearing killed 6 worms of S02b. Off by default: S12 and S19 spawn creatures of their own.
         /// </summary>
+        public bool GuardCreatures;
+        private float _nextGuard;
+
+        public void GuardTick()
+        {
+            if (!GuardCreatures || Time.time < _nextGuard) return;
+            _nextGuard = Time.time + 0.5f;
+            Player p = Player.m_localPlayer;
+            if (p != null) S18_GroupCoherence.ClearCreatures(this, p, quiet: true);
+        }
+
         private static bool CalmBiome(Vector3 p)
         {
             WorldGenerator wg = WorldGenerator.instance;
@@ -204,6 +233,11 @@ namespace MistWorms.Dev.Scenarios
             return b == Heightmap.Biome.Meadows;
         }
 
+        /// <summary>
+        /// Teleports the player onto flat open ground with <paramref name="clearRadius"/> metres of nothing around (see
+        /// <see cref="DevWorld.MoveToOpenGround"/>) and records the "open_ground_found" assertion. <paramref name="accept"/> adds a
+        /// scenario specific test on the candidate ground point.
+        /// </summary>
         public IEnumerator MoveToOpenGround(float clearRadius = 5f, Func<Vector3, bool> accept = null)
         {
             var result = new OpenGroundResult();

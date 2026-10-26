@@ -96,6 +96,7 @@ namespace MistWorms.Dev.Scenarios
                         clutterHidden = true;
                     }
                     yield return ctx.MoveToOpenGround(OpenClearRadius);
+                    ctx.GuardCreatures = true;
                     if (!ctx.LastOpenGround.Found) yield break;
                     player.SetGhostMode(false);
                     player.SetGodMode(true);
@@ -479,7 +480,7 @@ namespace MistWorms.Dev.Scenarios
             return Mathf.Min(ring, 6);
         }
 
-        internal static void ClearCreatures(ScenarioContext ctx, Player player)
+        internal static void ClearCreatures(ScenarioContext ctx, Player player, bool quiet = false)
         {
             var found = new List<Character>();
             foreach (Character c in Character.GetAllCharacters())
@@ -495,11 +496,11 @@ namespace MistWorms.Dev.Scenarios
                 ZNetView view = c.GetComponent<ZNetView>();
                 if (view == null || !view.IsValid()) continue;
                 if (!view.IsOwner()) view.ClaimOwnership();
-                ctx.Log($"removing creature {c.name} at {c.transform.position}");
+                if (!quiet) ctx.Log($"removing creature {c.name} at {c.transform.position}");
                 if (ZNetScene.instance != null) ZNetScene.instance.Destroy(c.gameObject);
                 removed++;
             }
-            ctx.Log($"vanilla creatures within {CreatureClearRadius:0} m removed: {removed} of {found.Count} found");
+            if (!quiet || removed > 0) ctx.Log($"vanilla creatures within {CreatureClearRadius:0} m removed: {removed} of {found.Count} found");
         }
 
         /// <summary>

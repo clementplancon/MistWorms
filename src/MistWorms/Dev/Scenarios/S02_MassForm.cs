@@ -70,6 +70,7 @@ namespace MistWorms.Dev.Scenarios
                 player.SetGhostMode(false);
                 ctx.ClearInventory();
                 S18_GroupCoherence.ClearCreatures(ctx, player);
+                ctx.GuardCreatures = true;       // counts worms: nothing wanders in and poisons them
                 yield return ctx.Wait(0.5f);
 
                 // ---- spawn: widening passes until the wanted number is placed (some draws fall out of the line of sight)

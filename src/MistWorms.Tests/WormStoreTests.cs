@@ -100,6 +100,8 @@ namespace MistWorms.Tests
             s.hp[i] = 1f;
             s.targetId[i] = 42;
             s.pathSlot[i] = 7;
+            s.nestIndex[i] = 3;
+            s.lone[i] = true;
             s.animTime[i] = 9f;
             s.stillSince[i] = -5f;
             s.Free(i);
@@ -110,6 +112,7 @@ namespace MistWorms.Tests
             Assert.Equal(0L, s.targetId[i]);
             Assert.Equal(-1, s.pathSlot[i]);
             Assert.Equal(-1, s.nestIndex[i]);
+            Assert.False(s.lone[i]);
             Assert.Equal(-1, s.poolIndex[i]);
             Assert.Equal(-1, s.proxyIndex[i]);
             Assert.Equal(0f, s.animTime[i]);

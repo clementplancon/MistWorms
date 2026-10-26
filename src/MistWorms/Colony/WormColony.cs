@@ -65,6 +65,7 @@ namespace MistWorms.Colony
 
         public ZNetView NView => _nview;
         public bool IsOwner => _nview != null && _nview.IsValid() && _nview.IsOwner();
+        public long OwnerUid => _nview != null && _nview.IsValid() ? _nview.GetZDO().GetOwner() : 0L;
         public ZDOID ZdoId => _nview != null && _nview.IsValid() ? _nview.GetZDO().m_uid : ZDOID.None;
 
         // ------------------------------------------------------------------ creation
@@ -149,6 +150,8 @@ namespace MistWorms.Colony
             _dropRng = WormDrops.NewRng(GetInstanceID());
             _nview.Register<int, int, ZPackage>(MWNames.RpcWormHit, RPC_WormHit);
             _nview.Register<ZDOID, int, Vector3, ZPackage>(MWNames.RpcMassDissolve, RPC_MassDissolve);
+            _nview.Register<int, Vector3>(MWNames.RpcNestGone, RPC_NestGone);
+            InitNests();
             InitPaths();
             InitTargetCache(capacity);
             InitMassLink(capacity);
@@ -219,7 +222,7 @@ namespace MistWorms.Colony
         public int AddWorm(Vector3 position, WormState state, float headingRad, bool force = false)
         {
             if (!_initialized || Store == null) return -1;
-            if (!force && Store.AliveCount >= MWConfig.Colony.MaxAlivePerMine.Value) return -1;
+            if (!force && TotalAlive >= MWConfig.Colony.MaxAlivePerMine.Value) return -1;   // free worms and the worms inside masses (spec §8.2)
 
             float now = Time.time;
             int i = Store.Alloc(position, headingRad, state, MWConfig.Worm.Health.Value, now);

@@ -52,6 +52,15 @@ public static class SimCheck
             throw new Exception("host init failed: " + GpuWormHost.Error);
         GpuWormHost.AutoStep = false;
 
+        // MW_SIMCHECK_ONLY=skin: only the skin engulf (the formation of the sleeve), for the quick loop on the entry of the worms
+        if (Environment.GetEnvironmentVariable("MW_SIMCHECK_ONLY") == "skin")
+        {
+            SkinBody(500);
+            SkinBody(2000);
+            GpuWormHost.Shutdown();
+            return;
+        }
+
         Parity();
         Rest();
         BirthAndDeath();
@@ -68,6 +77,7 @@ public static class SimCheck
         SkinCpuCost();
         SkinBody(500);
         SkinBody(2000);
+        FreeWorms();
         Pictures();
         GpuWormHost.Shutdown();
     }
@@ -349,7 +359,7 @@ public static class SimCheck
             GpuWormHost.Tick(0f);
             GpuWormHost.StepNow(8);
             if (step == 152) { SkinSnapshot(m, region, worms, set.Count, out GpuSkinMetrics.Result f25); formed = f25.Settled; }
-            if (step % 60 == 0 || step == 232)
+            if (step % 24 == 0 || step == 232)
             {
                 SkinSnapshot(m, region, worms, set.Count, out GpuSkinMetrics.Result q);
                 timeline.Append($" t={step / 60f:0.0}s engulf {m.Engulf:0.00}: S {m.SleevePlan.Count:0}, transit {q.Transit}, settled {q.Settled};");
@@ -790,6 +800,141 @@ public static class SimCheck
         int covered = 0;
         for (int b = 0; b < bands; b++) if (mark[b] >= 2) covered++;
         return covered / (float)bands;
+    }
+
+    // ------------------------------------------------------------------ free worms: ropes of the colony against the flipbooks
+
+    private static readonly (MistWorms.Render.WormAnim anim, string file, int[] frames)[] FreeSets =
+    {
+        (MistWorms.Render.WormAnim.Crawl, "worm_crawl", new[] { 0, 3, 6, 9, 12 }),
+        (MistWorms.Render.WormAnim.Idle, "worm_idle", new[] { 0, 2, 4, 6 }),
+        (MistWorms.Render.WormAnim.Rear, "worm_rear", new[] { 0, 2, 3, 5 }),
+        (MistWorms.Render.WormAnim.Strike, "worm_strike", new[] { 0, 1, 2, 3 }),
+        (MistWorms.Render.WormAnim.Sleep, "worm_sleep", new[] { 0, 1, 2 }),
+        (MistWorms.Render.WormAnim.Coil, "worm_coil", new[] { 0, 2, 4, 6, 8, 10 }),
+    };
+
+    private static Mesh LoadFlipbook(string file, int frame)
+    {
+        byte[] bytes = File.ReadAllBytes(Path.GetFullPath(Path.Combine("..", "..", "build", $"{file}_{frame:00}.glb")));
+        MistWorms.Assets.GlbMeshData d = MistWorms.Assets.GlbParser.Parse(bytes, file);
+        int vc = d.Positions.Length / 3;
+        var pos = new Vector3[vc];
+        var nrm = new Vector3[vc];
+        var uv = new Vector2[vc];
+        for (int i = 0; i < vc; i++)
+        {
+            pos[i] = new Vector3(-d.Positions[i * 3], d.Positions[i * 3 + 1], d.Positions[i * 3 + 2]);
+            nrm[i] = new Vector3(-d.Normals[i * 3], d.Normals[i * 3 + 1], d.Normals[i * 3 + 2]);
+            uv[i] = new Vector2(d.Uvs[i * 2], 1f - d.Uvs[i * 2 + 1]);
+        }
+        var tris = new int[d.Indices.Length];
+        for (int i = 0; i < tris.Length; i += 3) { tris[i] = d.Indices[i]; tris[i + 1] = d.Indices[i + 2]; tris[i + 2] = d.Indices[i + 1]; }
+        var mesh = new Mesh { name = file + frame };
+        mesh.SetVertices(pos); mesh.SetNormals(nrm); mesh.SetUVs(0, uv); mesh.SetTriangles(tris, 0);
+        mesh.RecalculateBounds();
+        mesh.RecalculateTangents();
+        return mesh;
+    }
+
+    // Each picture: the ropes (left) and the flipbook meshes (right) of one animation, one row per frame, heads to the right, the same camera. The nodes of a rope are the centre line of
+    // its flipbook frame, so the two must overlap in shape; the difference to judge is the shading and the section.
+    private static void FreeWorms()
+    {
+        if (!GpuWormHost.EnsureFree()) { Check("free_ropes_pool", false, "no room for the free ropes"); return; }
+        Shader std = Shader.Find("Standard");
+        var mat = new Material(std) { mainTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Textures/worm_albedo.png") };
+        mat.SetFloat("_Glossiness", 0.5f);
+        int checkedPoses = 0, bad = 0;
+        foreach (var set in FreeSets)
+        {
+            // numeric check: the nodes of the pose against the vertices of the flipbook mesh: every node lies within 3 mm of the axis of the mesh, in the order tail to head
+            foreach (int f in set.frames)
+            {
+                Mesh fm = LoadFlipbook(set.file, f);
+                GpuFreeWorms.Pose(set.anim, f, out Vector3[] nodes, out float[] sc);
+                // the vertices of a .glb are not in the order of the topology: the boxes are compared. The centre line lies inside the box of the mesh and spans it to within the
+                // radius of the body and the head (3 cm over the length)
+                Bounds mb = fm.bounds;
+                Vector3 nmin = nodes[0], nmax = nodes[0];
+                foreach (Vector3 nd in nodes) { nmin = Vector3.Min(nmin, nd); nmax = Vector3.Max(nmax, nd); }
+                float worst = 0f;
+                for (int ax = 0; ax < 3; ax++)
+                {
+                    worst = Mathf.Max(worst, mb.min[ax] - nmin[ax], nmax[ax] - mb.max[ax]);
+                    worst = Mathf.Max(worst, (mb.size[ax] - (nmax[ax] - nmin[ax])) - 0.03f);
+                }
+                if (worst > 0.005f) Debug.Log($"SimCheck: free pose {set.file}_{f:00}: nodes {nmin.ToString("0.000")} to {nmax.ToString("0.000")}, mesh {mb.min.ToString("0.000")} to {mb.max.ToString("0.000")}");
+                checkedPoses++;
+                if (worst > 0.005f) bad++;
+                UnityEngine.Object.DestroyImmediate(fm);
+            }
+        }
+        Check("free_poses_match_the_flipbooks", bad == 0, $"{checkedPoses} poses: the box of the 8 nodes inside the box of the flipbook mesh and within 3 cm of its span ({bad} not)");
+
+        foreach (var set in FreeSets)
+        {
+            var go = new List<GameObject>();
+            var camGo = new GameObject("FreeCam");
+            Camera cam = camGo.AddComponent<Camera>();
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.25f, 0.28f, 0.32f);
+            cam.renderingPath = RenderingPath.DeferredShading;
+            cam.allowHDR = true;
+            cam.nearClipPlane = 0.02f;
+            cam.farClipPlane = 50f;
+            int rows = set.frames.Length;
+            float zMid = (rows - 1) * 0.07f * 0.5f;
+            // the poses that rise (rear, strike, sleep) are seen from the side, the rows stacked in height; the others from above at an angle, the rows side by side
+            bool side = set.anim == MistWorms.Render.WormAnim.Rear || set.anim == MistWorms.Render.WormAnim.Strike || set.anim == MistWorms.Render.WormAnim.Sleep;
+            if (side)
+            {
+                camGo.transform.position = new Vector3(0.28f, rows * 0.045f, -1.1f);
+                camGo.transform.LookAt(new Vector3(0.28f, rows * 0.045f, 0f));
+                cam.fieldOfView = 25f;
+            }
+            else
+            {
+                camGo.transform.position = new Vector3(0.28f, 0.75f, zMid - 0.45f);
+                camGo.transform.LookAt(new Vector3(0.28f, 0f, zMid));
+            }
+            var rt = new RenderTexture(1400, 800, 24);
+            cam.targetTexture = rt;
+            GpuWormHost.CameraProvider = () => cam;
+            GpuWormHost.AutoStep = false;
+            GpuWormHost.FreeBegin(cam.transform.position);
+            for (int i = 0; i < rows; i++)
+            {
+                float z = side ? 0f : i * 0.07f, y = side ? i * 0.09f : 0f;
+                Quaternion q = Quaternion.Euler(0f, 90f, 0f);     // heads to +x
+                Matrix4x4 left = Matrix4x4.TRS(new Vector3(0f, y, z), q, Vector3.one);
+                bool ok = GpuFreeWorms.TryAdd(set.anim, MistWorms.Render.WormLod.Lod0, set.frames[i], left, cam.transform.position);
+                if (!ok) Check($"free_rope_taken_{set.file}_{set.frames[i]}", false, "the pool refused the rope");
+                var obj = new GameObject("flip");
+                obj.AddComponent<MeshFilter>().sharedMesh = LoadFlipbook(set.file, set.frames[i]);
+                obj.AddComponent<MeshRenderer>().sharedMaterial = mat;
+                obj.transform.SetPositionAndRotation(new Vector3(0.55f, y, z), q);
+                go.Add(obj);
+            }
+            GpuWormHost.FreeEnd();
+            GpuWormHost.Tick(0f);
+            cam.Render();
+            RenderTexture.active = rt;
+            var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+            tex.Apply();
+            File.WriteAllBytes($"Logs/simcheck_free_{set.file}.png", tex.EncodeToPNG());
+            Debug.Log($"SimCheck: picture free_{set.file}: {rows} ropes (left) against {rows} flipbooks (right), draw calls {GpuWormHost.DrawCalls}, ropes drawn {GpuWormHost.DrawnWorms}");
+            Check($"free_ropes_drawn_{set.file}", GpuWormHost.DrawnWorms == rows, $"{GpuWormHost.DrawnWorms} ropes drawn of {rows}");
+            RenderTexture.active = null;
+            cam.targetTexture = null;
+            UnityEngine.Object.DestroyImmediate(rt);
+            UnityEngine.Object.DestroyImmediate(tex);
+            UnityEngine.Object.DestroyImmediate(camGo);
+            foreach (GameObject g in go) { UnityEngine.Object.DestroyImmediate(g.GetComponent<MeshFilter>().sharedMesh); UnityEngine.Object.DestroyImmediate(g); }
+        }
+        GpuWormHost.FreeBegin(Vector3.zero);
+        GpuWormHost.FreeEnd();
     }
 
     // ------------------------------------------------------------------ 4. pictures

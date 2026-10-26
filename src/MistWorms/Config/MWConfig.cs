@@ -79,7 +79,7 @@ namespace MistWorms.Config
         /// migrations below, in order, then is stamped. A migration only touches a value that still equals the OLD default: a value the user
         /// chose is never overwritten. Each one is logged.
         /// </summary>
-        public const int CurrentConfigVersion = 4;
+        public const int CurrentConfigVersion = 5;
 
         private static void Migrate()
         {
@@ -100,6 +100,16 @@ namespace MistWorms.Config
 
             // v4: a mass is smaller (r(40) 1.36 -> 0.43 m): the limit r + DetachDistance past which a target breaks free went from 2.9 to 1.9 m, which a roll beats; 2.5 gives back about the old limit.
             if (from < 4) MigrateFloat(Mass.DetachDistance, 1.5f, 2.5f, 4);
+
+            // v5 (decision 191): fewer worms per mine for performance (cap 400 -> 200, nests 24 -> 8, 8 -> 6 worms at seeding, 50 -> 25 per nest, one egg per 30 s instead of 20).
+            if (from < 5)
+            {
+                MigrateInt(Colony.MaxAlivePerMine, 400, 200, 5);
+                MigrateInt(Nest.MaxNestsPerMine, 24, 8, 5);
+                MigrateInt(Nest.InitialWorms, 8, 6, 5);
+                MigrateInt(Nest.MaxAlivePerNest, 50, 25, 5);
+                MigrateFloat(Nest.SpawnInterval, 20f, 30f, 5);
+            }
 
             Plugin.Log?.LogInfo($"[Config] ConfigVersion {from} -> {CurrentConfigVersion}");
             General.ConfigVersion.Value = CurrentConfigVersion;
@@ -489,13 +499,15 @@ namespace MistWorms.Config
             private const string S = nameof(Nest);
             public static ConfigEntry<float> Health;
             public static ConfigEntry<int> InitialWorms;
-            public static ConfigEntry<int> FreeWormsPerRoom;
+            public static ConfigEntry<int> LoneWormsPerMine;
+            public static ConfigEntry<int> MaxLoneWormsPerRoom;
             public static ConfigEntry<float> SpawnInterval;
             public static ConfigEntry<int> MaxAlivePerNest;
             public static ConfigEntry<int> ReleaseOnDestroy;
             public static ConfigEntry<float> WakeRadius;
             public static ConfigEntry<float> MinRoomArea;
             public static ConfigEntry<int> MaxNestsPerMine;
+            public static ConfigEntry<float> HitPause;
 
             internal static void Bind()
             {
@@ -503,16 +515,19 @@ namespace MistWorms.Config
                 Health = Synced(S, nameof(Health), 150f,
                     "Hit points of a nest.", F(1f, 10000f));
                 // range chosen
-                InitialWorms = Synced(S, nameof(InitialWorms), 8,
+                InitialWorms = Synced(S, nameof(InitialWorms), 6,
                     "Sleeping worms placed around a nest when a mine is seeded.", I(0, 100));
                 // range chosen
-                FreeWormsPerRoom = Synced(S, nameof(FreeWormsPerRoom), 3,
-                    "Average lone sleeping worms scattered in each room when a mine is seeded (+/- 1).", I(0, 50));
+                LoneWormsPerMine = Synced(S, nameof(LoneWormsPerMine), 70,
+                    "Total lone sleeping worms scattered over the rooms of a mine when it is seeded (round-robin over the rooms).", I(0, 500));
                 // range chosen
-                SpawnInterval = Synced(S, nameof(SpawnInterval), 20f,
+                MaxLoneWormsPerRoom = Synced(S, nameof(MaxLoneWormsPerRoom), 2,
+                    "Maximum lone sleeping worms placed in one room when a mine is seeded.", I(0, 20));
+                // range chosen
+                SpawnInterval = Synced(S, nameof(SpawnInterval), 30f,
                     "Seconds between two worms laid by a nest while a player is in the mine.", F(1f, 600f));
                 // range chosen
-                MaxAlivePerNest = Synced(S, nameof(MaxAlivePerNest), 50,
+                MaxAlivePerNest = Synced(S, nameof(MaxAlivePerNest), 25,
                     "A nest stops laying once this many worms from it are alive (free or inside a mass).", I(1, 500));
                 // range chosen
                 ReleaseOnDestroy = Synced(S, nameof(ReleaseOnDestroy), 5,
@@ -523,8 +538,11 @@ namespace MistWorms.Config
                 // range chosen
                 MinRoomArea = Synced(S, nameof(MinRoomArea), 25f,
                     "Minimum floor area in square metres of a room that gets a nest.", F(1f, 1000f));
-                MaxNestsPerMine = Synced(S, nameof(MaxNestsPerMine), 24,
+                MaxNestsPerMine = Synced(S, nameof(MaxNestsPerMine), 8,
                     "Maximum nests per mine; further rooms only get lone worms.", I(1, 64));
+                // range chosen
+                HitPause = Synced(S, nameof(HitPause), 3f,
+                    "A nest does not lay for this many seconds after it was hit.", F(0f, 60f));
             }
         }
 
@@ -536,7 +554,7 @@ namespace MistWorms.Config
 
             internal static void Bind()
             {
-                MaxAlivePerMine = Synced(S, nameof(MaxAlivePerMine), 400,
+                MaxAlivePerMine = Synced(S, nameof(MaxAlivePerMine), 200,
                     "Maximum living worms per mine (free and inside masses). Read once when a colony loads.", I(10, 2000));
                 AlertRadius = Synced(S, nameof(AlertRadius), 25f,
                     "An alert spreads to every worm and nest within this many metres, nest after nest.", F(5f, 100f));

@@ -185,6 +185,7 @@ namespace MistWorms.Mass
             // The growth animation (spec §12.4) is for a mass born of a formation; a dev mass appears at its size (mw_born 0 = unknown).
             zdo.Set(HashBorn, newborn && ZNet.instance != null ? ZNet.instance.GetTime().Ticks : 0L);
             zdo.Set(MWNames.ZdoMassPool, Array.Empty<byte>());
+            ResetNests(n);
             ImposeHealth(n, 0f);
             _imposed = true;
         }
@@ -505,6 +506,7 @@ namespace MistWorms.Mass
                 DestroyReason = $"killed: health {health:0.#} (vanilla death), last hit by {LastAttackerText()}";
                 // Vanilla CheckDeath follows; clients see the last worms go.
                 WriteCount(0, 0f);
+                ClearNests();
                 PoolOnDeath();   // the last worm hands out everything left (spec Â§7.3)
                 return;
             }
@@ -524,6 +526,7 @@ namespace MistWorms.Mass
             WriteCount(newN, newPartial);
 
             int kills = n - newN;
+            if (kills > 0) LoseNests(kills, n);
             if (kills > 0) PoolOnLoss(kills, n);   // the dead worms' share of the pool, before a dissolution hands the rest over
             if (kills > 0 && newN < MWConfig.Mass.DissolveThreshold.Value) BeginDissolve(newN);
         }
@@ -532,12 +535,12 @@ namespace MistWorms.Mass
         /// Adds worms (absorption, fusion). The owner caps at Mass.MaxCount and returns the number accepted; any other peer forwards the
         /// request to the owner and returns -1 (the owner decides).
         /// </summary>
-        public int AddWorms(int k, MassPool donor = null)
+        public int AddWorms(int k, MassPool donor = null, NestCounts nests = null)
         {
             if (k <= 0 || !Valid) return 0;
             if (!_nview.IsOwner())
             {
-                _nview.InvokeRPC(MWNames.RpcMassAdd, k, DonorPackage(donor));
+                _nview.InvokeRPC(MWNames.RpcMassAdd, k, DonorPackage(donor, nests));
                 if (donor != null) donor.Clear();   // the pool left with the worms
                 return -1;
             }
@@ -548,6 +551,7 @@ namespace MistWorms.Mass
             if (accepted == 0) return 0;
 
             float partial = Partial;
+            AddNests(nests, accepted, k);   // before the count changes: the set is fitted to the old n first
             ImposeHealth(n + accepted, partial);
             WriteCount(n + accepted, partial);
             TakeDonorPool(donor, accepted, k);   // the pool comes with the worms (fraction accepted/k when the cap cut the group)
@@ -558,13 +562,16 @@ namespace MistWorms.Mass
         {
             try
             {
-                if (!s_poolRpcIn.Read(pool))
+                bool poolOk = s_poolRpcIn.Read(pool);
+                if (!poolOk)
                 {
                     Plugin.Log.LogWarning($"[Pool] mass {ZdoId}: unreadable pool in MW_MassAdd, ignored");
                     s_poolRpcIn.Clear();
                 }
+                if (poolOk) s_nestRpc.ReadTail(pool);     // the set that follows the pool; none = every worm without a nest
+                else s_nestRpc.Clear();
                 // Validation: no peer adds more worms than a mass can hold. Refused worms are gone, their pool is not: it is dropped (same result whoever owns the mass).
-                if (k > 0 && k <= MWConfig.Mass.MaxCount.Value && IsOwner) AddWorms(k, s_poolRpcIn);
+                if (k > 0 && k <= MWConfig.Mass.MaxCount.Value && IsOwner) AddWorms(k, s_poolRpcIn, s_nestRpc);
                 DropLeftover(s_poolRpcIn);
             }
             catch (Exception e)

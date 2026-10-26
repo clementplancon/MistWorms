@@ -41,6 +41,7 @@ namespace MistWorms.Mass
                     if (Application.isBatchMode || !GpuWormBundle.InitHost()) { s_ok = false; return false; }
                     s_env = GpuWormHost.Environment as GpuEnvCapture ?? new GpuEnvCapture();
                     GpuWormHost.Environment = s_env;
+                    GpuWormHost.EnsureFree();
                     s_ok = true;
                 }
                 catch (Exception e)
@@ -51,6 +52,9 @@ namespace MistWorms.Mass
                 return s_ok;
             }
         }
+
+        /// <summary>True when the free worms are ropes of the colony (the same conditions as the masses).</summary>
+        public static bool FreeActive => Available && GpuFreeWorms.Enabled;
 
         /// <summary>Visual worms for the count of the game (10 per unit), capped.</summary>
         public static int WormsFor(int n) => Mathf.Clamp(n * WormsPerUnit, 1, MaxWormsPerMass);

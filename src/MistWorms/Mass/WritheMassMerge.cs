@@ -1,4 +1,5 @@
 using System;
+using MistWorms.Colony;
 using MistWorms.Config;
 using MistWorms.Drops;
 using MistWorms.Render;
@@ -173,7 +174,8 @@ namespace MistWorms.Mass
         {
             int k = N;
             int bigBefore = big.N;
-            int accepted = big.AddWorms(k, OwnerPool());   // the pool (quantities and carries) goes with the worms; a cut group takes the fraction accepted/k
+            NestCounts own = OwnerNests();                 // the nests of origin go with the worms, like the pool
+            int accepted = big.AddWorms(k, OwnerPool(), own);   // the pool (quantities and carries) goes with the worms; a cut group takes the fraction accepted/k
             Plugin.Log.LogInfo($"[Mass] merge: {ZdoId} (n={k}) into {big.ZdoId}: the big one {bigBefore} -> {big.N}, accepted {accepted}");
             if (accepted < 0 || accepted >= k)
             {
@@ -181,6 +183,7 @@ namespace MistWorms.Mass
                 MergesCompleted++;
                 DestroyReason = $"merged into {big.ZdoId} (n={k} given, accepted {accepted})";
                 _merging = false;
+                ClearNests();                    // handed over: no double count while the small mass is still alive this frame
                 if (big._slidersIn > 0) big._slidersIn--;
                 SetBodiesIgnoring(big, false);
                 DestroyMass();
@@ -189,8 +192,9 @@ namespace MistWorms.Mass
             // The big mass grew meanwhile and cannot take everyone: this one keeps the rest, with no dissolution.
             if (accepted > 0)
             {
+                own.CopyProrata(accepted, s_nestShare);      // exactly what the big mass took (same rule, same input)
                 BeginTransferFlag();
-                RemoveWorms(accepted);
+                RemoveWorms(accepted, s_nestShare);
                 WormsTransferred += accepted;
             }
             SavePool();   // what the big mass did not take stays here, with the worms that stay
@@ -217,7 +221,8 @@ namespace MistWorms.Mass
             MassPool own = OwnerPool();
             s_poolTransfer.Clear();
             own.MoveFraction(s_poolTransfer, k, N);
-            int accepted = big.AddWorms(k, s_poolTransfer);
+            OwnerNests().CopyProrata(k, s_nestOffer);       // the nests of the k worms that leave
+            int accepted = big.AddWorms(k, s_poolTransfer, s_nestOffer);
             if (accepted != -1 && !s_poolTransfer.IsEmpty) own.Merge(s_poolTransfer);
             s_poolTransfer.Clear();
             SavePool();
@@ -236,8 +241,9 @@ namespace MistWorms.Mass
                 to.SeedArrivals(s_transferPoints, glides);
             }
 
+            s_nestOffer.CopyProrata(moved, s_nestShare);    // what the big mass took of the offer (or applies on its own cap, remote)
             BeginTransferFlag();
-            int removed = RemoveWorms(moved);
+            int removed = RemoveWorms(moved, s_nestShare);
             WormsTransferred += removed;
         }
 
@@ -258,12 +264,16 @@ namespace MistWorms.Mass
         /// Takes <paramref name="k"/> worms out of this mass without any loss effect (a partial merge hands them to another mass). Owner only; at
         /// least one worm stays. Never dissolves. Returns the number removed.
         /// </summary>
-        public int RemoveWorms(int k)
+        public int RemoveWorms(int k, NestCounts composition = null)
         {
             if (k <= 0 || !IsOwner || _character == null) return 0;
             int n = N;
             int removed = Math.Min(k, n - 1);
             if (removed <= 0) return 0;
+            NestCounts nests = OwnerNests();              // fitted to the old n, before the count changes
+            if (composition != null && composition.Total == removed) nests.Subtract(composition);
+            else nests.TakeProrata(removed, null);
+            SaveNests();
             float partial = Partial;
             ImposeHealth(n - removed, partial);
             WriteCount(n - removed, partial);

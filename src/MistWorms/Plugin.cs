@@ -61,6 +61,7 @@ namespace MistWorms
             // The only safe moment to build the effect templates (DestroyImmediate) and to play what the hits and deaths asked for.
             if (!Application.isBatchMode) Colony.WormEffects.Pump();
             Drops.WormDrops.PumpPending();   // the items of a dead pool that did not fit in one frame (spec 7.3)
+            MineSeeder.Pump();               // colony of a mine and its lazy seeding (spec 8.3)
         }
 
         /// <summary>The ObjectDB is ready (every time it is rebuilt): the Wisplight gets its virtual durability and the Infested effect its icon (plan 5-1).</summary>
@@ -77,6 +78,7 @@ namespace MistWorms
             // Before any zone loads, on every peer: a server that meets an unknown prefab hash destroys the ZDO.
             ColonyPrefab.Register();
             Mass.MassPrefab.Register();
+            NestPrefab.Register();
 
             try
             {
@@ -101,7 +103,6 @@ namespace MistWorms
             {
                 LogException("Plugin.OnVanillaPrefabsAvailable", e);
             }
-            // Later phases: prefab registration (MW_WormNest), status effects.
         }
 
         private void OnDestroy()

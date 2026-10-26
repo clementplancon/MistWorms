@@ -177,6 +177,7 @@ namespace MistWorms.Dev
             {
                 if (colony == null) continue;
                 worms += colony.KillAll();
+                colony.DestroyAllNests();
                 if (colony.Kind == WormColony.ColonyKind.Test && colony.IsOwner)
                 {
                     colony.DestroyColony();
@@ -184,6 +185,14 @@ namespace MistWorms.Dev
                 }
             }
             return worms;
+        }
+
+        /// <summary>Removes the worms and the nests of the mine colony around the player (a seeding done earlier), with no effect and no release. Returns how many.</summary>
+        public static int ClearMine(Player player)
+        {
+            WormColony colony = ColonyRegistry.FindFor(player.transform.position);
+            if (colony == null || colony.Kind != WormColony.ColonyKind.Mine) return 0;
+            return colony.KillAll() + colony.DestroyAllNests();
         }
 
         // ---------------------------------------------------------------- hits
@@ -281,6 +290,8 @@ namespace MistWorms.Dev
                 { "byState", byState },
                 { "simMs", new Dictionary<string, object> { { "last", c.LastSimMs }, { "avg", c.AvgSimMs }, { "max", c.MaxSimMs }, { "steps", c.LastSimSteps } } },
                 { "proxies", ProxiedWorms(c) },
+                { "seeded", c.Seeded },
+                { "nests", new Dictionary<string, object> { { "loaded", c.NestsLoaded }, { "eggsLaid", c.EggsLaid }, { "wormsReleased", c.WormsReleased }, { "totalAlive", c.TotalAlive } } },
                 { "masses", new Dictionary<string, object> { { "known", c.MassCount }, { "formed", c.MassesFormed }, { "wormsFormed", c.WormsFormed }, { "wormsAbsorbed", c.WormsAbsorbed }, { "dissolvedWorms", c.DissolvedWorms }, { "gathering", ColonyDev.GatheringEnabled } } },
                 {
                     "combat", new Dictionary<string, object>

@@ -123,6 +123,22 @@ namespace MistWorms.Tests
         }
 
         [Fact]
+        public void ASmallMassStillReachesTwoMetresAndAHalf()
+        {
+            // r(38) = 0.42 m after the v3 config (BaseRadius 0.26): the envelope term is 1.05 m, two worms 1.7 m from the centre of a mass of 38 waited for ever.
+            float r38 = MassMath.Radius(38, 0.26f, 0.36f);
+            Assert.True(WormGather.AbsorbReach(r38) >= 1.7f + 0.3f);
+            Assert.Equal(WormGather.MinAbsorbReach, WormGather.AbsorbReach(MassMath.Radius(5, 0.26f, 0.36f)));
+            Assert.Equal(WormGather.MinAbsorbReach, WormGather.AbsorbReach(MassMath.Radius(200, 0.26f, 0.36f)));
+            // a big mass keeps its envelope term
+            Assert.Equal(3f * 1.3f + 0.5f, WormGather.AbsorbReach(3f), 3);
+            // the stall rule follows the same reach
+            Assert.False(WormGather.IsStalled(1.7f, r38, 0f));
+            Assert.True(WormGather.IsStalled(3.5f, r38, 0f));
+            Assert.True(WormGather.StalledAbsorbReach > WormGather.MinAbsorbReach);
+        }
+
+        [Fact]
         public void GroupCentroidNeedsOthersWithinTheRadius()
         {
             Vector3[] pos = { new Vector3(0, 0, 0), new Vector3(4, 0, 0), new Vector3(8, 0, 0), new Vector3(100, 0, 0) };

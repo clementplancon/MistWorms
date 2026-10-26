@@ -10,8 +10,8 @@ namespace MistWorms.Tests
         public void NarrowMeansUnderTwiceTheRadiusPlusAMargin()
         {
             Assert.True(MassStream.TooNarrow(2.0f, 2.44f));     // a 2 m corridor for a mass of 200
-            Assert.False(MassStream.TooNarrow(5.1f, 2.44f));    // 2 x 2.44 + 0.2 = 5.08
-            Assert.True(MassStream.TooNarrow(5.0f, 2.44f));
+            Assert.False(MassStream.TooNarrow(5.4f, 2.44f));    // 2 x 2.44 + 0.5 = 5.38
+            Assert.True(MassStream.TooNarrow(5.3f, 2.44f));
         }
 
         [Fact]

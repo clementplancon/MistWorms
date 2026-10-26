@@ -29,7 +29,8 @@ namespace MistWorms.Colony
         public readonly float[] stateTime;        // seconds in the current state, as of lastSimTime
         public readonly byte[] subPhase;          // StrikePhase while Striking
         public readonly float[] hp;
-        public readonly short[] nestIndex;        // -1 = none (nests arrive in phase 7)
+        public readonly short[] nestIndex;        // -1 = none; the nest a worm was laid or seeded at, or the nearest one for a lone worm
+        public readonly bool[] lone;              // a lone worm of the seeding: attached to its nearest nest for the alert only, never counted in the cap of that nest (spec 8.1)
         public readonly byte[] targetKind;        // TargetKind
         public readonly long[] targetId;          // player id for TargetKind.Player, 0 = none; any other kind: a non zero key of the object (see SetObjectTarget)
         public readonly long[] targetZdoUser;     // ZDOID.UserID of a Tamed / Creature / Structure target (spec §11.3), 0 otherwise
@@ -100,6 +101,7 @@ namespace MistWorms.Colony
             subPhase = new byte[capacity];
             hp = new float[capacity];
             nestIndex = new short[capacity];
+            lone = new bool[capacity];
             targetKind = new byte[capacity];
             targetId = new long[capacity];
             targetZdoUser = new long[capacity];
@@ -173,6 +175,7 @@ namespace MistWorms.Colony
             subPhase[i] = 0;
             hp[i] = health;
             nestIndex[i] = -1;
+            lone[i] = false;
             targetKind[i] = (byte)TargetKind.None;
             targetId[i] = 0;
             targetZdoUser[i] = 0;

@@ -1,6 +1,7 @@
 #if MW_DEV
 using System.Collections;
 using MistWorms.Colony;
+using MistWorms.Config;
 using MistWorms.Dev.Preview;
 using UnityEngine;
 
@@ -11,7 +12,9 @@ namespace MistWorms.Dev.Scenarios
     /// a wall or leaving their box. Parameters: n (100), where = mine | open (mine), seconds (60).
     /// The measurements do not use the simulation's own checks: floor, wall and box are probed independently from the stored
     /// positions every 0.1 s (a 0.12 m chord cannot clip a wall corner the 0.05 m clearance of the worms respects; 0.25 s chords could).
-    /// The player is god and ghost, so the worms do not hunt and only wander.
+    /// The player is god and ghost, so the worms do not hunt and only wander. Since phase 6 a worm also senses creatures, tamed animals and (as a fallback) the structures of the town, and
+    /// a worm that senses something gathers into a mass; the absorbed ones leave the store (counted as deaths) and climb onto the heap (above the measured floor). The targets of the
+    /// worms are therefore switched off for the run (restored at the end), and the creatures of the mine are removed (<see cref="ScenarioContext.TpMine"/>).
     /// </summary>
     internal sealed class P3_Wander : IDevScenario
     {
@@ -29,8 +32,15 @@ namespace MistWorms.Dev.Scenarios
             // /tp-mine (90 s) + settling + the measurement + the captures.
             if (!ctx.Params.ContainsKey("timeout")) ctx.TimeoutSeconds = 240f + seconds;
 
+            bool tamedBefore = MWConfig.Targets.AttackTamed.Value;
+            bool creaturesBefore = MWConfig.Targets.AttackCreatures.Value;
+            bool structuresBefore = MWConfig.Targets.AttackStructures.Value;
             try
             {
+                MWConfig.Targets.AttackTamed.Value = false;
+                MWConfig.Targets.AttackCreatures.Value = false;
+                MWConfig.Targets.AttackStructures.Value = false;
+
                 yield return ctx.WaitUntil(() => Player.m_localPlayer != null && DevBridge.IsReady(Player.m_localPlayer), 60f, "player_ready");
                 if (ctx.LastWaitTimedOut) yield break;
 
@@ -43,6 +53,7 @@ namespace MistWorms.Dev.Scenarios
                 if (where == "open")
                 {
                     yield return ctx.MoveToOpenGround(8f);
+                    ctx.GuardCreatures = true;
                     placed = ctx.LastOpenGround.Found;
                 }
                 else
@@ -158,6 +169,9 @@ namespace MistWorms.Dev.Scenarios
             }
             finally
             {
+                MWConfig.Targets.AttackTamed.Value = tamedBefore;
+                MWConfig.Targets.AttackCreatures.Value = creaturesBefore;
+                MWConfig.Targets.AttackStructures.Value = structuresBefore;
                 DevCamera.Follow();
                 ctx.Console("mw_kill");
                 if (Player.m_localPlayer != null) Player.m_localPlayer.SetGhostMode(false);

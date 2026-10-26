@@ -22,11 +22,18 @@ namespace MistWorms.Colony
         public static bool IsStalled(float distanceToMassCentre, float massRadius, float movedOverWindow, float minMoved = 0.5f) =>
             distanceToMassCentre > AbsorbReach(massRadius) && movedOverWindow < minMoved;
 
+        /// <summary>Smallest absorption reach (metres): a mass is small (r(40) = 0.43 m) and its body is not the only thing that keeps a worm from the centre (the capsule, the other worms).</summary>
+        public const float MinAbsorbReach = 2.2f;
+
+        /// <summary>A worm that made no progress for a whole stuck window is pulled in from this far (metres) when nothing solid lies between it and the mass.</summary>
+        public const float StalledAbsorbReach = 10f;
+
         /// <summary>
         /// Distance from the centre of a mass at which a worm touches it and starts to climb: the visible envelope is wider than r in places (lobes),
-        /// so r x 1.3 + 0.5 m (a worm used to be missed at 2.8 m from a mass of 39 that wanders).
+        /// so r x 1.3 + 0.5 m (a worm used to be missed at 2.8 m from a mass of 39 that wanders), never under <see cref="MinAbsorbReach"/> (with r(38) = 0.42 m the
+        /// first term is 1.05 m and two worms that stood 1.7 m from the centre waited for ever; the old mass of 38 reached 2.2 m).
         /// </summary>
-        public static float AbsorbReach(float radius) => radius * 1.3f + 0.5f;
+        public static float AbsorbReach(float radius) => Mathf.Max(radius * 1.3f + 0.5f, MinAbsorbReach);
 
         /// <summary>
         /// The mass a gathering worm goes to: the nearest within <paramref name="radius"/> (xz) and <paramref name="maxDy"/> whose load (count plus worms

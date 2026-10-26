@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MistWorms.Colony;
 using MistWorms.Config;
 using MistWorms.Drops;
 using UnityEngine;
@@ -90,6 +91,7 @@ namespace MistWorms.Mass
             pool.Write(pkg);
             pool.Clear();
             SavePool();
+            TakeNestsInto(pkg);   // the nests of origin of the worms travel with the pool, after it
             return pkg;
         }
 
@@ -135,10 +137,12 @@ namespace MistWorms.Mass
             TakeDonorPool(pools, 1, 1);
         }
 
-        private ZPackage DonorPackage(MassPool donor)
+        private ZPackage DonorPackage(MassPool donor, NestCounts nests = null)
         {
             var pkg = new ZPackage();
             if (donor != null) donor.Write(pkg);
+            else new MassPool().Write(pkg);    // the set always follows a pool, empty or not
+            if (nests != null) nests.AppendTo(pkg);
             return pkg;
         }
 

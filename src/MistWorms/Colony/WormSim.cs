@@ -103,9 +103,11 @@ namespace MistWorms.Colony
                 steps++;
             }
 
-            // Phase 7 adds nests and the snapshot: a colony will then also wait for its nests before vanishing. It also stays while it has a mass
-            // (the worms of a dissolving mass come back to it, spec §4.4).
-            if (s.AliveCount == 0 && _massCount == 0)
+            TickNests(now);
+
+            // A test colony vanishes when it has no worm, no mass and no nest. It also stays while it has a mass (the worms of a dissolving mass come
+            // back to it, spec §4.4). A mine colony stays: it carries the seeded flag of the mine, which must outlive its last worm (decision 194).
+            if (s.AliveCount == 0 && _massCount == 0 && NestsLoaded == 0 && Kind != ColonyKind.Mine)
             {
                 if (_emptySince < 0f) _emptySince = now;
                 else if (now - _emptySince >= EmptyDestroyDelay) DestroyColony();

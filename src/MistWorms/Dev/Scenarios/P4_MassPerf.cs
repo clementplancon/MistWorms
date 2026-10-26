@@ -38,11 +38,10 @@ namespace MistWorms.Dev.Scenarios
         // Budgets of the GPU rope colony (visual v2, plan A10): main thread (free worms, probes, upload and submission of the masses) 0.25 ms, 16 calls of the mod, 1.5 M triangles seen by the camera,
         // frame time difference 2 ms, no managed allocation of the host in a steady window.
         private const float GpuMainBudget = 0.25f;
-        // Calls per pass: the GPU colony draws every mass of every LOD in one call per LOD and one for the shadows of LOD0 (4 at most); the 100 free worms are still flipbooks
-        // (one call per animation, LOD and frame bucket: 14 to 17 for 100 worms, the CPU path of the free worms, plan A7 not done). 16 for the whole mod would leave
-        // none for the free worms, so the budget is split: 4 for the colony, 20 for the free worms.
+        // Calls per pass: the GPU colony draws every mass of every LOD and every free worm in one call per LOD and one for the shadows (4 at most); what the flipbook renderer still draws
+        // (the nest, and the free worms when the GPU path is off) has its own small budget; the whole mod stays under 16.
         private const int GpuHostCallBudget = 4;
-        private const int GpuFreeCallBudget = 20;
+        private const int GpuFreeCallBudget = 4;
         private const int GpuCallBudget = 16;
         private const int GpuTriangleBudget = 1500000;
         private const float WalkHalf = 3f, WalkPeriod = 3f;
@@ -101,8 +100,11 @@ namespace MistWorms.Dev.Scenarios
                 DevCamera.Free(eye, eye + fwd * 10f);
 
                 // ---- the scene
-                _anchorA = player.transform.position + fwd * 7f - _perp * 4f;
-                _anchorB = player.transform.position + fwd * 20f + _perp * 9f;
+                // The levels of detail of the colony are 8 m and 25 m from the nearest point of the volume of a mass (the flipbook layout: 12 m and 30 m from its edge); each mass walks 3 m either
+                // side of its anchor, so A is placed at 4 to 8 m (LOD0 whatever the phase of the walk) and B at 13 to 16 m (LOD1) for the colony.
+                bool colony = GpuMassBridge.Available;
+                _anchorA = colony ? player.transform.position + fwd * 4f - _perp * 3.5f : player.transform.position + fwd * 7f - _perp * 4f;
+                _anchorB = colony ? player.transform.position + fwd * 13f + _perp * 7f : player.transform.position + fwd * 20f + _perp * 9f;
                 _a = SpawnRobust(ctx, "A", player, _anchorA);
                 _b = SpawnRobust(ctx, "B", player, _anchorB);
                 ctx.Assert("masses_created", _a != null && _b != null, "two masses of 200", $"{(_a != null)} {(_b != null)}");
@@ -523,7 +525,8 @@ namespace MistWorms.Dev.Scenarios
                 int hostMax = MaxI(s.HostCalls, n), freeMax = 0;
                 for (int i = 0; i < n; i++) freeMax = Math.Max(freeMax, s.Calls[i] - s.HostCalls[i]);
                 ctx.Assert($"{tag}_draw_calls_colony_max", hostMax <= GpuHostCallBudget, $"<= {GpuHostCallBudget} (one per LOD, one for the shadows)", hostMax);
-                ctx.Assert($"{tag}_draw_calls_free_worms_max", freeMax <= GpuFreeCallBudget, $"<= {GpuFreeCallBudget} (the flipbook batches of the 100 free worms; 17 measured)", freeMax);
+                ctx.Assert($"{tag}_draw_calls_flipbook_max", freeMax <= GpuFreeCallBudget, $"<= {GpuFreeCallBudget} (the flipbook renderer: free worms are ropes of the colony)", freeMax);
+                ctx.Assert($"{tag}_draw_calls_max", MaxI(s.Calls, n) <= callBudget, $"<= {callBudget} for the whole mod", MaxI(s.Calls, n));
             }
             else ctx.Assert($"{tag}_draw_calls_max", MaxI(s.Calls, n) <= callBudget, $"<= {callBudget}", MaxI(s.Calls, n));
             ctx.Assert($"{tag}_triangles_max", MaxI(s.Tris, n) <= triBudget, $"<= {triBudget}", MaxI(s.Tris, n));

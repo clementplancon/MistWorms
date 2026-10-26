@@ -36,6 +36,8 @@ namespace MistWorms.Render.Gpu
         public float ShrinkUntil;
         public uint Seed;
         public bool Active;
+        /// <summary>The pool of free ropes (flipbook worms drawn as ropes): written by the CPU every frame, never simulated.</summary>
+        public bool IsFree;
         public bool NeedsInit;
         public bool EnvForce;
         /// <summary>The owner writes the environment itself (parity check): the host never asks the <see cref="IGpuEnvironment"/> for this mass.</summary>
@@ -126,7 +128,7 @@ namespace MistWorms.Render.Gpu
         private static readonly int[] s_listCount = new int[4];
         private static readonly Mesh[] s_meshes = new Mesh[GpuWormTube.Lods];
         private static readonly Material[] s_materials = new Material[4];
-        private static readonly GpuMass[] s_slots = new GpuMass[WormSimConst.MaxMasses];
+        private static readonly GpuMass[] s_slots = new GpuMass[WormSimConst.MaxMasses + 1];
         private static readonly Plane[] s_planes = new Plane[6];
         private static GameObject s_driver;
         private static Bounds s_drawBounds;
@@ -211,7 +213,7 @@ namespace MistWorms.Render.Gpu
                 s_delta = new GraphicsBuffer(GraphicsBuffer.Target.Structured, worms * WormSimConst.PointStride, 16);
                 s_grid = new GraphicsBuffer(GraphicsBuffer.Target.Structured, WormSimConst.GridCells * WormSimConst.GridSlots, 4);
                 s_worms = new GraphicsBuffer(GraphicsBuffer.Target.Structured, worms, 16);
-                s_masses = new GraphicsBuffer(GraphicsBuffer.Target.Structured, masses, WormSimConst.MassStride);
+                s_masses = new GraphicsBuffer(GraphicsBuffer.Target.Structured, masses + 1, WormSimConst.MassStride);
                 s_height = new GraphicsBuffer(GraphicsBuffer.Target.Structured, masses * WormSimConst.HeightN * WormSimConst.HeightN, 4);
                 s_prims = new GraphicsBuffer(GraphicsBuffer.Target.Structured, masses * WormSimConst.MaxPrims, 64);
                 s_anchors = new GraphicsBuffer(GraphicsBuffer.Target.Structured, masses * WormSimConst.MaxAnchors, 32);
@@ -224,7 +226,7 @@ namespace MistWorms.Render.Gpu
                 s_skinState = new GraphicsBuffer(GraphicsBuffer.Target.Structured, worms, 16);
                 s_nodeAnchor = new GraphicsBuffer(GraphicsBuffer.Target.Structured, nodes, 4);
                 s_args = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, 4, GraphicsBuffer.IndirectDrawIndexedArgs.size);
-                s_massParams = new NativeArray<GpuMassParams>(masses, Allocator.Persistent);
+                s_massParams = new NativeArray<GpuMassParams>(masses + 1, Allocator.Persistent);
                 s_wormData = new NativeArray<GpuWormData>(worms, Allocator.Persistent);
                 s_argData = new NativeArray<GraphicsBuffer.IndirectDrawIndexedArgs>(4, Allocator.Persistent);
                 ClearMasses();
@@ -291,6 +293,8 @@ namespace MistWorms.Render.Gpu
 
         public static void Shutdown()
         {
+            s_free = null;
+            for (int l = 0; l < 3; l++) if (s_freeStage[l].IsCreated) s_freeStage[l].Dispose();
             for (int i = 0; i < s_slots.Length; i++) if (s_slots[i] != null) RemoveMass(s_slots[i]);
             Ready = false;
             if (s_driver != null) UnityEngine.Object.Destroy(s_driver);
@@ -320,7 +324,7 @@ namespace MistWorms.Render.Gpu
             get
             {
                 int n = 0;
-                for (int i = 0; i < s_slots.Length; i++) if (s_slots[i] != null) n++;
+                for (int i = 0; i < s_slots.Length; i++) if (s_slots[i] != null && !s_slots[i].IsFree) n++;
                 return n;
             }
         }
@@ -341,7 +345,7 @@ namespace MistWorms.Render.Gpu
             int wormCount = Mathf.Clamp(capacity, 1, 2400);
             active = Mathf.Clamp(active, 1, wormCount);
             int slot = -1;
-            for (int i = 0; i < s_slots.Length; i++) if (s_slots[i] == null) { slot = i; break; }
+            for (int i = 0; i < WormSimConst.MaxMasses; i++) if (s_slots[i] == null) { slot = i; break; }
             if (slot < 0) return null;
             int first = AllocWorms(wormCount);
             if (first < 0) return null;
@@ -408,6 +412,80 @@ namespace MistWorms.Render.Gpu
             m.ActiveCount = active;
             s_signature = 0;
             return fits;
+        }
+
+        // ---------------------------------------------------------------- the free ropes
+
+        private static GpuMass s_free;
+        private static readonly NativeArray<Vector4>[] s_freeStage = new NativeArray<Vector4>[3];
+        private static readonly int[] s_freeCount = new int[3];
+        private static Vector3 s_freeOrigin;
+        private static int s_freeSig;
+
+        /// <summary>True when the pool of free ropes exists (the host is ready and <see cref="EnsureFree"/> ran).</summary>
+        public static bool FreeReady => Ready && s_free != null;
+
+        /// <summary>Counts of the free ropes drawn last frame, by level of detail (dev checks).</summary>
+        public static int FreeDrawn(int lod) => s_freeCount[lod];
+
+        /// <summary>Allocates the segment of the pool the free ropes live in (3 x <see cref="WormSimConst.FreeCapPerLod"/>), once. False when the pool is full.</summary>
+        public static bool EnsureFree()
+        {
+            if (!Ready) return false;
+            if (s_free != null) return true;
+            int cap = WormSimConst.FreeCapPerLod, total = 3 * cap;
+            int first = AllocWorms(total);
+            if (first < 0) { LogWarning("[GpuWormHost] no room for the free ropes in the pool: the free worms stay flipbooks"); return false; }
+            var m = new GpuMass { Slot = WormSimConst.FreeSlot, FirstWorm = first, WormCount = total, ActiveCount = total, DrawEnd = 0, Active = true, IsFree = true, NeedsInit = false, Radius = 1f };
+            s_slots[WormSimConst.FreeSlot] = m;
+            s_free = m;
+            for (int i = 0; i < total; i++) s_wormData[first + i] = new GpuWormData { Mass = (uint)WormSimConst.FreeSlot, Seed = 0u, Speed = 0f, Phase = 0f };
+            s_worms.SetData(s_wormData, first, first, total);
+            for (int l = 0; l < 3; l++) s_freeStage[l] = new NativeArray<Vector4>(cap * WormSimConst.Nodes, Allocator.Persistent);
+            UpdateHigh();
+            s_signature = 0;
+            return true;
+        }
+
+        /// <summary>Starts a frame of free ropes: the local frame of their nodes is put at the camera (rounded), the counts are cleared.</summary>
+        public static void FreeBegin(Vector3 camera)
+        {
+            if (s_free == null) return;
+            s_freeCount[0] = s_freeCount[1] = s_freeCount[2] = 0;
+            s_freeOrigin = new Vector3(Mathf.Round(camera.x), Mathf.Round(camera.y), Mathf.Round(camera.z));
+            s_free.Origin = s_freeOrigin;
+        }
+
+        /// <summary>One free rope: the 8 nodes (world positions, tail first) and their radius scales, at the level of detail <paramref name="lod"/>. False when that level is full.</summary>
+        public static bool FreeAdd(int lod, Vector3[] world, float[] scale)
+        {
+            if (s_free == null) return false;
+            int c = s_freeCount[lod];
+            if (c >= WormSimConst.FreeCapPerLod) return false;
+            NativeArray<Vector4> stage = s_freeStage[lod];
+            int at = c * WormSimConst.Nodes;
+            for (int n = 0; n < WormSimConst.Nodes; n++)
+            {
+                Vector3 p = world[n] - s_freeOrigin;
+                stage[at + n] = new Vector4(p.x, p.y, p.z, scale[n]);
+            }
+            s_freeCount[lod] = c + 1;
+            return true;
+        }
+
+        /// <summary>Ends the frame of free ropes: the nodes go to the pool, in three consecutive ranges (LOD0, LOD1, LOD2) the lists of the draw are made of.</summary>
+        public static void FreeEnd()
+        {
+            if (s_free == null) return;
+            int off = 0;
+            for (int l = 0; l < 3; l++)
+            {
+                int c = s_freeCount[l];
+                if (c > 0) s_pos.SetData(s_freeStage[l], 0, (s_free.FirstWorm + off) * WormSimConst.Nodes, c * WormSimConst.Nodes);
+                off += c;
+            }
+            int sig = s_freeCount[0] * 1000003 + s_freeCount[1] * 1009 + s_freeCount[2];
+            if (sig != s_freeSig) { s_freeSig = sig; }
         }
 
         private static int AllocWorms(int count)
@@ -589,6 +667,11 @@ namespace MistWorms.Render.Gpu
             {
                 GpuMass m = s_slots[i];
                 if (m == null) continue;
+                if (m.IsFree)
+                {
+                    s_massParams[m.Slot] = new GpuMassParams { Origin = new Vector4(s_freeOrigin.x, s_freeOrigin.y, s_freeOrigin.z, 0f), FirstWorm = (uint)m.FirstWorm, WormCount = (uint)m.WormCount, MassIndex = (uint)m.Slot };
+                    continue;
+                }
                 if (m.NeedsInit) InitNow(m);
 
                 // re-centre a mass that walked far from its origin (floats keep their millimetre only near the origin)
@@ -659,6 +742,7 @@ namespace MistWorms.Render.Gpu
             {
                 GpuMass m = s_slots[i];
                 if (m == null) { sig = sig * 31 + 0; continue; }
+                if (m.IsFree) continue;
                 float ext = m.Radius + 0.7f;
                 // The LOD follows the distance from the camera to the nearest point of the volume of the mass: the layer on the ground, and the engulfed target (Height)
                 // when there is one. Not the centre of its base: a mass that wraps a 1.8 m body seen from 1 m is at LOD0, with shadows.
@@ -679,6 +763,13 @@ namespace MistWorms.Render.Gpu
                 if (!any) { all = b; any = true; } else all.Encapsulate(b);
             }
             VisibleMasses = visible;
+            int freeTotal = s_freeCount[0] + s_freeCount[1] + s_freeCount[2];
+            sig = sig * 31 + s_freeSig;
+            if (freeTotal > 0)
+            {
+                var fb = new Bounds(camPos, Vector3.one * (2f * DrawDistance));        // the free worms are anywhere around the camera
+                if (!any) { all = fb; any = true; } else all.Encapsulate(fb);
+            }
             if (!any)
             {
                 DrawCalls = 0; DrawnWorms = 0; Triangles = 0; ShadowTriangles = 0;
@@ -693,7 +784,7 @@ namespace MistWorms.Render.Gpu
                 for (int i = 0; i < s_slots.Length; i++)
                 {
                     GpuMass m = s_slots[i];
-                    if (m == null || !m.Visible) continue;
+                    if (m == null || m.IsFree || !m.Visible) continue;
                     NativeArray<uint> list = s_listData[m.Lod];
                     int c = s_listCount[m.Lod];
                     for (int w = 0; w < m.DrawEnd; w++) list[c + w] = (uint)(m.FirstWorm + w);
@@ -705,6 +796,26 @@ namespace MistWorms.Render.Gpu
                         int sc = s_listCount[3];
                         for (int w = 0; w < m.DrawEnd; w += 2) sh[sc++] = (uint)(m.FirstWorm + w);
                         s_listCount[3] = sc;
+                    }
+                }
+                if (freeTotal > 0 && s_free != null)
+                {
+                    int off = 0;
+                    for (int l = 0; l < 3; l++)
+                    {
+                        int fc = s_freeCount[l];
+                        NativeArray<uint> list = s_listData[l];
+                        int c = s_listCount[l];
+                        for (int w = 0; w < fc; w++) list[c + w] = (uint)(s_free.FirstWorm + off + w);
+                        s_listCount[l] = c + fc;
+                        if (l == 0)
+                        {
+                            NativeArray<uint> sh = s_listData[3];
+                            int sc = s_listCount[3];
+                            for (int w = 0; w < fc; w++) sh[sc++] = (uint)(s_free.FirstWorm + w);
+                            s_listCount[3] = sc;
+                        }
+                        off += fc;
                     }
                 }
                 for (int l = 0; l < 4; l++)
