@@ -13,6 +13,10 @@
 // of anchors up the body), 2 settled on the surface, 3 falling. A worm of the sleeve lies on the surface along its whole length: at every iteration each node is projected on the
 // tangent plane of its nearest anchor, among the anchor it was last on and the 8 neighbours of that anchor (_Knn).
 //
+// Pseudopod (a mass that stretches toward its target, the CPU Arm() of MassLayout.cs): the worms whose threshold Hash01(seed, 36) is under ARM_FRAC x ramp form a net along the segment mass ->
+// target. Each one has a place that runs along the net (0 at the root, 1 at the tip, ARM_FLOW per second, with a lateral undulation, a width that narrows and a layer that thins toward the tip);
+// KPredict pulls its nodes toward the line of that place (kinematic), KSolve does not contain it in the dome, and its size fades near the two ends of the conveyor.
+//
 // Determinism: the grid keeps, per cell, the SLOTS smallest ids (insertion by InterlockedMin with carry: the result does not depend on the order of the
 // atomics), neighbours are visited in a fixed order, every other write goes to the slot of the thread. WormSimRef.cs (src/MistWorms/Render/Gpu) is the exact CPU port
 // (same formulas, same order): the constants below are the ones of WormSimConst.
@@ -64,6 +68,25 @@ static const float HOP_TIME = 0.2;            // a head that has not reached the
 static const float SLIDE_GAIN = 1.0;           // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
 static const float BIRTH_TIME = 0.5;           // a newborn worm grows from nothing in this time, a dying one shrinks to nothing in it
 static const float PEND_SHARE = 0.08;         // share of the worms of the sleeve that hang by one end
+static const float ARM_FRAC = 0.25;           // pseudopod (mirrors WormSimConst.Arm*, which mirrors MassLayoutConst.Arm*)
+static const float ARM_SOFT = 0.1;
+static const float ARM_START = 0.6;
+static const float ARM_WIDTH = 0.4;
+static const float ARM_TAPER = 0.6;
+static const float ARM_THICK = 0.14;
+static const float ARM_WAVE = 0.18;
+static const float ARM_WAVE_K = 1.3;
+static const float ARM_WAVE_PER = 3.0;
+static const float ARM_FLOW = 0.12;
+static const float ARM_TIP_FRAC = 0.015;
+static const float ARM_TIP_PITCH = 1.2217305;     // 70 degrees
+static const float ARM_FADE = 0.08;
+static const float ARM_K = 0.15;
+static const float ARM_PULL_MAX = 0.03;
+static const float ARM_SNAP = 0.02;
+static const float ARM_OUT = 1.15;            // a worm whose centre is further than this (in footprint radii) from the centre of the dome has left the net
+static const float ARM_LEAVE_TIME = 0.15;     // a worm that left the net shrinks to nothing in this time before the containment takes it back
+static const float ARM_GONE = 0.02;           // size under which a worm that left the net is gone
 #define ITERATIONS 4
 
 struct WormData { uint mass; uint seed; float speed; float phase; };
@@ -81,6 +104,7 @@ struct MassParams
     float4 side;        // x lowest height of the side maps (local), y spacing, z 1 / spacing, w valid
     float4 plan;        // skin sleeve: x worms of the sleeve S, y worms per anchor, z height (rel) of the top of the covered surface, w anchors covered
     float4 plan2;       // x anchors of the base (where a worm enters the body), y worms alive (0 = all): the others shrink to nothing
+    float4 pseudo;      // pseudopod: xy horizontal unit direction to the target, z length of the net past its start (times the ramp, 0 = none), w ramp
 };
 struct Prim { float4 a; float4 b; float4 c; float4 d; };
 struct Anchor { float4 a; float4 b; };     // a: xyz position; b: xyz normal, w height over the height of the target (0 foot, 1 top, fixed at the selection)
@@ -520,6 +544,46 @@ float3 SolidPush(uint mi, MassParams m, float3 x, bool glide)
     return x;
 }
 
+// ---------------------------------------------------------------- pseudopod (mirrored in WormSimRef)
+
+// Whether the worm is of the net toward the target.
+bool ArmIs(MassParams m, uint seed)
+{
+    return m.pseudo.z > 0.0 && m.pseudo.w > 0.0 && m.sleeve.x < 0.5 && Hash01(seed, 36) < ARM_FRAC * m.pseudo.w - 0.5 * ARM_SOFT;
+}
+
+bool ArmTip(uint seed) { return Hash01(seed, 36) < ARM_TIP_FRAC; }
+
+// Place of the worm on the conveyor, 0 at the root of the net, 1 at the tip (a worm that rears up stays at the tip).
+float ArmS(uint seed, float t) { return ArmTip(seed) ? 1.0 : frac(Hash01(seed, 37) + t * ARM_FLOW); }
+
+// Size of the worm at that place: it grows from nothing at the root and shrinks to nothing at the tip (a rearing worm keeps its size).
+float ArmFadeOf(float s, bool tip) { return tip ? 1.0 : Smooth(0.0, ARM_FADE, s) * (1.0 - Smooth(1.0 - ARM_FADE, 1.0, s)); }
+
+// Place of the worm in the net at time t: hp the centre of its line (on the ground plus a share of the thickness of the layer), f the direction of its line, fade its size.
+// A worm that rears up (tip) has hp for its root and f pitched up; the others are centred on hp.
+void ArmFrame(uint mi, MassParams m, uint seed, float t, out float3 hp, out float3 f, out float fade, out bool tip)
+{
+    tip = ArmTip(seed);
+    float s = ArmS(seed, t);
+    float ln = m.pseudo.z;
+    float2 dir = m.pseudo.xy;
+    float2 pd = float2(-dir.y, dir.x);
+    float waveA = 6.2831853 * (s * ARM_WAVE_K - t / ARM_WAVE_PER);
+    float sw = sin(waveA);
+    float wave = ARM_WAVE * s * sw;
+    float wid = L(ARM_WIDTH, ARM_WIDTH * ARM_TAPER, s);
+    float lat = (Hash01(seed, 38) - 0.5) * wid;
+    float dist = ARM_START * m.center.w + s * ln;
+    float x = m.center.x + dir.x * dist + pd.x * (wave + lat);
+    float z = m.center.z + dir.y * dist + pd.y * (wave + lat);
+    hp = float3(x, Ground(mi, m, x, z) + RAD + ARM_THICK * Hash01(seed, 39) * (1.0 - 0.4 * s), z);
+    float dw = ARM_WAVE * (sw + s * ARM_WAVE_K * 6.2831853 * cos(waveA)) / max(ln, 0.2);
+    f = Norm(float3(dir.x + pd.x * dw, 0.0, dir.y + pd.y * dw), float3(dir.x, 0.0, dir.y));
+    if (tip) f = f * cos(ARM_TIP_PITCH) + float3(0, 1, 0) * sin(ARM_TIP_PITCH);
+    fade = ArmFadeOf(s, tip);
+}
+
 // Where a worm wants to be (centre of its line). Dome: a point of the layer, on the ground plus a fraction of the local thickness.
 float3 HomePoint(uint mi, MassParams m, uint seed, float t)
 {
@@ -823,6 +887,28 @@ void KPredict(uint3 id : SV_DispatchThreadID)
     bool onBody = mode == 1u || mode == 2u;
     bool dropping = m.skin.x > 0.5 && mode == 3u;
 
+    // Pseudopod: the nodes are pulled toward their place in the net (kinematic, like the pulls of the sleeve): a share of the gap per step, at most ARM_PULL_MAX; a worm that is
+    // invisible (fade near 0: the wrap of the conveyor, a worm just recruited at the root) goes straight to its place.
+    bool arm = mode == 0u && ArmIs(m, wd.seed);
+    if (arm)
+    {
+        float3 ahp, af;
+        float afade;
+        bool atip;
+        ArmFrame(wd.mass, m, wd.seed, t, ahp, af, afade, atip);
+        [unroll] for (int ja = 0; ja < K; ja++)
+        {
+            float3 kd = ahp + af * (((float)ja - (atip ? 0.0 : 3.5)) * SEG) - p[ja];
+            if (afade >= ARM_SNAP)
+            {
+                kd *= ARM_K;
+                float kl2 = dot(kd, kd);
+                if (kl2 > ARM_PULL_MAX * ARM_PULL_MAX) kd = kd / sqrt(kl2) * ARM_PULL_MAX;
+            }
+            kx[ja] = kd;
+        }
+    }
+
     float3 pn[K];
     [unroll] for (int j = 0; j < K; j++)
     {
@@ -842,6 +928,10 @@ void KPredict(uint3 id : SV_DispatchThreadID)
         {
             pj = float3(0, 0, 0);           // a worm that lets go falls with the real gravity, and nothing pulls it
             a.y = -9.8 * DT * DT;
+        }
+        else if (arm)
+        {
+            pj = float3(0, 0, 0);           // the net is pulled by kx
         }
         else if (member)
         {
@@ -950,7 +1040,21 @@ void KSolve(uint3 id : SV_DispatchThreadID)
     bool onBody = sMode == 1u || sMode == 2u;
     bool pend = sMode == 2u && Hash01(wd.seed, 19) < PEND_SHARE;
     float off = SkinOff(wd.seed);
-    bool skipContain = sMode != 0u;
+    float tNow = (float)_StepIndex * DT;
+    bool arm = sMode == 0u && ArmIs(m, wd.seed);     // a worm of the net is not contained in the dome
+    // A worm that has just left the net (the ramp falls) is far outside the dome: the containment would throw it back in one step. While a net is on it shrinks to nothing in ARM_LEAVE_TIME
+    // instead, where it is, and once it is gone the containment brings it back (it grows again in the dome).
+    bool leaving = false;
+    if (sMode == 0u && !arm && m.pseudo.w > 0.0 && rs[3] > ARM_GONE)
+    {
+        float3 lc = float3(0, 0, 0);
+        [unroll] for (int lk = 0; lk < K; lk++) lc += x[lk];
+        float3 ld = lc * 0.125 - m.center.xyz;
+        float3 lf = m.heading.xyz;
+        float lqx = (dot(ld, lf) - m.shape.w) / m.shape.x, lqz = dot(ld, Side(lf)) / m.shape.z;
+        leaving = lqx * lqx + lqz * lqz > ARM_OUT * ARM_OUT;
+    }
+    bool skipContain = sMode != 0u || arm || leaving;
     uint nodeA[K];
     [unroll] for (int na = 0; na < K; na++) nodeA[na] = onBody ? _NodeAnchor[w * K + na] : 0u;
     float attached[K];
@@ -1025,6 +1129,9 @@ void KSolve(uint3 id : SV_DispatchThreadID)
         vel *= 1.0 + (BODY_DAMP - 1.0) * attached[e];
         float rsn = rs[e];
         if (m.plan2.y > 0.5) rsn = (w - m.ranges.x) < (uint)(m.plan2.y + 0.5) ? min(1.0, rsn + DT / BIRTH_TIME) : max(0.0, rsn - DT / BIRTH_TIME);
+        if (m.plan2.y <= 0.5 && rsn < 1.0) rsn = min(1.0, rsn + DT / BIRTH_TIME);     // a worm that left the net grows back
+        if (arm) rsn = min(rsn, ArmFadeOf(ArmS(wd.seed, tNow), ArmTip(wd.seed)));
+        if (leaving) rsn = max(0.0, min(rsn, rs[e] - DT / ARM_LEAVE_TIME));
         _Pos[w * K + e] = float4(x[e], rsn);
         _Prev[w * K + e] = float4(x[e] - vel, rsn);
     }

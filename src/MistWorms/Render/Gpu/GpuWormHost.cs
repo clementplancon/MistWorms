@@ -53,6 +53,9 @@ namespace MistWorms.Render.Gpu
         public float Stream;                   // 0 dome .. 1 ribbon (the footprint is the lerp, set by the owner)
         public float Height;                   // height of what the mass wraps (0 = nothing): part of the volume used for the LOD and the culling
         public float Engulf;                   // 0..1, covered fraction of the height of the adhesive capsule
+        public Vector4 Pseudo;                 // pseudopod toward the target (see GpuMassParams.Pseudo, built by WormSimRef.PseudoParams); zero = none
+        public float PseudoRamp;               // ramp of the net given to the GPU (WormSimRef.SmoothRamp of the ramp of the visual)
+        public float PseudoDirX, PseudoDirZ, PseudoFull;   // direction and length (ramp 1) of the net, kept while it retracts after the target is gone
         public GpuMassMode Mode;
         public float ShellThickness = 0.04f;
         public int AdhesiveCount = 1;          // number of adhesive capsules, the first at index AdhesivePrim (a humanoid has up to 8: pelvis, torso, head, thighs, arms)
@@ -597,6 +600,7 @@ namespace MistWorms.Render.Gpu
                 Skin = skin ? new Vector4(m.AnchorCount, Mathf.Clamp01(m.Engulf), m.TargetHeight, m.SurfaceArea) : Vector4.zero,
                 Side = new Vector4(m.SideYMin - m.Origin.y, m.SideYStep, 1f / m.SideYStep, m.SideEnabled ? 1f : 0f),
                 Plan = new Vector4(plan.Count, plan.PerAnchor, plan.TopRel, plan.Cover), Plan2 = new Vector4(plan.Base, m.ActiveCount, 0f, 0f),
+                Pseudo = m.Pseudo,
             };
         }
 
@@ -743,11 +747,11 @@ namespace MistWorms.Render.Gpu
                 GpuMass m = s_slots[i];
                 if (m == null) { sig = sig * 31 + 0; continue; }
                 if (m.IsFree) continue;
-                float ext = m.Radius + 0.7f;
+                float ext = m.Radius + m.Pseudo.z + 0.7f;       // the net of the pseudopod reaches Pseudo.z past the mass
                 // The LOD follows the distance from the camera to the nearest point of the volume of the mass: the layer on the ground, and the engulfed target (Height)
                 // when there is one. Not the centre of its base: a mass that wraps a 1.8 m body seen from 1 m is at LOD0, with shadows.
                 float hgt = Mathf.Max(m.Height, 0.9f * m.Radius) + 0.3f;
-                var volume = new Bounds(m.Center + Vector3.up * (hgt * 0.5f - 0.1f), new Vector3(m.Radius * 2f + 0.2f, hgt, m.Radius * 2f + 0.2f));
+                var volume = new Bounds(m.Center + Vector3.up * (hgt * 0.5f - 0.1f), new Vector3((m.Radius + m.Pseudo.z) * 2f + 0.2f, hgt, (m.Radius + m.Pseudo.z) * 2f + 0.2f));
                 float dist = Mathf.Sqrt(volume.SqrDistance(camPos));
                 m.LodDistance = dist;
                 m.VolumeCenter = volume.center;

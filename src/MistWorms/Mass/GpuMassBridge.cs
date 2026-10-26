@@ -149,6 +149,26 @@ namespace MistWorms.Mass
                 m.Height = 0f;
             }
 
+            // ---- pseudopod: the net of worms toward the target (the CPU Arm()), not while the mass wraps its target; no allocation
+            // The ramp given to the GPU follows the one of the visual when it grows and falls slowly (WormSimRef.SmoothRamp), along the last direction and length when the target is gone.
+            float armWant = 0f;
+            if (!wrap && v.PseudoRamp > 0f && v.P.TargetDist > 0f)
+            {
+                float ang = v.P.TargetTurns * (2f * Mathf.PI);
+                float ca = Mathf.Cos(ang), sa = Mathf.Sin(ang);
+                Vector3 f = v.Forward, l = v.Left;
+                float dx = f.x * ca + l.x * sa, dz = f.z * ca + l.z * sa;
+                float dl = Mathf.Sqrt(dx * dx + dz * dz);
+                if (dl > 1e-4f)
+                {
+                    m.PseudoDirX = dx / dl; m.PseudoDirZ = dz / dl;
+                    m.PseudoFull = WormSimRef.PseudoParams(m.PseudoDirX, m.PseudoDirZ, v.P.TargetDist, 1f, radius).z;
+                    armWant = v.PseudoRamp;
+                }
+            }
+            m.PseudoRamp = wrap ? 0f : WormSimRef.SmoothRamp(m.PseudoRamp, armWant, Time.deltaTime);
+            m.Pseudo = m.PseudoRamp > 0f && m.PseudoFull > 0f ? new Vector4(m.PseudoDirX, m.PseudoDirZ, m.PseudoFull * m.PseudoRamp, m.PseudoRamp) : Vector4.zero;
+
             // ---- flow: the dome stretches into a ribbon along the passage
             float k = v.StreamK;
             if (k > 0.01f)
