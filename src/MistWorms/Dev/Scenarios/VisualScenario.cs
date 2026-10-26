@@ -6,6 +6,7 @@ using MistWorms.Config;
 using MistWorms.Dev.Preview;
 using MistWorms.Mass;
 using MistWorms.Render;
+using MistWorms.Render.Gpu;
 using UnityEngine;
 
 namespace MistWorms.Dev.Scenarios
@@ -29,8 +30,14 @@ namespace MistWorms.Dev.Scenarios
         /// <summary>Preview request: kind, n, anim, count, compare.</summary>
         protected abstract void Describe(out string kind, out int n, out string anim, out int count, out string compare);
 
-        /// <summary>Camera distance for a subject of the given size (m).</summary>
-        protected virtual float CameraDistance(float size) => Mathf.Max(2.5f, 2.2f * size);
+        /// <summary>Height of the camera of the standard angles over the centre of the subject, in the share of the horizontal distance (<see cref="DevPreview.CameraPoseAt"/>).</summary>
+        private const float PoseRise = 0.45f;
+
+        /// <summary>
+        /// Horizontal camera distance of the standard angles for a subject of the given size (its diameter, m): computed from the radius of the subject and the field of view, so that the
+        /// subject takes 50 % of the height of the image (<see cref="ScenarioContext.FitSphere"/>; D12), the camera standing <see cref="PoseRise"/> x the distance above it.
+        /// </summary>
+        protected virtual float CameraDistance(float size) => ScenarioContext.FitSphere(size * 0.5f) / Mathf.Sqrt(1f + PoseRise * PoseRise);
 
         /// <summary>Rough subject size known before the preview exists, to pick a clear spot.</summary>
         protected virtual float EstimateSize(string kind, int n) =>
@@ -117,6 +124,7 @@ namespace MistWorms.Dev.Scenarios
         public IEnumerator Run(ScenarioContext ctx)
         {
             bool keep = ctx.ParamBool("keep", false);
+            bool flipbookSaved = GpuFreeWorms.ForceFlipbook;
             bool clutterHidden = false;
             bool timeForced = false;
             var hiddenRenderers = new List<Renderer>();
@@ -144,6 +152,9 @@ namespace MistWorms.Dev.Scenarios
                 count = ctx.ParamInt("count", count);
                 compare = ctx.Param("compare", compare);
                 float distanceParam = ctx.ParamFloat("distance", 0f);
+                // D10: the free worms stay flipbooks (S11 measures 2 to 3 draw calls for all of them): the worm previews are judged as flipbooks, and the renderer counts their instances
+                if (kind == "worm") GpuFreeWorms.ForceFlipbook = true;
+                ctx.Log($"render path of the masses: {(ScenarioContext.GpuMasses ? "GPU colony (the reference)" : "CPU layout (force_cpu=1, no compute or GpuWorms Off)")}");
 
                 // Grass hidden for the whole scenario (restored in finally); ClearAll also sets m_forceRebuild for the restore.
                 if (ClutterSystem.instance != null)
@@ -267,7 +278,8 @@ namespace MistWorms.Dev.Scenarios
 
                 if (TopShot)
                 {
-                    Vector3 top = preview.Center + Vector3.up * 1f - preview.Forward * 0.05f;
+                    // straight down, from the height at which the subject takes 50 % of the height of the image
+                    Vector3 top = preview.Center + Vector3.up * ScenarioContext.FitSphere(preview.Radius) - preview.Forward * 0.05f;
                     DevCamera.Free(top, preview.Center);
                     yield return ctx.WaitFrames(10);
                     yield return ctx.Shot("top");
@@ -277,7 +289,11 @@ namespace MistWorms.Dev.Scenarios
 
                 WormRenderer.FrameStats stats = WormRenderer.Last;
                 ctx.Log("render stats: " + DevPreview.Describe(stats));
-                ctx.Assert("renderer_drew_instances", stats.Instances > 0, "> 0", stats.Instances);
+                WritheMassVisual drawnBy = kind == "mass" && preview.RealMassState != null ? preview.RealMassState.GetComponent<WritheMassVisual>() : null;
+                if (drawnBy != null && drawnBy.GpuDriven)
+                    ctx.Assert("renderer_drew_instances", GpuWormHost.DrawnWorms > 0, "> 0 worms drawn by the GPU colony (the mass is no flipbook instance there)", GpuWormHost.DrawnWorms);
+                else
+                    ctx.Assert("renderer_drew_instances", stats.Instances > 0, "> 0", stats.Instances);
                 ctx.Assert("renderer_no_dropped_instances", stats.Dropped == 0, 0, stats.Dropped);
             }
             finally
@@ -290,6 +306,7 @@ namespace MistWorms.Dev.Scenarios
                 if (timeForced && TimeOfDay != 0.5f) ctx.Console($"{VanillaNames.CmdTimeOfDay} -1");
                 DevPreview.Instance.WormSpacing = 0.5f;
                 DevPreview.Instance.ForcedOrigin = null;
+                GpuFreeWorms.ForceFlipbook = flipbookSaved;
                 if (torch != null) { if (ZNetScene.instance != null) ZNetScene.instance.Destroy(torch); else Object.Destroy(torch); }
                 if (movedPlayer && Player.m_localPlayer != null) { Player.m_localPlayer.SetGhostMode(false); Player.m_localPlayer.SetGodMode(false); }
                 if (!keep)
@@ -389,10 +406,8 @@ namespace MistWorms.Dev.Scenarios
             kind = "worm"; n = 0; anim = "crawl,rear,sleep,idle"; count = 4; compare = null;
         }
 
-        // Worms are small: close camera, wider spacing, and a straight-down shot to judge texture and head orientation.
-        // Four worms now (crawl, rear, sleep, idle): a little further back and closer together than with three.
-        protected override float CameraDistance(float size) => 1.5f;
-
+        // Worms are small: wider spacing, and a straight-down shot to judge texture and head orientation. Four worms (crawl, rear, sleep, idle). The camera distance is the framed one
+        // of the base class (the row of four worms takes 50 % of the height of the image).
         protected override float WormSpacing => 0.5f;
 
         protected override bool TopShot => true;
@@ -407,8 +422,6 @@ namespace MistWorms.Dev.Scenarios
     /// </summary>
     internal abstract class MassVisualScenario : VisualScenario
     {
-        private const float SideGap = 3f;
-        private const float CloseGap = 1f;
         private const float InsideMinDistance = 0.5f;
         private const float SequenceInterval = 1f;
         private const int SequenceShots = 4;
@@ -427,46 +440,67 @@ namespace MistWorms.Dev.Scenarios
             if (visual == null) yield break;
 
             yield return ctx.WaitFrames(20);
+            // D9: the GPU colony draws the mass (its twin is made a few frames after the visual is active); what is specific to the CPU layout (drawn places and their roles, the nearest worm to
+            // the camera, the lobes, the caps by distance) is judged only on the CPU path (force_cpu=1); on the GPU path the equivalents below are used, the rest is logged.
+            if (ScenarioContext.GpuMasses) yield return ctx.WaitUntil(() => visual.Gpu != null, 5f);
+            bool gpu = visual.GpuDriven;
+            ctx.Log(gpu ? "render path of this mass: GPU colony (worms drawn = the rope range of its twin)" : "render path of this mass: CPU layout");
             ctx.Assert("mass_visual_active", visual.Active, true, visual.Active);
             ctx.Assert("mass_ground_found", visual.Ground.Have, true, visual.Ground.Have);
             ctx.Assert("mass_root_rests_on_body", Vector3.Distance(visual.Root, mass.transform.position) < 0.15f, "< 0.15 m",
                 Vector3.Distance(visual.Root, mass.transform.position));
 
             float r = Mathf.Max(0.3f, visual.ShownRadius);
+            float domeH = 0.45f * r;
             Vector3 fwd = preview.Forward;
             Vector3 side = Vector3.Cross(Vector3.up, fwd);
 
-            // ---- side shot 3 m from the edge, close-up 1 m from the edge, 45 degree dive
-            yield return Aim(ctx, visual, side, r + SideGap, 1.3f, "side_3m");
-            AssertDrawn(ctx, visual, mass.N, "side_3m");
-            AssertRoles(ctx, visual, mass.N, "side_3m");
-            yield return Aim(ctx, visual, side, r + CloseGap, 0.7f, "close_1m");
-            AssertDrawn(ctx, visual, mass.N, "close_1m");
-            float dive = Mathf.Max(3f, r * 2.4f + 1.5f);
-            yield return Aim(ctx, visual, side, dive * Mathf.Cos(45f * Mathf.Deg2Rad), dive * Mathf.Sin(45f * Mathf.Deg2Rad), "dive_45");
-            AssertDrawn(ctx, visual, mass.N, "dive_45");
-            ctx.Log($"roles drawn at 45 degrees: {Roles(visual)}");
+            // ---- side shot framed at 50 % of the height of the image, close-up at 60 %, 45 degree dive at 45 % (D12: the distance comes from the radius of the mass and the field of view)
+            Frame(r, domeH, 20f, 0.5f, out float sideH, out float sideUp);
+            yield return Aim(ctx, visual, side, sideH, sideUp, "side_fit");
+            AssertDrawn(ctx, visual, mass.N, "side_fit", gpu);
+            if (!gpu) AssertRoles(ctx, visual, mass.N, "side_fit");
+            Frame(r, domeH, 12f, 0.6f, out float closeH, out float closeUp);
+            yield return Aim(ctx, visual, side, closeH, closeUp, "close");
+            AssertDrawn(ctx, visual, mass.N, "close", gpu);
+            Frame(r, domeH, 45f, 0.45f, out float diveH, out float diveUp);
+            yield return Aim(ctx, visual, side, diveH, diveUp, "dive_45");
+            AssertDrawn(ctx, visual, mass.N, "dive_45", gpu);
+            if (!gpu) ctx.Log($"roles drawn at 45 degrees: {Roles(visual)}");
+            else ctx.Log("roles (body, flux, border) are a CPU layout notion: not judged on the GPU path");
 
             // ---- camera at the centre: nothing within 0.5 m, still some worms around
             DevCamera.Free(visual.Center, visual.Center + fwd);
             yield return ctx.WaitFrames(12);
             yield return ctx.Shot("inside");
-            float closest = visual.ClosestToCam;
-            ctx.Assert("camera_inside_clear_radius", closest >= InsideMinDistance - 0.01f, $">= {InsideMinDistance} m", closest == float.MaxValue ? "none tracked" : closest.ToString("0.00"));
+            if (!gpu)
+            {
+                float closest = visual.ClosestToCam;
+                ctx.Assert("camera_inside_clear_radius", closest >= InsideMinDistance - 0.01f, $">= {InsideMinDistance} m", closest == float.MaxValue ? "none tracked" : closest.ToString("0.00"));
+            }
+            else ctx.Log("camera_inside_clear_radius is a CPU layout check (the worm nearest to the camera is tracked by the layout worker): not judged on the GPU path, see the capture inside");
             ctx.Assert("camera_inside_still_draws", visual.LastDrawn > 0, "> 0", visual.LastDrawn);
 
             // ---- the shape changes: 4 shots 1 s apart, lobes compared between the first and the next ones
+            GpuMassDev.NodeSnapshot nodesFirst = null, nodesLast = null;
             var first = new Vector2[MassLayoutConst.LobeMax];
             float maxMove = 0f;
             var firstPose = new Vector3[MassLayoutConst.SlotCount];
             var firstSeen = new bool[MassLayoutConst.SlotCount];
             float wormMove = 0f;
             int wormMatched = 0;
+            Frame(r, domeH, 20f, 0.5f, out float seqH, out float seqUp);
             for (int i = 0; i < SequenceShots; i++)
             {
                 float t0 = Time.realtimeSinceStartup;
-                AimNow(ctx, visual, side, r + SequenceGap, SequenceHeight);
+                AimNow(ctx, visual, side, seqH, seqUp);
                 yield return ctx.WaitFrames(3);
+                if (gpu && (i == 0 || i == SequenceShots - 1))
+                {
+                    GpuMassDev.NodeSnapshot snap = GpuMassDev.RequestNodes(visual.Gpu);
+                    yield return ctx.WaitUntil(() => snap.Done, 5f);
+                    if (snap.Done && !snap.Error) { if (i == 0) nodesFirst = snap; else nodesLast = snap; }
+                }
                 for (int j = 0; j < first.Length; j++)
                 {
                     var c = new Vector2(visual.LobeSnapshot[j].Cx, visual.LobeSnapshot[j].Cz);
@@ -497,16 +531,39 @@ namespace MistWorms.Dev.Scenarios
                 float took = Time.realtimeSinceStartup - t0;
                 if (i < SequenceShots - 1 && took < SequenceInterval) yield return ctx.Wait(SequenceInterval - took);
             }
-            float meanMove = wormMatched > 0 ? wormMove / wormMatched : 0f;
-            ctx.Log($"shape change over 3 s: largest lobe move {maxMove:0.000} m, mean move of {wormMatched} matched drawn worms {meanMove:0.000} m");
-            ctx.Assert("shape_changes_over_the_sequence", wormMatched >= 10 && meanMove >= 0.05f, "the matched drawn worms move >= 0.05 m on average over 3 s", $"{meanMove:0.000} m over {wormMatched} worms");
+            if (!gpu)
+            {
+                float meanMove = wormMatched > 0 ? wormMove / wormMatched : 0f;
+                ctx.Log($"shape change over 3 s: largest lobe move {maxMove:0.000} m, mean move of {wormMatched} matched drawn worms {meanMove:0.000} m");
+                ctx.Assert("shape_changes_over_the_sequence", wormMatched >= 10 && meanMove >= 0.05f, "the matched drawn worms move >= 0.05 m on average over 3 s", $"{meanMove:0.000} m over {wormMatched} worms");
+            }
+            else
+            {
+                // lobes and matched candidates are the CPU layout's; the GPU twin is a rope simulation: the mean move of every node between the first and the last readback is logged
+                // (information, no threshold: a rope colony at rest has no spec'd amount of writhing; judge the captures seq_0 to seq_3 and the clip)
+                float mean = -1f;
+                if (nodesFirst != null && nodesLast != null && nodesFirst.Nodes.Length == nodesLast.Nodes.Length && nodesFirst.Nodes.Length > 0)
+                {
+                    float sum = 0f;
+                    for (int q = 0; q < nodesFirst.Nodes.Length; q++)
+                    {
+                        Vector3 a = new Vector3(nodesFirst.Nodes[q].x, nodesFirst.Nodes[q].y, nodesFirst.Nodes[q].z) + nodesFirst.Origin;
+                        Vector3 b = new Vector3(nodesLast.Nodes[q].x, nodesLast.Nodes[q].y, nodesLast.Nodes[q].z) + nodesLast.Origin;
+                        sum += Vector3.Distance(a, b);
+                    }
+                    mean = sum / nodesFirst.Nodes.Length;
+                }
+                ctx.Log($"shape change over 3 s (GPU, information only): mean move of the {(nodesFirst != null ? nodesFirst.Nodes.Length : 0)} nodes {(mean >= 0f ? mean.ToString("0.000") + " m" : "not read back")}");
+            }
 
-            // ---- caps by distance
-            if (CheckCaps && mass.N >= 150) yield return Caps(ctx, visual, side, r);
+            // ---- caps by distance (the caps are the CPU layout's)
+            if (CheckCaps && gpu) ctx.Log("caps by distance (8, 20, 45 m, render distance) are a CPU layout notion: not judged on the GPU path (the LOD distances of the colony are measured by V14 and P4)");
+            else if (CheckCaps && mass.N >= 150) yield return Caps(ctx, visual, side, r);
             else if (CheckCaps) ctx.Log($"caps check skipped: n={mass.N} is too small to reach the caps (the mine view shrank it)");
 
-            // ---- clip, framed on the swarm
-            bool clipClear = ClipPose(visual, SequenceGap, SequenceHeight, out Vector3 clipPos, out Vector3 clipLook);
+            // ---- clip, framed on the swarm (50 % of the height of the image from three quarters front)
+            Frame(r, domeH, 20f, 0.5f, out float clipH, out float clipUp);
+            bool clipClear = ClipPose(visual, Mathf.Max(0.4f, clipH - r), clipUp, out Vector3 clipPos, out Vector3 clipLook);
             if (!clipClear) ctx.Log("clip camera: no clear side, using the first");
             DevCamera.Free(clipPos, clipLook);
             if (ctx.ParamBool("light", true)) DevCamera.SetFillLight(true);
@@ -527,6 +584,12 @@ namespace MistWorms.Dev.Scenarios
             }
         }
 
+        /// <summary>Horizontal distance and height over the root of the mass of a camera at <paramref name="elevationDeg"/> for which the mass takes <paramref name="fraction"/> of the height of the image.</summary>
+        private static void Frame(float radius, float height, float elevationDeg, float fraction, out float horizontal, out float up)
+        {
+            ScenarioContext.Orbit(ScenarioContext.FitFlat(radius, height, elevationDeg, fraction), elevationDeg, out horizontal, out up);
+        }
+
         private static string Roles(WritheMassVisual v) =>
             $"body {v.DrawnByRole[0]}, flux {v.DrawnByRole[1]}, border {v.DrawnByRole[2]} (lod {v.LastLod}, cap {v.LastCap})";
 
@@ -544,7 +607,7 @@ namespace MistWorms.Dev.Scenarios
             // Closer step by step (1 m at a time, never under 1.5 m from the edge) when no side is clear at the asked distance.
             bool clear = false;
             Vector3 pos = default;
-            float minH = Mathf.Max(1.5f, v.ShownRadius + 1.5f);
+            float minH = Mathf.Min(horizontal, Mathf.Max(1.5f, v.ShownRadius + 1.5f));       // a framed camera can be closer than 1.5 m from the edge: then it is not moved in
             for (float h = horizontal; h >= minH - 1e-3f && !clear; h -= 1f)
             {
                 clear = ClearCamera(v.Root, dir, h, height, look, out pos);
@@ -558,8 +621,15 @@ namespace MistWorms.Dev.Scenarios
             DevCamera.Free(pos, look);
         }
 
-        private static void AssertDrawn(ScenarioContext ctx, WritheMassVisual v, int n, string tag)
+        private static void AssertDrawn(ScenarioContext ctx, WritheMassVisual v, int n, string tag, bool gpu)
         {
+            if (gpu)
+            {
+                // the GPU twin draws the ropes of its range (every worm of the mass, LOD and frustum aside): something, and never more than the worms of the mass
+                int worms = MistWorms.Mass.GpuMassBridge.WormsFor(n);
+                ctx.Assert($"drawn_count_{tag}", v.LastDrawn > 0 && v.LastDrawn <= worms, $"1..{worms} worms drawn by the GPU colony", $"{v.LastDrawn}");
+                return;
+            }
             int slots = MassLayout.VisibleCount(n, MassLayoutConst.SlotCount);
             int cap = v.LastCap;
             int drawn = v.LastDrawn;
@@ -638,17 +708,21 @@ namespace MistWorms.Dev.Scenarios
     }
 
     /// <summary>
-    /// V07: the worm skin under light. At night, three preview worms (crawl, idle, crawl) are shot at 0.5 m then 2 m under a
+    /// V07: the worm skin under light. At night, three preview worms (crawl, idle, crawl) are shot framed on one worm (near) then on the three (far) under a
     /// vanilla ground torch placed 1.5 m away, then under a dvergr lamp (skipped with a log line when none is found), then
     /// four crawl frames 1/12 s apart. Assertions only cover loading (lustre active, Point filtering): the judgement is visual.
     /// </summary>
     internal sealed class V07_WormLight : VisualScenario
     {
         private const float LightSideDistance = 1.0f;     // light 90 degrees to the camera axis, 1 m from the central worm
-        private const float NearShot = 0.6f;              // horizontal camera distance, height NearHeight (dive about 34 degrees)
-        private const float NearHeight = 0.45f;
-        private const float FarShot = 2f;                 // height FarHeight (dive about 30 degrees)
-        private const float FarHeight = 1.2f;
+        private const float WormRadius = 0.15f;           // a worm is 0.3 m long: the near shot frames one worm (50 % of the height of the image, dive of 35 degrees)
+        private const float NearElevation = 35f, FarElevation = 30f;   // the far shot frames the three worms (their bounding radius)
+
+        /// <summary>Horizontal distance and height of the near shot (one worm) and of the far shot (the three of them), from the radius of the subject and the field of view (D12).</summary>
+        private static void ShotPose(bool near, DevPreview preview, out float horizontal, out float height)
+        {
+            ScenarioContext.Orbit(ScenarioContext.FitSphere(near ? WormRadius : Mathf.Max(preview.Radius, WormRadius)), near ? NearElevation : FarElevation, out horizontal, out height);
+        }
         private const float RaiseStep = 0.1f;
         private const int MaxRaises = 25;
         private const float FlatTolerance = 0.15f;        // ground height spread allowed at 1.5 m and 3 m around the subject
@@ -666,8 +740,6 @@ namespace MistWorms.Dev.Scenarios
         {
             kind = "worm"; n = 0; anim = "crawl,idle,crawl"; count = 3; compare = null;
         }
-
-        protected override float CameraDistance(float size) => 1.2f;
 
         // Side by side, perpendicular to the camera axis (the camera looks along the preview's forward axis).
         protected override float WormSpacing => 0.35f;
@@ -714,8 +786,8 @@ namespace MistWorms.Dev.Scenarios
             if (torch != null)
             {
                 yield return ctx.Wait(LightSettle);
-                yield return Shoot(ctx, preview, "torch_0_5m", true);
-                yield return Shoot(ctx, preview, "torch_2m", false);
+                yield return Shoot(ctx, preview, "torch_near", true);
+                yield return Shoot(ctx, preview, "torch_far", false);
                 Despawn(torch);
             }
 
@@ -740,8 +812,8 @@ namespace MistWorms.Dev.Scenarios
             if (lamp != null)
             {
                 yield return ctx.Wait(LightSettle);
-                yield return Shoot(ctx, preview, "dvergr_0_5m", true);
-                yield return Shoot(ctx, preview, "dvergr_2m", false);
+                yield return Shoot(ctx, preview, "dvergr_near", true);
+                yield return Shoot(ctx, preview, "dvergr_far", false);
                 Despawn(lamp);
             }
             else ctx.Log("no dvergr lamp prefab found: the dvergr captures are skipped");
@@ -753,7 +825,8 @@ namespace MistWorms.Dev.Scenarios
             for (int i = 0; i < CrawlShots; i++)
             {
                 float t0 = Time.time;
-                PlaceCamera(ctx, wormPos, preview, NearShot, NearHeight);
+                ShotPose(true, preview, out float crawlH, out float crawlUp);
+                PlaceCamera(ctx, wormPos, preview, crawlH, crawlUp);
                 yield return ctx.WaitFrames(2);
                 yield return ctx.Shot("crawl_" + i);
                 float took = Time.time - t0;
@@ -776,7 +849,8 @@ namespace MistWorms.Dev.Scenarios
 
         private static IEnumerator Shoot(ScenarioContext ctx, DevPreview preview, string name, bool near)
         {
-            PlaceCamera(ctx, preview.Center, preview, near ? NearShot : FarShot, near ? NearHeight : FarHeight);
+            ShotPose(near, preview, out float shotH, out float shotUp);
+            PlaceCamera(ctx, preview.Center, preview, shotH, shotUp);
             yield return ctx.WaitFrames(10);
             yield return ctx.Shot(name);
         }

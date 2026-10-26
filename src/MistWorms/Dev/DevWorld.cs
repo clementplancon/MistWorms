@@ -308,6 +308,22 @@ namespace MistWorms.Dev
         /// <summary>The last open ground found in this game session (statics survive the scenarios); tried first by the next search.</summary>
         private static Vector3? _lastGoodSite;
 
+        /// <summary>
+        /// Forgets the last good open ground: the next search starts from where the player is, whatever an earlier scenario of the session found. A scenario that must be reproducible
+        /// (V14) calls it, then goes to a fixed point first (<see cref="FixedSearchOrigin"/>), so that the site is the same on every run in the same world.
+        /// </summary>
+        public static void ResetLastGoodSite() => _lastGoodSite = null;
+
+        /// <summary>
+        /// The point every reproducible open ground search starts from: the start temple of the world (flat, in the Meadows, the same for a given world seed), else the world origin.
+        /// </summary>
+        public static Vector3 FixedSearchOrigin()
+        {
+            Vector3 origin = Vector3.zero;
+            if (ZoneSystem.instance != null && ZoneSystem.instance.FindClosestLocation("StartTemple", Vector3.zero, out ZoneSystem.LocationInstance temple)) origin = temple.m_position;
+            return origin;
+        }
+
         /// <summary>The spiral search around <paramref name="center"/>, then up to <paramref name="maxHops"/> hops of 150 m to load more ground; fills <paramref name="result"/> when found.</summary>
         private static IEnumerator SearchWithHops(Vector3 center, int maxHops, float clearRadius, Func<Vector3, bool> accept, FlatSpec flat, OpenGroundResult result, Action<string> log, bool onlyCenter = false)
         {

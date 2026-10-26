@@ -30,7 +30,8 @@ namespace MistWorms.Dev.Scenarios
 
         public IEnumerator Run(ScenarioContext ctx)
         {
-            float settle = ctx.ParamFloat("settle", 2.5f);
+            // 3.5 s on the GPU path: the sleeve of the colony forms in 3.5 s at most (V14 sleeve_formed_in_3.5s); 2.5 s for the CPU layout
+            float settle = ctx.ParamFloat("settle", ScenarioContext.GpuMasses ? 3.5f : 2.5f);
             if (!ctx.Params.ContainsKey("timeout")) ctx.TimeoutSeconds = 240f;
             bool timeForced = false, clutterHidden = false;
             string where = ctx.Param("where", "mine");
@@ -157,14 +158,35 @@ namespace MistWorms.Dev.Scenarios
 
                         ctx.Assert(tag + "_engulf_applied", Mathf.Abs(visual.EngulfShown - level) < 0.02f, level, visual.EngulfShown);
                         ctx.Assert(tag + "_worms_drawn", visual.LastDrawn > 0, "> 0", visual.LastDrawn);
-                        ctx.Log($"{tag}: drawn {visual.LastDrawn} (body {visual.DrawnByRole[0]}, flux {visual.DrawnByRole[1]}, border {visual.DrawnByRole[2]}), max height {visual.MaxDrawnHeight:0.00} m, lod {visual.LastLod}");
-                        if (level >= 1f)
+                        bool gpu = visual.GpuDriven;
+                        if (!gpu) ctx.Log($"{tag}: drawn {visual.LastDrawn} (body {visual.DrawnByRole[0]}, flux {visual.DrawnByRole[1]}, border {visual.DrawnByRole[2]}), max height {visual.MaxDrawnHeight:0.00} m, lod {visual.LastLod}");
+                        else ctx.Log($"{tag}: GPU colony, {visual.LastDrawn} worms drawn, LOD {visual.Gpu.Lod}");
+                        if (level >= 1f && !gpu)
                         {
                             Lobe e = visual.LobeSnapshot[MassLayoutConst.EngulfLobe];
                             V3 t = visual.P.TargetLocal();
                             float err = Mathf.Sqrt((e.Cx - t.X) * (e.Cx - t.X) + (e.Cz - t.Z) * (e.Cz - t.Z));
                             ctx.Assert(tag + "_lobe_centred_on_target", visual.P.TargetDist >= 0f && err < 0.05f, "< 0.05 m", err.ToString("0.000"));
                             ctx.Assert(tag + "_column_height", visual.MaxDrawnHeight >= MinColumnHeight, $">= {MinColumnHeight} m", visual.MaxDrawnHeight.ToString("0.00"));
+                        }
+                        else if (level >= 1f)
+                        {
+                            // D9, GPU path: the lobe and the drawn heights are the CPU layout's. The equivalents: the simulated mass is centred on the target (the bridge puts its centre on the foot of
+                            // the collider), and the highest rope node stands at the height of a column (read back from the GPU). n50 does not reach as high as n200: its sleeve is a part of the
+                            // body (V14 judges the coverage by the planned sleeve), so the column of n50 is asked at 0.6 m.
+                            Collider col = visual.GpuTargetCol;
+                            float err = col != null ? Mathf.Sqrt(Mathf.Pow(visual.Gpu.Center.x - col.bounds.center.x, 2f) + Mathf.Pow(visual.Gpu.Center.z - col.bounds.center.z, 2f)) : float.MaxValue;
+                            ctx.Assert(tag + "_gpu_mass_centred_on_target", col != null && visual.Gpu.Mode == MistWorms.Render.Gpu.GpuMassMode.Engulf && err < 0.05f, "engulf mode, centre within 0.05 m of the target", col != null ? err.ToString("0.000") : "no target collider");
+                            GpuMassDev.NodeSnapshot snap = GpuMassDev.RequestNodes(visual.Gpu);
+                            yield return ctx.WaitUntil(() => snap.Done, 10f);
+                            float need = n >= 100 ? MinColumnHeight : 0.6f;
+                            if (snap.Done && !snap.Error && col != null)
+                            {
+                                float foot = col.bounds.min.y, top = float.MinValue;
+                                for (int q = 0; q < snap.Nodes.Length; q++) top = Mathf.Max(top, snap.Nodes[q].y + snap.Origin.y - foot);
+                                ctx.Assert(tag + "_gpu_column_height", top >= need, $"highest node >= {need:0.0} m over the foot of the target", top.ToString("0.00"));
+                            }
+                            else ctx.Assert(tag + "_gpu_column_height", false, "nodes read back", "failed");
                         }
                     }
 
@@ -211,8 +233,9 @@ namespace MistWorms.Dev.Scenarios
         }
 
         /// <summary>
-        /// Side: the camera stands perpendicular to the player / mass axis, 4 m beyond the pair, looking at their middle. Player: behind the player,
-        /// looking over his shoulder toward the swarm (what the player sees).
+        /// Side: the camera stands perpendicular to the player / mass axis, looking at their middle, at the distance for which the swarm and the player (a body of 1.8 m) take 50 % of the
+        /// height of the image (D12; the radius of the subject is the shown radius of the swarm plus 0.4 m). Player: behind the player, looking over his shoulder toward the swarm (what the
+        /// player sees), at the distance for which the swarm takes 50 % of the height, never closer than 1.2 m behind the player.
         /// </summary>
         private static void Aim(ScenarioContext ctx, Player player, WritheMassVisual visual, bool side)
         {
@@ -223,17 +246,21 @@ namespace MistWorms.Dev.Scenarios
             axis = axis.sqrMagnitude > 1e-4f ? axis.normalized : Vector3.forward;
             Vector3 perp = Vector3.Cross(Vector3.up, axis);
             Vector3 pos, look;
+            float subjectR = Mathf.Max(0.3f, visual.ShownRadius) + 0.4f;
             if (side)
             {
                 Vector3 mid = (p + m) * 0.5f;
-                float d = 3f + 0.5f * visual.ShownRadius;
+                ScenarioContext.Orbit(ScenarioContext.FitFlat(subjectR, 1.8f, 15f), 15f, out float d, out float up);
                 look = mid + Vector3.up * 0.7f;
-                pos = mid + perp * d + Vector3.up * 1.4f;
+                pos = mid + perp * d + Vector3.up * (0.7f + up);
             }
             else
             {
+                float gap = Vector3.Distance(new Vector3(p.x, 0f, p.z), new Vector3(m.x, 0f, m.z));
+                ScenarioContext.Orbit(ScenarioContext.FitFlat(subjectR, 1.0f, 20f), 20f, out float back, out float up);
+                float behind = Mathf.Max(back - gap, 1.2f);
                 look = p + Vector3.up * 1.0f + axis * 0.8f;
-                pos = p - axis * 2.4f + perp * 0.6f + Vector3.up * 1.7f;
+                pos = p - axis * behind + perp * 0.6f + Vector3.up * (0.5f + up);
             }
             int mask = LayerMask.GetMask("Default", "static_solid", "Default_small", "piece", "piece_nonsolid", "vehicle", "item", "terrain");
             // In a mine a wall is never far: the first of the four rotations of the camera with a clear line wins.

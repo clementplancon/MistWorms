@@ -42,6 +42,14 @@ namespace MistWorms.Render.Gpu
         /// <summary>The skin sampler of the mass that was sampled last (every mass has its own: they can wrap different targets).</summary>
         public GpuSkinSampler Skin => _skins[_lastSkinSlot] ?? (_skins[_lastSkinSlot] = new GpuSkinSampler());
 
+#if MW_DEV
+        /// <summary>Dev (V14): every skin sampler forgets its selection (see <see cref="GpuSkinSampler.DevForget"/>); the next sample of each selects again.</summary>
+        internal void DevForgetSkins()
+        {
+            for (int i = 0; i < _skins.Length; i++) if (_skins[i] != null) _skins[i].DevForget();
+        }
+#endif
+
         public int LastPrimCount { get; private set; }
         public int Captures { get; private set; }
 

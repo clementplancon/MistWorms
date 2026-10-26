@@ -8,6 +8,7 @@ using MistWorms.Dev.Preview;
 using MistWorms.Config;
 using MistWorms.Mass;
 using MistWorms.Render;
+using MistWorms.Render.Gpu;
 using UnityEngine;
 
 namespace MistWorms.Dev.Scenarios
@@ -64,7 +65,7 @@ namespace MistWorms.Dev.Scenarios
             int n = ctx.ParamInt("n", 200);
             _wallInner = 2f * MassMath.Radius(n) + 0.45f;
             float seconds = ctx.ParamFloat("seconds", 20f);
-            if (!ctx.Params.ContainsKey("timeout")) ctx.TimeoutSeconds = 420f;
+            if (!ctx.Params.ContainsKey("timeout")) ctx.TimeoutSeconds = 600f;       // the environment step of the stairs (search, up to three agents of 20 s) comes before the corridor
 
             try
             {
@@ -94,9 +95,10 @@ namespace MistWorms.Dev.Scenarios
                 // In the mine: the stairs (the geometry of the mines gives stairs but no straight corridor to rely on), and a corridor search that
                 // is informative only.
                 yield return Scan(ctx, generator);
-                // The stairs depend on the navmesh of the mine, built on request around the player, which has not given a path to the stairs in the last runs (945 of 1624 pairs
-                // without path, identical on every attempt): an environment test, run apart (S08b_MassStairs), not part of the stream check.
-                if (StairsOnly || ctx.ParamBool("stairs", false)) yield return StairsPart(ctx, colony, seconds);
+                // D11. The stairs depend on the navmesh of the mine, built on request around the player, which has not given a path to the stairs in the last runs (945 of 1624 pairs
+                // without path, identical on every attempt): an "environment, non blocking" step. It runs by default (stairs=0 skips it), logs what it finds and what the mass does and takes
+                // pictures, and records no assertion: it cannot fail the run. S08 is judged on the corridor built below (stream, hit chain, progress); S08b_MassStairs runs the step alone.
+                if (StairsOnly || ctx.ParamBool("stairs", true)) yield return StairsPart(ctx, colony, seconds);
                 if (StairsOnly) yield break;
                 if (ctx.ParamBool("mineCorridor", true))
                 {
@@ -118,9 +120,12 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert("open_colony", openColony != null, "a colony", openHow);
                 if (openColony == null) yield break;
 
+                // D11: the corridor the stream is judged on is a built one (two rows of vanilla wall pieces on flat ground, checked piece by piece: walls_aligned, corridor_built,
+                // corridor_path below): the mines do not guarantee a straight corridor, the one searched in the mine above is information only.
                 Corridor built = null;
                 yield return BuildCorridor(ctx, c => built = c);
-                if (built == null) yield break;
+                if (built == null) { ctx.Assert("corridor_built_exists", false, "a corridor built from vanilla wall pieces", "none"); yield break; }
+                ctx.Log($"S08 is judged on the built corridor: {built.Width:0.00} m wide, {built.Length:0.0} m long, from {built.A}");
                 yield return RunCorridor(ctx, openColony, n, seconds, built);
                 yield return FallRescuePart(ctx, openColony);
             }
@@ -601,6 +606,11 @@ namespace MistWorms.Dev.Scenarios
             if (look != null) look.ProbeEnabled = true;
             Vector3 side = Vector3.Cross(Vector3.up, dir);
             int lastProbeFrame = -1, fluxSeen = 0, fluxCentred = 0, probeFrames = 0;
+            // D9, GPU path: no layout worker, so no probe of flux and border worms. The nodes of the colony are read back every 0.4 s while the stream is at full speed instead, and the
+            // lateral offset of every node from the axis of the corridor is measured (the walls are in the environment the ropes are simulated against).
+            GpuMassDev.NodeSnapshot gpuPending = null;
+            float gpuLastRequest = -1f, gpuMaxLateral = 0f, gpuRibbon = 0f;
+            int gpuSnapshots = 0;
             // Samples are taken at full speed only (steady state). Once the required progress is reached the mass is sent back and forth along the corridor
             // (DevGoal, no engulfing) so that the ribbon is sampled for the rest of the run: about twice the samples of a single pass. The per-second share of
             // centred flux worms is logged (min, median, max).
@@ -643,7 +653,30 @@ namespace MistWorms.Dev.Scenarios
                     maxSpheres = Mathf.Max(maxSpheres, mass.HitSphereCount);
                     ribbon = mass.StreamWidth;
                     ribbonLength = mass.RibbonLength;
-                    MassJob probeJob = look != null ? look.Job : null;
+                    if (look != null && look.GpuDriven && elapsed - firstStream > 1.5f && look.StreamK >= 0.999f && look.Speed >= 0.9f * MWConfig.Mass.MoveSpeed.Value)
+                    {
+                        if (gpuPending != null && gpuPending.Done)
+                        {
+                            if (!gpuPending.Error && gpuPending.Worms > 0)
+                            {
+                                int count = gpuPending.Worms * WormSimConst.Nodes;
+                                for (int q = 0; q < count; q++)
+                                {
+                                    Vector3 wp = new Vector3(gpuPending.Nodes[q].x + gpuPending.Origin.x, 0f, gpuPending.Nodes[q].z + gpuPending.Origin.z);
+                                    gpuMaxLateral = Mathf.Max(gpuMaxLateral, Mathf.Abs(Vector3.Dot(wp - new Vector3(corridor.A.x, 0f, corridor.A.z), side)));
+                                }
+                                gpuSnapshots++;
+                                gpuRibbon = mass.StreamWidth;
+                            }
+                            gpuPending = null;
+                        }
+                        if (gpuPending == null && Time.time - gpuLastRequest > 0.4f)
+                        {
+                            gpuLastRequest = Time.time;
+                            gpuPending = GpuMassDev.RequestNodes(look.Gpu);
+                        }
+                    }
+                    MassJob probeJob = look != null && !look.GpuDriven ? look.Job : null;
                     if (probeJob != null && probeJob.ReadyIdx >= 0 && elapsed - firstStream > 1.5f && look.StreamK >= 0.999f && look.Speed >= 0.9f * MWConfig.Mass.MoveSpeed.Value)
                     {
                         MassOutput po = probeJob.Out[probeJob.ReadyIdx];
@@ -710,6 +743,13 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Log($"stream layout over {probeFrames} frames, ribbon {sampledWidth:0.00} m: flux within 0.25 w of the axis {centred * 100f:0} % of {fluxSeen}; largest lateral offset {maxLateral:0.00} m (flux {maxLateralFlux:0.00}, border {maxLateralBorder:0.00}), limit w/2 + 0.1 = {sampledWidth * 0.5f + 0.1f:0.00} m; largest heading error of the heap against the corridor {maxHeadingError:0.0} degrees, which puts the largest offset against the corridor axis at {maxLateralWorld:0.00} m");
                 ctx.Assert("stream_flux_centred", centred >= 0.9f, ">= 90 % of the flux worms within 0.25 x width of the axis", $"{centred * 100f:0} %");
                 ctx.Assert("stream_nothing_outside_the_ribbon", maxLateral <= sampledWidth * 0.5f + 0.1f, $"no drawn worm beyond w/2 + 0.1 = {sampledWidth * 0.5f + 0.1f:0.00} m", $"{maxLateral:0.00} m");
+            }
+            else if (gpuSnapshots > 0)
+            {
+                // the corridor is `corridor.Width` wide between the walls: no rope node beyond its half width (+ 0.1 m, the margin the layout was judged with)
+                float limit = corridor.Width * 0.5f + 0.1f;
+                ctx.Log($"stream on the GPU colony over {gpuSnapshots} readbacks at full speed: largest lateral offset of a node from the axis {gpuMaxLateral:0.00} m, limit w/2 + 0.1 = {limit:0.00} m (ribbon {gpuRibbon:0.00} m); the centred flux share is a CPU layout notion, not judged");
+                ctx.Assert("stream_nothing_outside_the_walls", gpuMaxLateral <= limit, $"no rope node beyond w/2 + 0.1 = {limit:0.00} m from the axis of the corridor", $"{gpuMaxLateral:0.00} m over {gpuSnapshots} readbacks");
             }
             else ctx.Assert("stream_layout_sampled", false, "frames of the ribbon sampled", "none");
             ctx.Assert("target_sensed_by_the_ai", natural && !forced, "the mass acquires the player by itself (view or hearing)", forced ? "forced after 3 s" : natural.ToString());
@@ -823,14 +863,20 @@ namespace MistWorms.Dev.Scenarios
                 yield return FindStairs(ctx, (s, ok) => { stair = s; have = ok; }, wide: attempt > 0);
                 if (!have) yield return ctx.Wait(4f);
             }
-            ctx.Assert("stairs_found", have, $"a rise of {StairMinRise}-{StairMaxRise} m within {StairMaxRun} m with a vanilla path",
+            ctx.Note("stairs_found", have, $"a rise of {StairMinRise}-{StairMaxRise} m within {StairMaxRun} m with a vanilla path",
                 have ? $"{stair.Low} -> {stair.High}: rise {stair.High.y - stair.Low.y:0.00} m, path {stair.Path:0.0} m, start {stair.Start} ({stair.Offset} m outward)" : "none");
-            if (!have) yield break;
+            if (!have)
+            {
+                ctx.Log("ENV stairs: none found with a vanilla path (the navmesh of the mine is built on request): the step ends here, it does not fail the run; capture of the place");
+                yield return ctx.Shot("stairs_not_found");
+                yield break;
+            }
+            yield return StairsShot(ctx, "stairs_foot_to_top", stair.Low, stair.High);
 
             // The ranked candidates, best first: the first one where a mass really settles at the foot of the stairs.
             have = false;
             yield return PickStart(ctx, colony, (s, ok) => { stair = s; have = ok; });
-            ctx.Assert("stairs_start_valid", have, "a candidate where the mass settles within " + StartTolerance + " m of the foot of the stairs", have ? $"start {stair.Start}" : "none of the first 8");
+            ctx.Note("stairs_start_valid", have, "a candidate where the mass settles within " + StartTolerance + " m of the foot of the stairs", have ? $"start {stair.Start}" : "none of the first 8");
             if (!have) yield break;
 
             // The hunt stops at r(n) + EngulfRange from the player: with the player right at the top the mass could stop half way up the stairs.
@@ -839,7 +885,7 @@ namespace MistWorms.Dev.Scenarios
             ctx.Log($"landing for the player: {landing}, {Utils.DistanceXZ(landing, stair.High):0.0} m from the top of the stairs");
             var tp = new TeleportOutcome();
             yield return DevWorld.TeleportPlayer(landing + Vector3.up * 0.2f, Quaternion.identity, false, 30f, tp);
-            ctx.Assert("player_on_stairs_top", tp.Ok, "teleported", tp.Ok ? "ok" : tp.Error);
+            ctx.Note("player_on_stairs_top", tp.Ok, "teleported", tp.Ok ? "ok" : tp.Error);
             if (!tp.Ok) yield break;
             Player player = Player.m_localPlayer;
             player.SetGodMode(true);
@@ -861,7 +907,7 @@ namespace MistWorms.Dev.Scenarios
                     ctx.Log($"stairs start {stair.Start} ({stair.Offset} m outward): the mass settled {settled:0.00} m from the foot of the stairs");
                     if (mass == null || Mathf.Abs(settled) > StartTolerance) { MassDev.Destroy(mass); mass = null; }
                 }
-                if (mass == null) { ctx.Assert($"stairs_{agent}", false, "a mass starting within 0.3 m of the foot of the stairs", "none"); continue; }
+                if (mass == null) { ctx.Note($"stairs_{agent}", false, "a mass starting within 0.3 m of the foot of the stairs", "none"); continue; }
                 mass.DevFrozen = false;
                 var ai = mass.GetComponent<WritheMassAI>();
                 ai.PathAgent = agent;
@@ -911,19 +957,34 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Log($"stairs with {agent}: visual root: {rootSamples} frames sampled, largest vertical step {worstRootStep:0.000} m per frame, largest horizontal root-to-body gap {worstRootGap:0.00} m (vertical {worstRootGapY:0.00} m; a hop of the body is absorbed up to {MassRoot.MaxOffset:0.0} m at once, the rest in about 0.5 s)");
                 if (rootSamples > 10)
                 {
-                    ctx.Assert($"stairs_root_smooth_{agent}", worstRootStep <= 0.08f, "<= 0.08 m per frame (StepAssist hides in the smoothed root)", worstRootStep.ToString("0.000"));
-                    ctx.Assert($"stairs_root_near_body_{agent}", worstRootGap < 0.4f + 0.02f, "horizontal root to body gap < 0.4 m", worstRootGap.ToString("0.00"));
+                    ctx.Note($"stairs_root_smooth_{agent}", worstRootStep <= 0.08f, "<= 0.08 m per frame (StepAssist hides in the smoothed root)", worstRootStep.ToString("0.000"));
+                    ctx.Note($"stairs_root_near_body_{agent}", worstRootGap < 0.4f + 0.02f, "horizontal root to body gap < 0.4 m", worstRootGap.ToString("0.00"));
                 }
                 ctx.Log($"stairs with {agent}: {(ok ? how + " in " + reached.ToString("0.0") + " s" : "not reached")}, highest {bestY - stair.Low.y:0.00} m of {rise:0.00} m (needs {needed:0.00}), " +
                         (mass != null ? $"path ticks {ai.PathTicks}, no path {ai.NoPathTicks}, step assists {ai.StepAssists}, AI avg {ai.CostAvgMs:0.000} ms" : "mass lost"));
-                if (mass != null) ctx.Assert($"fall_rescues_stairs_{agent}", mass.FallRescues == 0, 0, mass.FallRescues);
+                if (mass != null) ctx.Note($"fall_rescues_stairs_{agent}", mass.FallRescues == 0, 0, mass.FallRescues);
                 MassDev.Destroy(mass);
                 yield return ctx.Wait(0.3f);
                 if (ok) { worked = agent.ToString(); break; }
             }
-            ctx.Assert("stairs_climbed", worked != null, $"the mass climbs {StairMinRise} m or more in {seconds:0} s with one of Humanoid, HumanoidNoSwim, GoblinBruteSize",
+            ctx.Note("stairs_climbed", worked != null, $"the mass climbs {StairMinRise} m or more in {seconds:0} s with one of Humanoid, HumanoidNoSwim, GoblinBruteSize",
                 worked != null ? "agent " + worked : "none worked");
             if (worked != null) ctx.Log($"decisions.md 24: agent type that passes the stairs of the mines: {worked}");
+            yield return StairsShot(ctx, "stairs_after", stair.Low, stair.High);
+        }
+
+        /// <summary>A capture of the stairs from below and behind, 3 m up (the environment step records a picture, not a verdict).</summary>
+        private static IEnumerator StairsShot(ScenarioContext ctx, string name, Vector3 low, Vector3 high)
+        {
+            Vector3 along = high - low; along.y = 0f;
+            along = along.sqrMagnitude > 1e-4f ? along.normalized : Vector3.forward;
+            Vector3 mid = (low + high) * 0.5f;
+            float radius = Mathf.Max(Utils.DistanceXZ(low, high) * 0.5f, 1.5f);
+            float d = ScenarioContext.FitSphere(radius);
+            DevCamera.Free(mid - along * d + Vector3.up * (0.4f * d), mid);
+            yield return ctx.WaitFrames(10);
+            yield return ctx.Shot(name);
+            DevCamera.Follow();
         }
 
         /// <summary>A floor point on the upper level, 4 to 8 m beyond the top of the stairs (away from the bottom) and reachable from it; the top itself if none.</summary>

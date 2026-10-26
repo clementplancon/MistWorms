@@ -179,9 +179,11 @@ namespace MistWorms.Dev.Scenarios
             catch (Exception e) { Plugin.Log.LogWarning("[Scenario] WaitPlayerSane: " + e.Message); }
             if (ready != null) yield return ready;
 
-            // The scenarios of the CPU layout of the masses (previews, lobes, flipbook instances) look at the fallback path: the GPU twin is off for them.
+            // D9: the GPU colony is the reference of every visual scenario, the masses are drawn by it. force_cpu=1 keeps the CPU layout (previews, lobes, flipbook instances) for a
+            // comparison with the fallback path; nothing forces it by default any more.
             MistWorms.Dev.DevSpawnBlock.Active = false;
-            MistWorms.Mass.GpuMassBridge.ForceCpu = scenario is VisualScenario || scenario is V09_MassTransitions || scenario is V10_MassMoving || scenario is V11_MassEngulf || scenario is S08_MassStream;
+            MistWorms.Mass.GpuMassBridge.ForceCpu = ctx.ParamBool("force_cpu", false);
+            if (MistWorms.Mass.GpuMassBridge.ForceCpu) ctx.Log("force_cpu=1: the masses stay on the CPU layout path");
             // The mines the scenarios enter stay as they expect them (no nest, no sleeping worm): only S16 wants the lazy seeding.
             MistWorms.Colony.MineSeeder.Suppressed = !(scenario is S16_MineSeed || scenario is S14_CalmSleep || scenario is S15_Persist);
             // Sleeping worms wake by themselves (a player near them or near a nest) only in the scenarios about the waking; the others place sleepers and expect them to stay so.
