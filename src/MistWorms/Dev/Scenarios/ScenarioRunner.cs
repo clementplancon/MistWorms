@@ -57,8 +57,47 @@ namespace MistWorms.Dev.Scenarios
             s_current = result;
 
             var ctx = new ScenarioContext(result, result.Parameters);
-            DevBridge.Host.StartCoroutine(Execute(scenario, ctx, result));
+            Coroutine run = DevBridge.Host.StartCoroutine(Execute(scenario, ctx, result));
+            DevBridge.Host.StartCoroutine(Watchdog(ctx, result, run, Time.realtimeSinceStartup));
             return result.Id;
+        }
+
+        /// <summary>Seconds after the timeout of a scenario at which the watchdog gives up on a run that did not stop by itself.</summary>
+        private const float WatchdogGrace = 20f;
+
+        /// <summary>
+        /// A scenario can never stay running: the runner aborts it between two steps once its timeout is over, but a step that never returns (a Unity wait under a frozen time scale, a
+        /// stopped coroutine) would hold the runner forever and every later start would be refused. Past the timeout plus a grace the run is cut, marked as an error and cleaned up.
+        /// </summary>
+        private static IEnumerator Watchdog(ScenarioContext ctx, ScenarioResult result, Coroutine run, float began)
+        {
+            while (s_current == result)
+            {
+                if (Time.realtimeSinceStartup - began > ctx.TimeoutSeconds + WatchdogGrace)
+                {
+                    try { DevBridge.Host.StopCoroutine(run); } catch (Exception e) { Plugin.Log.LogWarning("[Scenario] watchdog stop: " + e.Message); }
+                    try { DevConsole.Execute("mw_kill"); } catch (Exception e) { Plugin.Log.LogWarning("[Scenario] watchdog cleanup: " + e.Message); }
+                    try
+                    {
+                        Player p = Player.m_localPlayer;
+                        if (p != null) { p.SetGhostMode(false); p.SetGodMode(true); }
+                    }
+                    catch (Exception e) { Plugin.Log.LogWarning("[Scenario] watchdog player: " + e.Message); }
+                    MistWorms.Mass.GpuMassBridge.ForceCpu = false;
+                    MistWorms.Dev.DevSpawnBlock.Active = false;
+                    MistWorms.Colony.MineSeeder.Suppressed = false;
+                    MistWorms.Colony.WormColony.DevPassiveWake = true;
+                    MistWorms.Colony.WormColony.DevSpawnInterval = 0f;
+                    try { s_errors?.End(); } catch (Exception) { }
+                    result.DurationSeconds = Time.realtimeSinceStartup - began;
+                    result.Status = ScenarioResult.Errored;
+                    result.Error = $"watchdog: the scenario did not stop {WatchdogGrace:0} s after its timeout of {ctx.TimeoutSeconds:0} s; cut and cleaned up";
+                    Plugin.Log.LogWarning($"[Scenario] {result.Id} {result.Error}");
+                    s_current = null;
+                    yield break;
+                }
+                yield return null;
+            }
         }
 
         public static ScenarioResult Get(string id) =>
@@ -142,7 +181,9 @@ namespace MistWorms.Dev.Scenarios
             MistWorms.Dev.DevSpawnBlock.Active = false;
             MistWorms.Mass.GpuMassBridge.ForceCpu = scenario is VisualScenario || scenario is V09_MassTransitions || scenario is V10_MassMoving || scenario is V11_MassEngulf || scenario is S08_MassStream;
             // The mines the scenarios enter stay as they expect them (no nest, no sleeping worm): only S16 wants the lazy seeding.
-            MistWorms.Colony.MineSeeder.Suppressed = !(scenario is S16_MineSeed);
+            MistWorms.Colony.MineSeeder.Suppressed = !(scenario is S16_MineSeed || scenario is S14_CalmSleep || scenario is S15_Persist);
+            // Sleeping worms wake by themselves (a player near them or near a nest) only in the scenarios about the waking; the others place sleepers and expect them to stay so.
+            MistWorms.Colony.WormColony.DevPassiveWake = scenario is S14_CalmSleep || scenario is S14b_WakeRules;
             IEnumerator body = null;
             try { body = scenario.Run(ctx); }
             catch (Exception e) { error = e; }
@@ -161,6 +202,7 @@ namespace MistWorms.Dev.Scenarios
             MistWorms.Mass.GpuMassBridge.ForceCpu = false;
             MistWorms.Dev.DevSpawnBlock.Active = false;
             MistWorms.Colony.MineSeeder.Suppressed = false;
+            MistWorms.Colony.WormColony.DevPassiveWake = true;
             MistWorms.Colony.WormColony.DevSpawnInterval = 0f;
             List<string> logErrors = s_errors.End();
             result.DurationSeconds = Time.realtimeSinceStartup - start;

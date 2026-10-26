@@ -22,27 +22,33 @@ namespace MistWorms
         // Hidden status effect of an engulfed creature (spec §6.5): the slow only, no icon.
         public const string StatusEngulfed = "MW_SE_Engulfed";
 
-        // ZDO keys of the colony (spec §11.3/§11.4). Phase 3 only persists the kind and the box; the snapshot comes in phase 7.
+        // ZDO keys of the colony (spec §11.3/§11.4).
         public const string ZdoKind = "mw_kind";               // int: WormColony.ColonyKind
         public const string ZdoBoxCenter = "mw_box_c";         // Vector3, world space (spec §8.4)
         public const string ZdoBoxExtents = "mw_box_e";        // Vector3, half size
+        public const string ZdoAwake = "mw_awake";             // long on the colony: one bit per nest group, set while the group is awake (spec §5.1, phase 7-2)
+        public const string ZdoSnapshot = "mw_snap";           // byte[]: the free worms, their pools and the reserve (SnapshotFormat, spec §11.4, phase 7-3); written by the owner
         public const string ZdoSeeded = "mw_seeded";           // int on the colony: 1 once the mine has been seeded, never seeded twice (spec §8.3, plan 7 A7)
+        public const string ZdoColonyKey = "mw_key";           // long on the colony: its stable identity (MineKey; spec §11.3). A ZDOID is NOT stable: Valheim gives new ids to the ZDOs it loads
+        public const string ZdoCreated = "mw_created";         // long on the colony: network time (ticks) of its creation; the older colony of a mine wins the deduplication (0 or missing = unknown)
+        public const string ZdoLegacyColony = "mw_colony";     // ZDOID written by the builds before the stable key (nests and masses): never trusted, only a marker of an old object (see WormNest, WritheMassState)
+        public const string ZdoColonyRef = "mw_ckey";          // long on a nest or a mass: the MineKey of the colony it belongs to (spec §11.3)
 
         // ZDO keys of a worm nest (spec §10.1, §11.3). The hit points are the vanilla "health" of the Destructible.
-        public const string ZdoNestColony = "mw_colony";       // ZDOID of the colony the nest belongs to
         public const string ZdoNestIndex = "mw_nest";          // int: stable index of the nest in its colony (WormStore.nestIndex)
         public const string ZdoNestHit = "mw_nest_hit";        // long: network time (ticks) of the last hit, for the laying pause (Nest.HitPause)
+        public const string ZdoNestPlayerHit = "mw_nest_pl";   // long: network time (ticks) of the last hit by a player; the colony owner reads it to alert the group (phase 7-2)
 
         // ZDO keys of a writhing mass (spec §11.3, plan 4B-1). The vanilla health of the Character is the source of truth of the owner;
         // mw_n and mw_partial are derived from it after every hit and read by every peer (name, render, loss effects).
         public const string ZdoMassN = "mw_n";                 // int: worms in the mass
         public const string ZdoMassPartial = "mw_partial";     // float: damage already dealt toward the next worm (0 <= partial < Worm.Health)
         public const string ZdoMassState = "mw_state";         // byte: MassStateCodes (mode + transition + Stream bit)
-        public const string ZdoMassColony = "mw_colony";       // ZDOID of the colony the worms come from and return to
         public const string ZdoMassBorn = "mw_born";           // long: network time (ticks) of the birth, for the growth animation
         public const string ZdoMassPool = "mw_pool";           // byte[]: loot pool (MassPool.Write: version, count, then hash + quantity + carry per entry)
         public const string ZdoMassNests = "mw_nests";         // byte[]: NestCounts.ToBytes, the worms of the mass per nest of origin (spec §8.2); the sum is always n
-        public const string ZdoMassTarget = "mw_target";       // ZDOID of the creature the mass hunts (ZDOID.None = none)
+        public const string ZdoMassTarget = "mw_target";       // ZDOID of the creature the mass hunts (ZDOID.None = none); only valid in the session that wrote it, cleared when a mass is loaded from a save
+        public const string ZdoMassPlayerHit = "mw_phit";      // long: network time (ticks) of the last hit by a player; the colony owner reads it to alert the groups (phase 7-2)
         public const string ZdoMassStreamWidth = "mw_sw";      // float: width of the ribbon while the Stream bit is set (spec §4.7)
 
         // RPC names (spec §11.3). Part of the wire protocol: never rename after release.
@@ -55,7 +61,8 @@ namespace MistWorms
         public const string RpcConsumed = "MW_Consumed";       // routed RPC to the mass owner: ZDOID mass, ZPackage (int count <= 16, then int prefab hash + float quantity <= 50 per entry)
         public const string RpcWormConsumed = "MW_WormConsumed"; // routed RPC to the colony owner: ZDOID colony, int slot, int generation, ZPackage (same payload as MW_Consumed)
         public const string RpcLastWormHit = "MW_LastHit";     // routed RPC to the owner of a creature or a structure: ZDOID victim, ZDOID colony, int slot, int generation ("last worm hit" registry, spec §7.4)
-        public const string RpcMassDissolve = "MW_Dissolve";   // ZNetView RPC to the colony owner: ZDOID mass, int n, Vector3 position, ZPackage pool
+        public const string RpcMassDissolve = "MW_Dissolve";   // ZNetView RPC to the colony owner: ZDOID mass, int n, Vector3 position, ZPackage pool, bool sleep (true: n Sleeping worms around position, phase 7-2)
+        public const string RpcSnapAbsorb = "MW_SnapAbsorb";   // ZNetView RPC to the colony owner: ZPackage snapshot (SnapshotFormat), Vector3 centre of the box it is relative to (a duplicate colony hands its worms over)
         public const string RpcNestGone = "MW_NestGone";       // ZNetView RPC to the colony owner: int nest index, Vector3 position (the nest was destroyed by a hit: release its worms)
     }
 }

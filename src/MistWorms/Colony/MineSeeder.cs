@@ -12,13 +12,16 @@ namespace MistWorms.Colony
     {
         public int Seed;
         public int Rooms;               // rooms of the mine
-        public int EligibleRooms;       // big enough, not the entrance, not a divider, with a valid floor point
+        public int EligibleRooms;       // big enough for a nest, not the entrance, not a divider, with a valid floor point
+        public int LoneRooms;           // not the entrance, not a divider, with a valid floor point for a lone worm (corridors included, any size)
+        public int LargestRoom;         // m2, for the log
         public int NestsPlaced;
         public int BroodWanted, BroodPlaced;
         public int LoneWanted, LonePlaced;
         public Vector3 Entrance;
         public Vector3[] NestPositions = new Vector3[0];
-        public int[] LonePerRoom = new int[0];    // per eligible room, in the order they were handed out
+        public int[] LonePerRoom = new int[0];    // per lone room, in the order they were handed out (the wish)
+        public int[] LonePlacedPerRoom = new int[0];   // per lone room, what was really placed there (never above Nest.MaxLoneWormsPerRoom)
         public int Frames;
         public float PlanMs;
         public string Note;
@@ -47,6 +50,9 @@ namespace MistWorms.Colony
         private const float BroodRingMin = 1f, BroodRingMax = 3f;
         private const int BroodTries = 12;
         private const float RoomMargin = 1.5f;
+        private const float LoneWallClearance = 0.6f;   // a lone worm also lives in corridors 2 m wide
+        private const float LoneRoomMargin = 0.6f;
+        private const int LoneTries = 24;
 
         /// <summary>Seedings completed in this game session (S16: leaving the mine and coming back must not add one).</summary>
         public static int Runs { get; private set; }
@@ -152,6 +158,42 @@ namespace MistWorms.Colony
         }
 
         private static readonly List<WormColony> s_sameBox = new List<WormColony>();
+        private static readonly int s_colonyHash = MWNames.ColonyPrefab.GetStableHashCode();
+        private static float s_loadingSince = -1f;
+        private const float LoadingPatience = 30f;
+
+        /// <summary>
+        /// True while the zone of <paramref name="where"/> holds a colony ZDO whose object is not there yet (a saved colony that the zone is still instantiating,
+        /// or one not configured yet): creating a colony now would make a second one for the same mine, and the nests of the one that is removed would be orphans.
+        /// Gives up after <see cref="LoadingPatience"/> seconds (a ZDO that never gets an object).
+        /// </summary>
+        internal static bool ColonyLoading(Vector3 where)
+        {
+            bool pending = false;
+            ZDOMan man = ZDOMan.instance;
+            if (man != null && man.m_objectsBySector != null)
+            {
+                int sector = (int)ZoneSystem.SectorToIndex(ZoneSystem.GetZone(where)).Sector;
+                List<ZDO> list = sector >= 0 && sector < man.m_objectsBySector.Length ? man.m_objectsBySector[sector] : null;
+                if (list != null)
+                {
+                    for (int k = 0; k < list.Count && !pending; k++)
+                    {
+                        ZDO zdo = list[k];
+                        if (zdo == null || !zdo.IsValid() || zdo.GetPrefab() != s_colonyHash) continue;
+                        WormColony c = ColonyRegistry.FindById(zdo.m_uid);
+                        pending = c == null || !c.IsConfigured;
+                    }
+                }
+            }
+            if (!pending) { s_loadingSince = -1f; return false; }
+            float now = Time.unscaledTime;
+            if (s_loadingSince < 0f) s_loadingSince = now;
+            if (now - s_loadingSince < LoadingPatience) return true;
+            s_loadingSince = -1f;
+            Plugin.Log.LogWarning("[Seed] a colony of this mine is still not there after " + LoadingPatience + " s: creating one");
+            return false;
+        }
 
         private static void PollPlayer(Player player)
         {
@@ -162,6 +204,7 @@ namespace MistWorms.Colony
             Vector3 here = player.transform.position;
             WormColony colony = Deduplicate(here);
             if (colony != null && (colony.Kind != WormColony.ColonyKind.Mine || !colony.IsConfigured)) return;
+            if (colony != null && colony.IsOwner && !colony.SnapshotSettled) return;   // a reloaded colony gets its worms back before any seeding (phase 7-3)
 
             // The common case in a mine that is already handled: nothing to look at, nothing allocated.
             MineStep step = MineOwnership.Decide(colony != null, colony != null && colony.IsOwner, colony != null && !colony.IsOwner && OwnerHasPlayerInside(colony), colony != null && colony.Seeded);
@@ -191,6 +234,7 @@ namespace MistWorms.Colony
             {
                 ColonyBox.ForDungeon(gen, out Vector3 center, out Vector3 half);
                 if (!WormMath.InsideBox(here, center, half)) return;
+                if (ColonyLoading(gen.transform.position)) return;   // the saved colony of this mine is still being instantiated: wait for it
 
                 // Any peer with a player in the box creates the colony (registry by box, spec §8.3); two made at once are reduced to one by Deduplicate.
                 colony = WormColony.Create(gen.transform.position, WormColony.ColonyKind.Mine, center, half);
@@ -216,9 +260,13 @@ namespace MistWorms.Colony
             return false;
         }
 
+        private static KeeperCandidate[] s_candidates = new KeeperCandidate[4];
+
         /// <summary>
-        /// The colony of the mine around <paramref name="pos"/>. When several mine colonies share the box the smallest ZDO id stays; the others are
-        /// destroyed by their owners and the seeded flag is inherited, so the mine is never seeded twice. Returns the one that stays (null when none).
+        /// The colony of the mine around <paramref name="pos"/>. When several mine colonies share the box one stays, chosen by <see cref="MineOwnership.CompareKeeper"/> from what their ZDOs hold
+        /// (seeded, more worms, older; never by ZDOID, which is not the same from one session to the next, decision 211). Each duplicate that this peer owns hands its worms, pools and reserve
+        /// to the one that stays and is destroyed; its nests and masses carry the key of the mine and follow. The seeded flag is inherited, so the mine is never seeded twice.
+        /// Returns the one that stays (null when none).
         /// </summary>
         private static WormColony Deduplicate(Vector3 pos)
         {
@@ -230,25 +278,28 @@ namespace MistWorms.Colony
                 if (c != null && c.IsConfigured && c.Kind == WormColony.ColonyKind.Mine && WormMath.InsideBox(pos, c.BoxCenter, c.BoxHalfSize)) s_sameBox.Add(c);
             }
             if (s_sameBox.Count == 0) return ColonyRegistry.FindFor(pos);
-            WormColony keep = s_sameBox[0];
-            for (int k = 1; k < s_sameBox.Count; k++)
+            if (s_sameBox.Count == 1)
             {
-                ZDOID a = s_sameBox[k].ZdoId, b = keep.ZdoId;
-                if (MineOwnership.Compare(a.UserID, a.ID, b.UserID, b.ID) < 0) keep = s_sameBox[k];
+                WormColony only = s_sameBox[0];
+                s_sameBox.Clear();
+                return only;
             }
-            if (s_sameBox.Count > 1)
+
+            if (s_candidates.Length < s_sameBox.Count) s_candidates = new KeeperCandidate[s_sameBox.Count];
+            for (int k = 0; k < s_sameBox.Count; k++) s_candidates[k] = s_sameBox[k].Candidate;
+            WormColony keep = s_sameBox[MineOwnership.PickKeeper(s_candidates, s_sameBox.Count)];
+
+            bool anySeeded = false;
+            for (int k = 0; k < s_sameBox.Count; k++)
+                if (s_sameBox[k] != keep && s_sameBox[k].Seeded) anySeeded = true;
+            if (keep.IsOwner && MineOwnership.InheritSeeded(keep.Seeded, anySeeded) && !keep.Seeded) keep.SetSeeded(true);
+            for (int k = 0; k < s_sameBox.Count; k++)
             {
-                bool anySeeded = false;
-                for (int k = 0; k < s_sameBox.Count; k++)
-                    if (s_sameBox[k] != keep && s_sameBox[k].Seeded) anySeeded = true;
-                if (keep.IsOwner && MineOwnership.InheritSeeded(keep.Seeded, anySeeded) && !keep.Seeded) keep.SetSeeded(true);
-                for (int k = 0; k < s_sameBox.Count; k++)
-                {
-                    WormColony dup = s_sameBox[k];
-                    if (dup == keep || !dup.IsOwner) continue;
-                    Plugin.Log.LogInfo($"[Seed] duplicate colony {dup.ZdoId} for the mine of colony {keep.ZdoId}: destroyed");
-                    dup.DestroyColony();
-                }
+                WormColony dup = s_sameBox[k];
+                if (dup == keep || !dup.IsOwner) continue;
+                Plugin.Log.LogInfo($"[Seed] duplicate colony {dup.ZdoId} (mine {MineKey.Describe(dup.Key)}, {s_candidates[k].Worms} worms, seeded {s_candidates[k].Seeded}) for the mine of colony {keep.ZdoId}: handed over, destroyed");
+                dup.HandOverTo(keep);
+                dup.DestroyColony();
             }
             s_sameBox.Clear();
             return keep;
@@ -335,6 +386,7 @@ namespace MistWorms.Colony
             {
                 if (room.m_entrance || room.m_divider) continue;
                 float area = room.m_size.x * room.m_size.z;
+                if (area > report.LargestRoom) report.LargestRoom = Mathf.RoundToInt(area);
                 if (area < minArea) continue;
                 if (FloorPoint(room, rng, spawners, colony, none, 0f, none, 0f, out Vector3 point)) picks.Add(new RoomPick { Room = room, Point = point, Area = area });
                 if (slice.Elapsed.TotalMilliseconds > BudgetMs) { report.Frames++; yield return null; slice.Restart(); }
@@ -364,27 +416,67 @@ namespace MistWorms.Colony
                 if (slice.Elapsed.TotalMilliseconds > BudgetMs) { report.Frames++; yield return null; slice.Restart(); }
             }
 
-            // 4. The lone worms: the budget over the eligible rooms, the biggest rooms first (SeedMath hands the round out from a seeded start).
-            picks.Sort((a, b) => b.Area != a.Area ? b.Area.CompareTo(a.Area) : a.Room.transform.position.GetHashCode().CompareTo(b.Room.transform.position.GetHashCode()));
-            int[] counts = SeedMath.LoneWormsPerRoom(MWConfig.Nest.LoneWormsPerMine.Value, picks.Count, MWConfig.Nest.MaxLoneWormsPerRoom.Value, seed);
+            // 4. The lone worms: the budget over every room that is not the entrance or a divider and has a valid floor point (corridors and small rooms included,
+            //    decision 207), the biggest rooms first (SeedMath hands the round out from a seeded start).
+            var lonePicks = new List<RoomPick>();
+            foreach (Room room in rooms)
+            {
+                if (room.m_entrance || room.m_divider) continue;
+                float area = room.m_size.x * room.m_size.z;
+                if (FloorPoint(room, rng, spawners, colony, none, 0f, none, 0f, out Vector3 point, LoneWallClearance, LoneRoomMargin, LoneTries))
+                    lonePicks.Add(new RoomPick { Room = room, Point = point, Area = area });
+                if (slice.Elapsed.TotalMilliseconds > BudgetMs) { report.Frames++; yield return null; slice.Restart(); }
+            }
+            report.LoneRooms = lonePicks.Count;
+            var areaCount = new SortedDictionary<int, int>();
+            foreach (Room room in rooms)
+            {
+                int a = Mathf.RoundToInt(room.m_size.x * room.m_size.z);
+                areaCount[a] = areaCount.TryGetValue(a, out int n) ? n + 1 : 1;
+            }
+            var areaText = new System.Text.StringBuilder();
+            foreach (KeyValuePair<int, int> kv in areaCount) areaText.Append(kv.Value).Append('x').Append(kv.Key).Append(" m2 ");
+            Plugin.Log.LogInfo($"[Seed] room floor areas: {areaText}");
+            lonePicks.Sort((a, b) => b.Area != a.Area ? b.Area.CompareTo(a.Area) : a.Room.transform.position.GetHashCode().CompareTo(b.Room.transform.position.GetHashCode()));
+            int loneCap = MWConfig.Nest.MaxLoneWormsPerRoom.Value;
+            int[] counts = SeedMath.LoneWormsPerRoom(MWConfig.Nest.LoneWormsPerMine.Value, lonePicks.Count, loneCap, seed);
             report.LonePerRoom = counts;
             var lone = new List<Vector3>();
-            var loneNear = new List<Vector3>();
-            for (int k = 0; k < picks.Count; k++)
+            var loneByRoom = new List<Vector3>[lonePicks.Count];
+            for (int k = 0; k < lonePicks.Count; k++)
             {
-                loneNear.Clear();
+                loneByRoom[k] = new List<Vector3>(loneCap);
                 for (int w = 0; w < counts[k]; w++)
                 {
                     report.LoneWanted++;
                     // At least 4 m from every nest: the nests act as the "others" of the distance test (LoneNestDistance), the lone worms of the room as the second one.
-                    if (LonePoint(picks[k].Room, rng, spawners, colony, nestPoints, loneNear, out Vector3 at))
+                    if (LonePoint(lonePicks[k].Room, rng, spawners, colony, nestPoints, loneByRoom[k], out Vector3 at))
                     {
                         lone.Add(at);
-                        loneNear.Add(at);
+                        loneByRoom[k].Add(at);
                     }
                 }
                 if (slice.Elapsed.TotalMilliseconds > BudgetMs) { report.Frames++; yield return null; slice.Restart(); }
             }
+            // What a room could not take (a point too close to a nest) goes to the rooms that still have room for one.
+            int shortfall = report.LoneWanted - lone.Count;
+            for (int pass = 0; pass < 2 && shortfall > 0; pass++)
+            {
+                for (int k = 0; k < lonePicks.Count && shortfall > 0; k++)
+                {
+                    if (loneByRoom[k].Count >= loneCap) continue;
+                    if (LonePoint(lonePicks[k].Room, rng, spawners, colony, nestPoints, loneByRoom[k], out Vector3 at))
+                    {
+                        lone.Add(at);
+                        loneByRoom[k].Add(at);
+                        shortfall--;
+                    }
+                    if (slice.Elapsed.TotalMilliseconds > BudgetMs) { report.Frames++; yield return null; slice.Restart(); }
+                }
+            }
+
+            report.LonePlacedPerRoom = new int[lonePicks.Count];
+            for (int k = 0; k < lonePicks.Count; k++) report.LonePlacedPerRoom[k] = loneByRoom[k].Count;
 
             // 5. Placement, in this frame. The flag first: whatever happens next, this mine is not seeded again.
             if (colony == null || !colony.IsOwner || colony.Seeded) yield break;
@@ -420,7 +512,7 @@ namespace MistWorms.Colony
             Last = report;
             Runs++;
             Plugin.Log.LogInfo($"[Seed] mine at {root} seeded (seed {seed}): {report.Rooms} rooms, {report.EligibleRooms} eligible, {report.NestsPlaced} nests, " +
-                               $"{report.BroodPlaced}/{report.BroodWanted} brood worms, {report.LonePlaced}/{report.LoneWanted} lone worms, {report.Frames + 1} frames, {report.PlanMs:0} ms");
+                               $"{report.LoneRooms} lone rooms (largest room {report.LargestRoom} m2, nest minimum {minArea:0} m2), {report.BroodPlaced}/{report.BroodWanted} brood worms, {report.LonePlaced}/{report.LoneWanted} lone worms, {report.Frames + 1} frames, {report.PlanMs:0} ms");
         }
 
         private static int NearestNest(Vector3 p, List<Vector3> nestPoints, List<WormNest> placed)
@@ -444,16 +536,17 @@ namespace MistWorms.Colony
         /// mound, inside the box of the colony, at least <paramref name="distA"/> from every point of <paramref name="avoidA"/> and <paramref name="distB"/> from every
         /// point of <paramref name="avoidB"/>.
         /// </summary>
-        private static bool FloorPoint(Room room, System.Random rng, Vector3[] spawners, WormColony colony, List<Vector3> avoidA, float distA, List<Vector3> avoidB, float distB, out Vector3 point)
+        private static bool FloorPoint(Room room, System.Random rng, Vector3[] spawners, WormColony colony, List<Vector3> avoidA, float distA, List<Vector3> avoidB, float distB, out Vector3 point,
+            float wallClearance = WallClearance, float margin = RoomMargin, int maxTries = FloorTries)
         {
             Transform t = room.transform;
             float hx = room.m_size.x * 0.5f, hz = room.m_size.z * 0.5f, hy = room.m_size.y * 0.5f;
             int mask = WormPhysics.CharacterSolidMask;
             float cosMax = Mathf.Cos(MaxFloorSlopeDeg * Mathf.Deg2Rad);
-            for (int tries = 0; tries < FloorTries; tries++)
+            for (int tries = 0; tries < maxTries; tries++)
             {
-                float lx = Between(rng, -hx + RoomMargin, hx - RoomMargin);
-                float lz = Between(rng, -hz + RoomMargin, hz - RoomMargin);
+                float lx = Between(rng, -hx + margin, hx - margin);
+                float lz = Between(rng, -hz + margin, hz - margin);
                 Vector3 top = t.TransformPoint(new Vector3(lx, hy, lz));
                 int count = Physics.RaycastNonAlloc(top, Vector3.down, s_hits, room.m_size.y + 4f, mask, QueryTriggerInteraction.Ignore);
                 int low = -1;
@@ -466,7 +559,7 @@ namespace MistWorms.Colony
                 }
                 if (low < 0) continue;
                 Vector3 p = s_hits[low].point;
-                if (Accept(p, spawners, colony, avoidA, distA, avoidB, distB)) { point = p; return true; }
+                if (Accept(p, spawners, colony, avoidA, distA, avoidB, distB, wallClearance)) { point = p; return true; }
             }
             point = default;
             return false;
@@ -474,9 +567,9 @@ namespace MistWorms.Colony
 
         /// <summary>A lone worm: at least 4 m from every nest and 1.2 m from the other lone worms of its room.</summary>
         private static bool LonePoint(Room room, System.Random rng, Vector3[] spawners, WormColony colony, List<Vector3> nests, List<Vector3> others, out Vector3 point) =>
-            FloorPoint(room, rng, spawners, colony, nests, LoneNestDistance, others, LoneSpacing, out point);
+            FloorPoint(room, rng, spawners, colony, nests, LoneNestDistance, others, LoneSpacing, out point, LoneWallClearance, LoneRoomMargin, LoneTries);
 
-        private static bool Accept(Vector3 p, Vector3[] spawners, WormColony colony, List<Vector3> avoidA, float distA, List<Vector3> avoidB, float distB)
+        private static bool Accept(Vector3 p, Vector3[] spawners, WormColony colony, List<Vector3> avoidA, float distA, List<Vector3> avoidB, float distB, float wallClearance)
         {
             if (!WormMath.InsideBox(p, colony.BoxCenter, colony.BoxHalfSize)) return false;
             for (int k = 0; k < avoidA.Count; k++)
@@ -488,7 +581,7 @@ namespace MistWorms.Colony
             int solid = WormPhysics.SolidMask;
             if (Physics.Raycast(p + Vector3.up * 0.05f, Vector3.up, 1.2f, solid, QueryTriggerInteraction.Ignore)) return false;    // headroom
             if (Physics.CheckSphere(p + Vector3.up * 0.55f, 0.45f, solid, QueryTriggerInteraction.Ignore)) return false;               // a prop on the spot
-            return FreeRadius(p, WallClearance, solid) >= WallClearance;
+            return FreeRadius(p, wallClearance, solid) >= wallClearance;
         }
 
         /// <summary>Distance to the nearest wall over 16 horizontal rays at knee height, at most <paramref name="max"/>.</summary>

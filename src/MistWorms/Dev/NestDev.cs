@@ -87,6 +87,7 @@ namespace MistWorms.Dev
                 { "seed", r.Seed },
                 { "rooms", r.Rooms },
                 { "eligibleRooms", r.EligibleRooms },
+                { "loneRooms", r.LoneRooms },
                 { "nests", r.NestsPlaced },
                 { "broodWanted", r.BroodWanted },
                 { "broodPlaced", r.BroodPlaced },

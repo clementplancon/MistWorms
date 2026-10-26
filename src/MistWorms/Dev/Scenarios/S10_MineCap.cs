@@ -71,8 +71,9 @@ namespace MistWorms.Dev.Scenarios
 
                 // ---- a nest in a full mine lays nothing
                 WormColony.DevSpawnInterval = 2f;
-                NestDev.PlaceInFront(3f, out WormColony nestColony, out _);
+                WormNest placed = NestDev.PlaceInFront(3f, out WormColony nestColony, out _);
                 ctx.Assert("nest_in_the_same_colony", nestColony == colony, colony.ZdoId.ToString(), nestColony.ZdoId.ToString());
+                nestColony.DevWakeGroup(placed.Index);    // a sleeping group lays nothing (phase 7-2): the cap is what this scenario is about
                 int laidBefore = colony.EggsLaid;
                 yield return ctx.WaitGame(7f);
                 ctx.Assert("full_mine_lays_nothing", colony.EggsLaid == laidBefore && colony.Store.AliveCount == cap + ForcedExtra, "no egg, count unchanged", $"eggs {colony.EggsLaid - laidBefore}, alive {colony.Store.AliveCount}");

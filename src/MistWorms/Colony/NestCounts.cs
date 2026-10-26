@@ -113,6 +113,36 @@ namespace MistWorms.Colony
             return -1;
         }
 
+        /// <summary>
+        /// The nest that most of the worms come from (the lowest index on a tie), or -1 when no worm has a nest or the worms with no nest are more numerous than
+        /// the biggest nest share: the group of a mass (spec §5.1, plan 7-2).
+        /// </summary>
+        public int Majority()
+        {
+            int best = -1, bestCount = 0;
+            for (int i = 0; i < Slots; i++)
+            {
+                if (_c[i] <= bestCount) continue;
+                bestCount = _c[i];
+                best = i;
+            }
+            return best >= 0 && bestCount >= _c[None] ? best : -1;
+        }
+
+        /// <summary>
+        /// Takes <paramref name="n"/> worms from the set one by one (the lowest nest first, the "no nest" worms last) and writes the nest index of each into
+        /// <paramref name="into"/>, -1 for a worm with no nest or once the set is empty: the nest of origin of the sleeping worms a mass is dissolved into. Exact,
+        /// not prorata: each nest gets back exactly its count.
+        /// </summary>
+        public void DrainTo(short[] into, int n)
+        {
+            for (int k = 0; k < n; k++)
+            {
+                int origin = TakeOne();
+                into[k] = origin >= 0 && origin < None ? (short)origin : (short)-1;
+            }
+        }
+
         /// <summary>Removes <paramref name="other"/> from this set, slot by slot, never below zero.</summary>
         public void Subtract(NestCounts other)
         {

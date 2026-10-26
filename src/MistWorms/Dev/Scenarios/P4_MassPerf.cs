@@ -358,15 +358,21 @@ namespace MistWorms.Dev.Scenarios
         {
             Vector3 origin = player.transform.position;
             int mask = WormPhysics.SolidMask;
-            for (int k = 0; k < 8; k++)
+            // Deterministic search: three passes, each over the 8 directions: the asked distance and 6 m of height difference, then 36 m (the edge of the swarm is still past 31 m)
+            // and 12 m, then 33 m and 20 m (hilly ground: the Mistlands).
+            float[] distances = { distance, 36f, 33f };
+            float[] heights = { 6f, 12f, 20f };
+            for (int n = 0; n < 24; n++)
             {
+                int k = n % 8, pass = n / 8;
+                float dist = distances[pass], maxDy = heights[pass];
                 Vector3 dir = Quaternion.AngleAxis(k * 45f, Vector3.up) * fwd;
                 Vector3 side = Vector3.Cross(Vector3.up, dir);
-                Vector3 a = origin + dir * distance;
-                Vector3 b = origin + dir * (distance - 2f) + side * 12f;
-                if (!HasFloor(a, origin.y, mask) || !HasFloor(b, origin.y, mask))
+                Vector3 a = origin + dir * dist;
+                Vector3 b = origin + dir * (dist - 2f) + side * 12f;
+                if (!HasFloor(a, origin.y, mask, maxDy) || !HasFloor(b, origin.y, mask, maxDy))
                 {
-                    ctx.Log($"far placement: direction {k * 45} deg has no floor within 6 m of the player's height under both anchors");
+                    ctx.Log($"far placement: direction {k * 45} deg at {dist:0} m has no floor within {maxDy:0} m of the player's height under both anchors");
                     continue;
                 }
                 _anchorA = a; _anchorB = b; _perp = side;
@@ -385,8 +391,8 @@ namespace MistWorms.Dev.Scenarios
             ctx.Log("far placement: no direction put both masses 31 m away; the LOD assertions of D will say so");
         }
 
-        private static bool HasFloor(Vector3 p, float playerY, int mask) =>
-            Physics.Raycast(p + Vector3.up * 8f, Vector3.down, out RaycastHit hit, 20f, mask, QueryTriggerInteraction.Ignore) && Mathf.Abs(hit.point.y - playerY) <= 6f;
+        private static bool HasFloor(Vector3 p, float playerY, int mask, float maxDy) =>
+            Physics.Raycast(p + Vector3.up * (maxDy + 2f), Vector3.down, out RaycastHit hit, 2f * maxDy + 4f, mask, QueryTriggerInteraction.Ignore) && Mathf.Abs(hit.point.y - playerY) <= maxDy;
 
         private void Place(Vector3 a, Vector3 b)
         {

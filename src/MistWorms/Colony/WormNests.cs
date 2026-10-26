@@ -55,12 +55,13 @@ namespace MistWorms.Colony
             get
             {
                 int n = 0;
-                ZDOID me = ZdoId;
+                long me = Key;
+                if (me == 0L) return 0;
                 List<WritheMassState> all = WritheMassState.All;
                 for (int i = 0; i < all.Count; i++)
                 {
                     WritheMassState m = all[i];
-                    if (m != null && m.Valid && !m.Dissolving && m.ColonyId == me) n += m.N;
+                    if (m != null && m.Valid && !m.Dissolving && m.ColonyKey == me) n += m.N;
                 }
                 return n;
             }
@@ -96,9 +97,21 @@ namespace MistWorms.Colony
         public void RegisterNest(WormNest nest)
         {
             if (_nests == null || nest == null || (uint)nest.Index >= (uint)_nests.Length) return;
-            if (_nests[nest.Index] == nest) return;
+            WormNest there = _nests[nest.Index];
+            if (there == nest) return;
+            if (there != null && there.IsValid)
+            {
+                // Two nests of this mine claim one index: a second seeding of the mine (two colonies seeded it at once). The per mine cap of nests must hold, so one of them goes;
+                // the one with the larger ZDOID, which every peer works out the same way. Its owner removes it; no worm is lost (they live in the snapshot, not in the nest).
+                bool newcomerLoses = MineOwnership.Compare(nest.ZdoId.UserID, nest.ZdoId.ID, there.ZdoId.UserID, there.ZdoId.ID) > 0;
+                WormNest loser = newcomerLoses ? nest : there;
+                loser.GiveUp($"index {nest.Index} is taken by another nest of mine {MineKey.Describe(Key)}: a leftover of a second seeding");
+                if (newcomerLoses) return;
+                UnregisterNest(there);
+            }
             if (_nests[nest.Index] == null) NestsLoaded++;
             _nests[nest.Index] = nest;
+            nest.SeenPlayerHit = nest.PlayerHitTicks;   // a hit from before this colony knew the nest alerts nobody
         }
 
         public void UnregisterNest(WormNest nest)
@@ -182,12 +195,12 @@ namespace MistWorms.Colony
             int n = 0;
             for (int i = 0; i < s.HighWater; i++)
                 if (s.alive[i] && s.nestIndex[i] == k && !s.lone[i]) n++;
-            ZDOID me = ZdoId;
+            long me = Key;
             List<WritheMassState> all = WritheMassState.All;
-            for (int i = 0; i < all.Count; i++)
+            for (int i = 0; me != 0L && i < all.Count; i++)
             {
                 WritheMassState m = all[i];
-                if (m != null && m.Valid && m.ColonyId == me) n += m.NestCountOf(k);
+                if (m != null && m.Valid && m.ColonyKey == me) n += m.NestCountOf(k);
             }
             return n;
         }
@@ -209,7 +222,8 @@ namespace MistWorms.Colony
                 WormNest nest = _nests[k];
                 if (nest == null || !nest.IsValid) continue;
 
-                bool paused = !present || nest.SecondsSinceHit < pause;
+                // No egg while nobody is in the mine, during the pause after a hit, nor while the group sleeps (spec §8.1: a sleeping group lays nothing).
+                bool paused = !present || nest.SecondsSinceHit < pause || !_gAwake[k];
                 bool ready = nest.LayTimer + dt >= interval;
                 bool can = true;
                 if (ready && !paused)
@@ -267,23 +281,23 @@ namespace MistWorms.Colony
         // ------------------------------------------------------------------ destruction (spec §8.1)
 
         /// <summary>The nest owner tells the colony owner that nest <paramref name="index"/> was destroyed by a hit: its worms are released.</summary>
-        public void RequestNestGone(int index, Vector3 position)
+        public void RequestNestGone(int index, Vector3 position, bool byPlayer)
         {
             if (!_initialized || !_nview.IsValid()) return;
             if (_nview.IsOwner())
             {
-                ReceiveNestGone(index, position);
+                ReceiveNestGone(index, position, byPlayer);
                 return;
             }
-            _nview.InvokeRPC(MWNames.RpcNestGone, index, position);
+            _nview.InvokeRPC(MWNames.RpcNestGone, index, position, byPlayer);
         }
 
-        private void RPC_NestGone(long sender, int index, Vector3 position)
+        private void RPC_NestGone(long sender, int index, Vector3 position, bool byPlayer)
         {
             try
             {
                 if (!_initialized || !_nview.IsValid() || !_nview.IsOwner()) return;
-                ReceiveNestGone(index, position);
+                ReceiveNestGone(index, position, byPlayer);
             }
             catch (Exception e)
             {
@@ -291,10 +305,13 @@ namespace MistWorms.Colony
             }
         }
 
-        private void ReceiveNestGone(int index, Vector3 position)
+        private void ReceiveNestGone(int index, Vector3 position, bool byPlayer)
         {
             NestsDestroyed++;
             if (!MWConfig.General.Enabled.Value || Disabled) return;
+
+            // The killing blow of a player is never seen in the ZDO of the nest (it is gone with it): the nest owner says so. The group wakes, as for any hit (spec §5.1).
+            if (byPlayer && _gAwake != null) OnPlayerHit(position, index, Time.time);
 
             // Active worms, no drop (nothing falls out of a nest). The cap applies: a full mine releases nothing (spec §8.2).
             int wanted = MWConfig.Nest.ReleaseOnDestroy.Value;

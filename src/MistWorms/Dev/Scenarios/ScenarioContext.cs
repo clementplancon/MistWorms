@@ -238,23 +238,28 @@ namespace MistWorms.Dev.Scenarios
         /// <see cref="DevWorld.MoveToOpenGround"/>) and records the "open_ground_found" assertion. <paramref name="accept"/> adds a
         /// scenario specific test on the candidate ground point.
         /// </summary>
-        public IEnumerator MoveToOpenGround(float clearRadius = 5f, Func<Vector3, bool> accept = null)
+        public const float DefaultFlatRadius = 6f, DefaultFlatTolerance = 0.5f, DefaultLenientTolerance = 1f;
+
+        public IEnumerator MoveToOpenGround(float clearRadius = 5f, Func<Vector3, bool> accept = null, float flatRadius = DefaultFlatRadius, float flatTolerance = DefaultFlatTolerance, float lenientTolerance = DefaultLenientTolerance)
         {
             var result = new OpenGroundResult();
             LastOpenGround = result;
             // Hardening of the open ground scenarios: never a site in or beside water (the rings of water on the captures, the sea level under the masses), and once there the vanilla
             // creatures within 40 m are removed and the player is protected (a P3_Cobra was spoiled once by the death of the player in the Plains).
+            // The site is level within flatTolerance over flatRadius: a condition of acceptance, not a remark (a door 1.3 m above the mass, a mass that climbs, a speed that is not the flat one).
+            // Strict first (flatTolerance), else the flattest site within lenientTolerance of the spiral (logged with its measured deviation): the rolling Meadows rarely offer 0.5 m over 6 m next to a clear radius of 10 m or more.
+            var flat = new FlatSpec(flatRadius, flatTolerance, lenientTolerance);
             Func<Vector3, bool> dry = p => !V14_GpuMassSandbox.NearWater(p, V14_GpuMassSandbox.WaterClearance) && (accept == null || accept(p));
             // Meadows first: the Plains have tar blobs and fulings that kill the worms of a test (S18 a: 24 of 30 dead), the Black Forest has trees that block a fleeing mass (S06) and greydwarves
             // that eat the pool (S13). Any biome only when the Meadows have no flat clear spot within reach (logged).
             Func<Vector3, bool> calm = p => dry(p) && CalmBiome(p);
-            yield return DevWorld.MoveToOpenGround(clearRadius, calm, result, Log);
+            yield return DevWorld.MoveToOpenGround(clearRadius, calm, result, Log, flat);
             if (!result.Found)
             {
                 Log("no calm biome (Meadows, Black Forest) found: any biome");
                 result = new OpenGroundResult();
                 LastOpenGround = result;
-                yield return DevWorld.MoveToOpenGround(clearRadius, dry, result, Log);
+                yield return DevWorld.MoveToOpenGround(clearRadius, dry, result, Log, flat);
             }
             Assert("open_ground_found", result.Found, true,
                 result.Found ? (object)$"{result.Spot} after {result.Tested} candidates, {result.Hops} hops" : result.Error);

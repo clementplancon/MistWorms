@@ -108,7 +108,7 @@ namespace MistWorms.Dev.Scenarios
                 }
 
                 // The corridor itself is built on open flat ground out of vanilla wall pieces (decisions: the geometry of the mines does not guarantee one).
-                yield return ctx.MoveToOpenGround(3f, AcceptCorridorSpot);
+                yield return ctx.MoveToOpenGround(3f, AcceptCorridorSpot, flatRadius: 3f, flatTolerance: 1f, lenientTolerance: 1.5f);   // the corridor itself is placed on a flat strip found by BuildCorridor
                 if (!ctx.LastOpenGround.Found) yield break;
                 player = Player.m_localPlayer;
                 player.SetGodMode(true);

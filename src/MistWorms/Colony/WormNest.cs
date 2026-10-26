@@ -28,6 +28,7 @@ namespace MistWorms.Colony
         private ZNetView _nview;
         private Destructible _destructible;
         private WormColony _colony;
+        private bool _givenUp;
         private bool _renderRegistered;
         private float _nextLookup;
         private WormEffects.Limiter _hitFx;
@@ -45,6 +46,17 @@ namespace MistWorms.Colony
         public float LayTimer;
         public float NextCapCheck;
         public int Laid;
+
+        // Waking state, local to the peer that owns the colony (phase 7-2).
+        public float NextWakeCheck;
+        public long SeenPlayerHit = -1;
+        private int _playerHitFrame = -1;   // frame of the last hit by a player on this peer: the destruction that follows in the same frame was dealt by a player
+
+        private static readonly int HashPlayerHit = MWNames.ZdoNestPlayerHit.GetStableHashCode();
+        private static readonly int HashColonyRef = MWNames.ZdoColonyRef.GetStableHashCode();
+
+        /// <summary>Network time (ticks) of the last hit by a player, 0 = never; written by the owner of the nest, read by the owner of the colony.</summary>
+        public long PlayerHitTicks => IsValid ? _nview.GetZDO().GetLong(HashPlayerHit, 0L) : 0L;
 
         /// <summary>Hit points left: the vanilla "health" of the ZDO, the configured maximum before the first hit.</summary>
         public float Health => IsValid ? _nview.GetZDO().GetFloat(ZDOVars.s_health, MaxHealth) : 0f;
@@ -105,15 +117,44 @@ namespace MistWorms.Colony
 
         private void Update()
         {
-            if (_colony != null || !IsValid || Time.time < _nextLookup) return;
+            if (_colony != null || _givenUp || !IsValid || Time.time < _nextLookup) return;
             _nextLookup = Time.time + ColonyLookupInterval;
 
-            // The colony of a reloaded nest: found by the id the nest carries, once the colony object exists on this peer.
-            ZDOID id = _nview.GetZDO().GetZDOID(MWNames.ZdoNestColony);
-            WormColony colony = ColonyRegistry.FindById(id);
+            // The colony of a reloaded nest: found by the stable key the nest carries, once the colony object exists on this peer.
+            WormColony colony = ResolveColony();
             if (colony == null || !colony.IsConfigured) return;
             Attach(colony);
             colony.RegisterNest(this);
+        }
+
+        /// <summary>
+        /// The colony this nest belongs to, among the loaded ones. The nest carries the stable key of its colony (<c>mw_ckey</c>, <see cref="MineKey"/>). A nest written before the key existed carries a
+        /// ZDOID, which is worthless after a reload (Valheim renumbers the ZDOs it loads) and may even be the id of another object: it only tells that the nest is an old one, which belongs to the
+        /// mine colony whose box holds it (one colony per mine); the owner of the nest then writes the key.
+        /// </summary>
+        private WormColony ResolveColony()
+        {
+            ZDO zdo = _nview.GetZDO();
+            long key = zdo.GetLong(HashColonyRef, 0L);
+            if (key != 0L) return ColonyRegistry.FindByKey(key);
+            if (zdo.GetZDOID(MWNames.ZdoLegacyColony) == ZDOID.None) return null;
+
+            WormColony colony = ColonyRegistry.FindFor(transform.position);
+            if (colony == null || !colony.IsConfigured || colony.Kind != WormColony.ColonyKind.Mine || colony.Key == 0L) return null;
+            if (_nview.IsOwner()) zdo.Set(HashColonyRef, colony.Key);
+            return colony;
+        }
+
+        /// <summary>
+        /// The colony refused this nest (its index is taken by another nest of the mine, a leftover of a second seeding): it is not attached any more, and its owner removes it.
+        /// </summary>
+        public void GiveUp(string why)
+        {
+            _givenUp = true;
+            _colony = null;
+            if (!IsValid || !_nview.IsOwner()) return;
+            Plugin.Log.LogInfo($"[Nest] nest {Index} at {transform.position} removed: {why}");
+            DestroyQuiet();
         }
 
         private void Attach(WormColony colony)
@@ -130,11 +171,23 @@ namespace MistWorms.Colony
             Attach(colony);
             if (!IsValid || !_nview.IsOwner()) return;
             ZDO zdo = _nview.GetZDO();
-            zdo.Set(MWNames.ZdoNestColony, colony.ZdoId);
+            zdo.Set(HashColonyRef, colony.Key);
             zdo.Set(MWNames.ZdoNestIndex, index);
         }
 
         // ------------------------------------------------------------------ hits (owner of the nest)
+
+        /// <summary>
+        /// A hit reached the destructible of this nest (prefix of <c>Destructible.RPC_Damage</c>, see WakePatches): when a player dealt it, the time is written to the ZDO,
+        /// where the owner of the colony finds it and alerts the group. Owner of the nest only (vanilla runs RPC_Damage there).
+        /// </summary>
+        public void NotePlayerHit(HitData hit)
+        {
+            if (!IsValid || !_nview.IsOwner() || hit == null || ZNet.instance == null) return;
+            if (!(hit.GetAttacker() is Player)) return;
+            _playerHitFrame = Time.frameCount;
+            _nview.GetZDO().Set(HashPlayerHit, ZNet.instance.GetTime().Ticks);
+        }
 
         private void OnDamaged()
         {
@@ -150,8 +203,8 @@ namespace MistWorms.Colony
             try
             {
                 WormEffects.PlayNestBurst(where + Vector3.up * 0.2f);
-                WormColony colony = _colony ?? ColonyRegistry.FindById(_nview.GetZDO().GetZDOID(MWNames.ZdoNestColony));
-                if (colony != null) colony.RequestNestGone(Index, where);
+                WormColony colony = _colony ?? ColonyRegistry.FindByKey(_nview.GetZDO().GetLong(HashColonyRef, 0L));
+                if (colony != null) colony.RequestNestGone(Index, where, _playerHitFrame == Time.frameCount);
                 else Plugin.Log.LogWarning($"[Nest] nest {Index} destroyed at {where} but its colony is not loaded on this peer: no worm released");
             }
             catch (Exception e)

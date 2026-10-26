@@ -42,6 +42,8 @@ namespace MistWorms.Colony
 
         // ---- movement and wandering
         public readonly Vector3[] home;
+        public readonly Vector3[] den;            // where the worm sleeps: its place at the last wake up, where Calming brings it back (phase 7-2)
+        public readonly float[] lastActive;       // last time a player was within Targets.ActiveRadius of a worm with no nest: its own calm timer (phase 7-2)
         public readonly Vector3[] wanderGoal;
         public readonly float[] goalTime;         // when wanderGoal was chosen, 0 = no goal
         public readonly float[] pauseUntil;
@@ -112,6 +114,8 @@ namespace MistWorms.Colony
             proxyIndex = new int[capacity];
 
             home = new Vector3[capacity];
+            den = new Vector3[capacity];
+            lastActive = new float[capacity];
             wanderGoal = new Vector3[capacity];
             goalTime = new float[capacity];
             pauseUntil = new float[capacity];
@@ -184,6 +188,8 @@ namespace MistWorms.Colony
             proxyIndex[i] = -1;
 
             home[i] = position;
+            den[i] = position;
+            lastActive[i] = now;
             wanderGoal[i] = position;
             goalTime[i] = 0f;
             pauseUntil[i] = 0f;

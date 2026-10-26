@@ -12,7 +12,7 @@ namespace MistWorms.Dev.Scenarios
     /// S16 (spec §15.5, §8.3, plan 7 A1, A2, A7): the lazy seeding of a real infested mine (/tp-mine). The colony of the mine is created without any dev
     /// tool, the mine is seeded once the rooms stand and the player is inside: between 1 and Nest.MaxNestsPerMine nests, apart from each other and at least
     /// 20 m from the entrance; a brood of Nest.InitialWorms asleep around each; at most Nest.MaxLoneWormsPerRoom lone worms in a room, 4 m from any nest;
-    /// a total of about InitialWorms x nests + min(LoneWormsPerMine, MaxLoneWormsPerRoom x eligible rooms), within 5 %; everything inside the box of the mine;
+    /// a total of about InitialWorms x nests + min(LoneWormsPerMine, MaxLoneWormsPerRoom x lone rooms: every room but the entrance and the dividers with a floor point), within 5 %; everything inside the box of the mine;
     /// the vanilla rooms untouched. Leaving the mine and coming back does not seed it again. The seeded mine is left in place at the end; the runner keeps
     /// the seeding off for every other scenario, and entering a mine in one of them wipes its worms and nests.
     /// </summary>
@@ -77,7 +77,7 @@ namespace MistWorms.Dev.Scenarios
                 SeedReport report = colony.LastSeed;
                 if (!ctx.Assert("seed_report", report != null, true, report != null)) yield break;
                 ctx.Assert("seeded_once_so_far", MineSeeder.Runs == runsBefore + 1, runsBefore + 1, MineSeeder.Runs);
-                ctx.Log($"seed {report.Seed}: {report.Rooms} rooms, {report.EligibleRooms} eligible, {report.NestsPlaced} nests, brood {report.BroodPlaced}/{report.BroodWanted}, " +
+                ctx.Log($"seed {report.Seed}: {report.Rooms} rooms, {report.EligibleRooms} eligible for a nest, {report.LoneRooms} for lone worms (largest {report.LargestRoom} m2), {report.NestsPlaced} nests, brood {report.BroodPlaced}/{report.BroodWanted}, " +
                         $"lone {report.LonePlaced}/{report.LoneWanted}, {report.Frames + 1} frames, {report.PlanMs:0} ms; entrance {report.Entrance}");
 
                 // ---- nests
@@ -136,11 +136,16 @@ namespace MistWorms.Dev.Scenarios
                         if (n == null || d < BroodMin || d > BroodMax) broodBad++;
                     }
                 }
-                int maxPerRoom = 0;
-                foreach (KeyValuePair<Room, int> kv in lonePerRoom) maxPerRoom = Mathf.Max(maxPerRoom, kv.Value);
+                // The room of a lone worm is the one the seeder placed it in (the report): the bounds of neighbouring rooms overlap, so a geometric lookup is ambiguous.
+                int maxPerRoom = 0, placedInRooms = 0;
+                foreach (int c in report.LonePlacedPerRoom) { maxPerRoom = Mathf.Max(maxPerRoom, c); placedInRooms += c; }
+                int maxByBounds = 0;
+                foreach (KeyValuePair<Room, int> kv in lonePerRoom) maxByBounds = Mathf.Max(maxByBounds, kv.Value);
                 int loneCap = MWConfig.Nest.MaxLoneWormsPerRoom.Value;
+                ctx.Log($"lone worms per room: max {maxPerRoom} by the seeder's report over {report.LonePlacedPerRoom.Length} rooms ({placedInRooms} worms); max {maxByBounds} by overlapping room bounds (informative)");
                 ctx.Assert("all_worms_asleep", awake == 0, 0, awake);
-                ctx.Assert("lone_worms_at_most_the_room_maximum", maxPerRoom <= loneCap && loneOutsideRooms == 0, $"<= {loneCap} per room, all in a room", $"max {maxPerRoom}, outside any room {loneOutsideRooms}");
+                ctx.Assert("lone_worms_at_most_the_room_maximum", maxPerRoom <= loneCap && placedInRooms == report.LonePlaced && loneOutsideRooms == 0, $"<= {loneCap} per room, all in a room",
+                    $"max {maxPerRoom}, {placedInRooms} placed in rooms of {report.LonePlaced}, outside any room {loneOutsideRooms}");
                 ctx.Assert("lone_worms_apart_from_nests", loneNearNest == 0, 0, loneNearNest);
                 ctx.Assert("lone_worms_attached_to_a_nest", noNest == 0, 0, noNest);
                 ctx.Assert("lone_count_matches_report", lone == report.LonePlaced, report.LonePlaced, lone);
@@ -151,9 +156,9 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert("each_nest_has_its_brood", broods, $">= {perNest - 1} each", broods);
                 ctx.Assert("nothing_outside_the_box", outsideBox == 0, 0, outsideBox);
 
-                int expected = nests.Count * perNest + Math.Min(MWConfig.Nest.LoneWormsPerMine.Value, loneCap * report.EligibleRooms);
+                int expected = nests.Count * perNest + Math.Min(MWConfig.Nest.LoneWormsPerMine.Value, loneCap * report.LoneRooms);
                 int tolerance = Math.Max(1, Mathf.CeilToInt(expected * Tolerance));
-                ctx.Assert("initial_total_matches_the_formula", Math.Abs(alive - expected) <= tolerance, $"{expected} +- {tolerance} ({nests.Count} nests x {perNest} + min({MWConfig.Nest.LoneWormsPerMine.Value}, {loneCap} x {report.EligibleRooms} rooms))",
+                ctx.Assert("initial_total_matches_the_formula", Math.Abs(alive - expected) <= tolerance, $"{expected} +- {tolerance} ({nests.Count} nests x {perNest} + min({MWConfig.Nest.LoneWormsPerMine.Value}, {loneCap} x {report.LoneRooms} rooms))",
                     $"{alive} ({brood} brood + {lone} lone)");
                 ctx.Assert("under_the_mine_cap", alive <= MWConfig.Colony.MaxAlivePerMine.Value, $"<= {MWConfig.Colony.MaxAlivePerMine.Value}", alive);
                 ctx.Assert("vanilla_rooms_intact", gen.GetComponentsInChildren<Room>().Length == report.Rooms, report.Rooms, gen.GetComponentsInChildren<Room>().Length);

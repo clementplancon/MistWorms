@@ -65,7 +65,7 @@ namespace MistWorms.Mass
             Vector3 p = transform.position;
             float r = MassMath.Radius(n);
             ZDOID mine = ZdoId;
-            ZDOID colonyId = ColonyId;
+            long colonyKey = ColonyKey;
             if (_seekTarget != null && (!_seekTarget.Valid || _seekTarget._dissolving || _seekTarget._merging || now >= _seekUntil))
             {
                 // Gave up (or arrived): the hunt resumes, and the next search waits a little.
@@ -94,7 +94,7 @@ namespace MistWorms.Mass
                 {
                     // Not touching: a smaller mass that sees a bigger one of its colony close by goes to it (spec 4.1; the hunts alone would never
                     // bring two masses that stop at the same target face to face).
-                    if (iAmSmaller && !mayEngulf && colonyId != ZDOID.None && b.ColonyId == colonyId && d < seekBestD && Math.Abs(q.y - p.y) <= MassMergeMath.MaxContactDy
+                    if (iAmSmaller && !mayEngulf && colonyKey != 0L && b.ColonyKey == colonyKey && d < seekBestD && Math.Abs(q.y - p.y) <= MassMergeMath.MaxContactDy
                         && MassMergeMath.Transfer(n, nb, max, out _) > 0)
                     {
                         seekBest = b;

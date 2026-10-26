@@ -121,16 +121,19 @@ namespace MistWorms.Patches
         /// <summary>
         /// After a hit (or a burning tick, which calls ApplyDamage directly): n and partial follow the new health, and a loss under
         /// Mass.DissolveThreshold dissolves the mass (spec §4.2, §4.4). The bite prefix in <see cref="DamagePatches"/> patches the same
-        /// method; the two do not interact (that one needs an active bite context, this one needs a mass).
+        /// method; the two do not interact (that one needs an active bite context, this one needs a mass). A hit dealt by a player is also written to the
+        /// ZDO of the mass, where the owner of the colony finds it to alert the groups (spec §5.1).
         /// </summary>
         [HarmonyPatch(typeof(Character), nameof(Character.ApplyDamage))]
         private static class ApplyDamagePostfix
         {
-            private static void Postfix(Character __instance)
+            private static void Postfix(Character __instance, HitData hit)
             {
                 try
                 {
-                    if (WritheMassState.TryGet(__instance, out WritheMassState mass) && mass.IsOwner) mass.OnDamageApplied();
+                    if (!WritheMassState.TryGet(__instance, out WritheMassState mass) || !mass.IsOwner) return;
+                    mass.NotePlayerHit(hit);     // a hit by a player alerts the groups of the mass (the colony reads it from the ZDO, phase 7-2)
+                    mass.OnDamageApplied();
                 }
                 catch (Exception e)
                 {

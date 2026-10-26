@@ -9,6 +9,7 @@ namespace MistWorms.Colony
         Hunting = 3,
         Striking = 4,
         Fleeing = 5,
+        Calming = 6,     // walking back to its den after its group went back to sleep (phase 7-2, spec §5.2)
         Absorbing = 7,   // climbing onto a mass for 0.5 s (decisions.md 64: Absorbed and Dead move up by one)
         Absorbed = 8,
         Dead = 9,

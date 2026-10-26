@@ -120,9 +120,12 @@ namespace MistWorms.Drops
         public static bool CaptureCreature(CharacterDrop drop, List<KeyValuePair<GameObject, int>> list)
         {
             if (drop == null || list == null) return false;
+            // A prefab that was never instantiated (no Awake, no ZNetView): vanilla, and no Character.GetZDOID (it dereferences m_nview).
+            ZNetView view = drop.GetComponent<ZNetView>();
+            if (view == null || !view.IsValid()) return false;
             Character c = drop.GetComponent<Character>();
             if (c == null || c.IsPlayer()) return false;
-            ZDOID id = c.GetZDOID();
+            ZDOID id = view.GetZDO().m_uid;
             if (id == ZDOID.None) return false;
             float now = Time.time;
 

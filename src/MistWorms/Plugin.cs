@@ -44,6 +44,7 @@ namespace MistWorms
             _harmony = new Harmony(ModGuid);
             _harmony.PatchAll(typeof(Plugin).Assembly);
 
+            ZNet.WorldSaveStarted += Colony.WormColony.OnWorldSaveStarted;   // the colonies leave their worms in their ZDOs before the world is copied (spec §11.4)
             PrefabManager.OnVanillaPrefabsAvailable += OnVanillaPrefabsAvailable;
             ItemManager.OnItemsRegistered += Drops.BaitWeightsInit.OnItemsRegistered;
             Bites.InfestedEffect.Register();
@@ -107,6 +108,7 @@ namespace MistWorms
 
         private void OnDestroy()
         {
+            ZNet.WorldSaveStarted -= Colony.WormColony.OnWorldSaveStarted;
             _harmony?.UnpatchSelf();
         }
 

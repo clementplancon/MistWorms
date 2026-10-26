@@ -17,7 +17,8 @@ namespace MistWorms.Mass
     /// <item>Engulf (phase 5): within r(n) + Mass.EngulfRange of the target the mass walks onto it (2.4 m/s, no teleport), applies the Infested effect, and
     /// every Worm.BiteInterval sends one aggregated bite tick (<see cref="MassEngulf"/>); it lets go when the target is invalid or stays beyond
     /// r + Mass.DetachDistance for Mass.DetachDelay, or when the mass dies or dissolves.</item>
-    /// <item>Dormant: a stub, the mass stands still (phase 7).</item>
+    /// <item>Dormant (phase 7-2): its group went back to sleep; the mass walks to the nest of its group, targets nothing, and lays its worms down asleep around it
+    /// (spec §5.2). A wake up of the group sends it back to Idle.</item>
     /// <item>Stream: every 0.25 s the free width ahead decides between the dome and the ribbon form (<see cref="MassStream"/>).</item>
     /// </list>
     /// Runs on the owner only. BaseAI.UpdateAI is deliberately not called: its regeneration would put the health out of step with mw_n / mw_partial.
@@ -172,11 +173,22 @@ namespace MistWorms.Mass
         private void Step(float dt)
         {
             float now = Time.time;
-            byte mode = MassStateCodes.Mode(_state.StateCode);
-            if (_state.FreezeAI || _state.Dissolving || mode == MassStateCodes.Dormant || m_character.IsDead())
+            if (_state.FreezeAI || _state.Dissolving || m_character.IsDead())
             {
                 if (_engulfing) EndEngulf(DetachReason.Dissolution, now);
                 StopMoving();
+                return;
+            }
+
+            if (now >= _nextDormancy)
+            {
+                _nextDormancy = now + DormancyPeriod;
+                EvaluateDormancy(now);
+                if (_state.Dissolving) { StopMoving(); return; }
+            }
+            if (MassStateCodes.Mode(_state.StateCode) == MassStateCodes.Dormant)
+            {
+                StepDormant(dt, now);
                 return;
             }
 
@@ -207,6 +219,126 @@ namespace MistWorms.Mass
             if (seeking) Hunt(dt, seekGoal);
             else if (HasTarget || DevGoal.HasValue) Hunt(dt);
             else Idle(dt);
+        }
+
+        // ------------------------------------------------------------------ dormancy (spec §5.1, §5.2, plan 7-2)
+
+        private const float DormancyPeriod = 1f;
+        private const float DormantArrive = 1.5f;        // the mass is home within this of the nest
+        private const float DormantPatience = 30f;       // and lays its worms down where it is after this long
+        private const float DormantDepositReach = 3f;    // ...around the nest when it is within this of it, else around itself
+        private const float DormantStop = 1.0f;
+
+        private float _nextDormancy;
+        private float _dormantSince;
+        private int _dormantGroup = -1;
+        private float _calmLastActive = -1f;
+
+        /// <summary>Times this mass went back to sleep (dev checks).</summary>
+        public int DormantRounds { get; private set; }
+
+        /// <summary>
+        /// Every second: is the group of this mass asleep? The group is the nest most of its worms come from, and its state is a bit of the colony (any peer reads
+        /// it). A mass that belongs to a group that went to sleep, and has no player to hunt, goes home (mode Dormant, a stub of 4B turned into the walk to the nest);
+        /// a group that wakes up sends it back to Idle. A mass with no nest has no bit: it keeps its own calm timer (no player within Targets.ActiveRadius of it for
+        /// Targets.CalmDelay) and lays its worms down where it stands. A mass that engulfs, merges or is steered by a dev tool does not go to sleep.
+        /// </summary>
+        private void EvaluateDormancy(float now)
+        {
+            if (_calmLastActive < 0f) _calmLastActive = now;
+            byte mode = MassStateCodes.Mode(_state.StateCode);
+            if (_engulfing || DevGoal.HasValue || _state.Merging || MassStateCodes.IsTransferring(_state.StateCode))
+            {
+                _calmLastActive = now;
+                if (mode == MassStateCodes.Dormant) _state.SetMode(MassStateCodes.Idle);
+                return;
+            }
+
+            WormColony colony = ColonyRegistry.FindByKey(_state.ColonyKey);
+            if (colony == null)
+            {
+                if (mode == MassStateCodes.Dormant) _state.SetMode(MassStateCodes.Idle);   // nobody to lay the worms down: it stays a mass
+                return;
+            }
+
+            int group = _state.MajorityNest();
+            bool asleep;
+            if (group >= 0)
+            {
+                asleep = !colony.IsGroupAwake(group);
+                if (asleep && mode != MassStateCodes.Dormant && _tKind == TargetKind.Player && TargetValid()) asleep = false;   // it hunts a player: the bit is not its business
+            }
+            else
+            {
+                if (AnyPlayerWithin(MWConfig.Targets.ActiveRadius.Value)) _calmLastActive = now;
+                asleep = WakeMath.CalmElapsed(now, _calmLastActive, MWConfig.Targets.CalmDelay.Value);
+            }
+
+            if (!asleep)
+            {
+                if (mode == MassStateCodes.Dormant)
+                {
+                    _state.SetMode(MassStateCodes.Idle);      // a wake up during the walk home brings the mass back to Idle
+                    _nextTarget = 0f;
+                }
+                return;
+            }
+
+            if (mode == MassStateCodes.Dormant) return;
+            if (group < 0)
+            {
+                BeginSleep(transform.position, now);
+                return;
+            }
+            _dormantGroup = group;
+            _dormantSince = now;
+            SetTarget((Player)null);
+            _state.SetMode(MassStateCodes.Dormant);
+        }
+
+        private bool AnyPlayerWithin(float radius)
+        {
+            var all = Player.GetAllPlayers();
+            float r2 = radius * radius;
+            Vector3 pos = transform.position;
+            for (int i = 0; i < all.Count; i++)
+            {
+                Player p = all[i];
+                if (Targetable(p) && (p.transform.position - pos).sqrMagnitude <= r2) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Dormant: walks to the nest of its group, then lays its worms down around it (arrival within 1.5 m, 30 s, or the nest gone).</summary>
+        private void StepDormant(float dt, float now)
+        {
+            WormColony colony = ColonyRegistry.FindByKey(_state.ColonyKey);
+            WormNest nest = colony != null ? colony.NestAt(_dormantGroup) : null;
+            Vector3 pos = transform.position;
+            if (nest == null || !nest.IsValid)
+            {
+                BeginSleep(pos, now);
+                return;
+            }
+
+            Vector3 goal = nest.transform.position;
+            float flat = Utils.DistanceXZ(goal, pos);
+            if (flat <= DormantArrive || now - _dormantSince > DormantPatience)
+            {
+                BeginSleep(flat <= DormantDepositReach ? goal : pos, now);
+                return;
+            }
+            SetSpeedFactor(1f);
+            WalkTo(dt, goal, DormantStop);
+        }
+
+        private void BeginSleep(Vector3 deposit, float now)
+        {
+            DormantRounds++;
+            if (_engulfing) EndEngulf(DetachReason.Dissolution, now);
+            StopMoving();
+            Plugin.Log.LogInfo($"[Mass] {_state.ZdoId} (n={_state.N}) goes back to sleep around {deposit}");
+            _state.BeginDormantDissolve(deposit);
         }
 
         // ------------------------------------------------------------------ target (spec §5.3, plan 6-2)

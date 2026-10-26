@@ -57,6 +57,7 @@ namespace MistWorms.Dev.Scenarios
                 WormColony.DevSpawnInterval = Interval;
                 WormNest nest = NestDev.PlaceInFront(3f, out WormColony colony, out string how);
                 ctx.Log($"nest {nest.Index} placed at {nest.transform.position} in {how} colony {colony.ZdoId}");
+                colony.DevWakeGroup(nest.Index);          // a sleeping group lays nothing (phase 7-2): this one is awake, and the player stays within its calm radius
                 yield return ctx.WaitFrames(5);
 
                 // ---- the object

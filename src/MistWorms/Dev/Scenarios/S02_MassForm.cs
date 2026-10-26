@@ -73,6 +73,10 @@ namespace MistWorms.Dev.Scenarios
                 ctx.GuardCreatures = true;       // counts worms: nothing wanders in and poisons them
                 yield return ctx.Wait(0.5f);
 
+                // The zone of the site may have loaded a colony left by an earlier run (a persisted test colony: "colony: existing" in r7, and no mass formed): the test starts from its own.
+                ctx.Console("mw_kill");
+                yield return ctx.WaitFrames(3);
+
                 // ---- spawn: widening passes until the wanted number is placed (some draws fall out of the line of sight)
                 WormColony colony = null;
                 int created = 0;
@@ -86,6 +90,12 @@ namespace MistWorms.Dev.Scenarios
                 if (colony == null || created == 0) yield break;
                 yield return ctx.WaitFrames(2);
                 ctx.Assert("start_all_free_idle", colony.Store.AliveCount == created, created, colony.Store.AliveCount);
+
+                // A worm that senses the player the instant it exists finds the tables of the 0.25 s scan empty (no group to join) and hunts alone, and nothing then forms a mass. The player
+                // is hidden (ghost) until the scan has seen all the worms, then every worm senses him with the group in the tables, as in the game where worms are never born in the same frame.
+                player.SetGhostMode(true);
+                yield return ctx.Wait(0.8f);
+                player.SetGhostMode(false);
 
                 // ---- watch
                 int cap = MWConfig.Mass.MaxCount.Value;

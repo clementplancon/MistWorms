@@ -292,6 +292,13 @@ namespace MistWorms.Dev
                 { "proxies", ProxiedWorms(c) },
                 { "seeded", c.Seeded },
                 { "nests", new Dictionary<string, object> { { "loaded", c.NestsLoaded }, { "eggsLaid", c.EggsLaid }, { "wormsReleased", c.WormsReleased }, { "totalAlive", c.TotalAlive } } },
+                {
+                    "groups", new Dictionary<string, object>
+                    {
+                        { "awake", c.DevAwakeGroups() }, { "awakeBits", c.AwakeBits }, { "woken", c.GroupsWoken }, { "slept", c.GroupsSlept },
+                        { "calmed", c.WormsCalmed }, { "sleptWorms", c.SleptWorms }, { "passiveWake", WormColony.DevPassiveWake },
+                    }
+                },
                 { "masses", new Dictionary<string, object> { { "known", c.MassCount }, { "formed", c.MassesFormed }, { "wormsFormed", c.WormsFormed }, { "wormsAbsorbed", c.WormsAbsorbed }, { "dissolvedWorms", c.DissolvedWorms }, { "gathering", ColonyDev.GatheringEnabled } } },
                 {
                     "combat", new Dictionary<string, object>

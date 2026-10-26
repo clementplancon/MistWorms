@@ -33,6 +33,7 @@ namespace MistWorms.Colony
         private const int GatherMinGroup = 2;                // spec §3.3: at least 2 other active worms
         private const float GatherGoalInterval = 0.25f;
         private const float GatherGrace = 0.6f;              // a worm that just began to gather keeps going while the scan tables catch up
+        private const float GatherStuckWindow = 1.5f;       // a worm that runs for a mass at 5.6 m/s and gains less than 0.5 m in this long is blocked (the 3 s window of §11.1 cost a straggler 6 to 9 s)
         private const float GatherDirectSeconds = 2f;       // a stalled gatherer steers by its goal alone this long
         private const float GatherPatience = 12f;            // a gathering worm of a group that never forms hunts after this long
         private const int MaxFormPerTick = 2;
@@ -123,6 +124,7 @@ namespace MistWorms.Colony
             _nextMassTick = now + MassTickInterval;
             RefreshMasses();
             SyncMassPositions();
+            ScanMassHits(now);
             if (!GatheringEnabled) return;
             AbsorbScan(now);
             TryForm(now);
@@ -146,11 +148,11 @@ namespace MistWorms.Colony
             WormStore s = Store;
             _massCount = 0;
             List<WritheMassState> all = WritheMassState.All;
-            ZDOID me = ZdoId;
-            for (int k = 0; k < all.Count; k++)
+            long me = Key;
+            for (int k = 0; me != 0L && k < all.Count; k++)
             {
                 WritheMassState m = all[k];
-                if (m == null || !m.Valid || m.ColonyId != me) continue;
+                if (m == null || !m.Valid || m.ColonyKey != me) continue;
                 byte code = m.StateCode;
                 if (m.Dissolving || MassStateCodes.IsDissolving(code) || MassStateCodes.IsMerging(code)) continue;
                 int n = m.N;
@@ -170,7 +172,7 @@ namespace MistWorms.Colony
             {
                 if (!s.alive[i]) continue;
                 var state = (WormState)s.state[i];
-                if (state == WormState.Sleeping || state == WormState.Absorbed || state == WormState.Dead) continue;
+                if (state == WormState.Sleeping || state == WormState.Calming || state == WormState.Absorbed || state == WormState.Dead) continue;   // a worm walking home joins nothing
                 if (state == WormState.Absorbing)
                 {
                     for (int k = 0; k < _massCount; k++)
@@ -294,7 +296,7 @@ namespace MistWorms.Colony
             Vector3 toGoal = target - s.pos[i];
             toGoal.y = 0f;
             bool toMass = s.subPhase[i] == GatherMass;
-            bool stuck = CheckStuck(i, now);      // true once per 3 s window without 0.5 m of progress
+            bool stuck = CheckStuck(i, now, toMass ? GatherStuckWindow : StuckWindow);      // true once per window (1.5 s to a mass, 3 s otherwise) without 0.5 m of progress
             if (stuck && toGoal.sqrMagnitude > 4f) TryRequestPath(i, target, now);
             if (stuck && toMass && mk >= 0 && WormGather.IsStalled(toGoal.magnitude, _masses[mk].R, 0f))
             {
@@ -356,7 +358,7 @@ namespace MistWorms.Colony
         private bool FormMass(int k, Vector3 centroid, float now)
         {
             WormStore s = Store;
-            WritheMassState mass = WritheMassState.Create(centroid, k, ZdoId, newborn: true);
+            WritheMassState mass = WritheMassState.Create(centroid, k, Key, newborn: true);
             if (mass == null)
             {
                 _massPrefabMissing = true;     // logged by Create; do not retry every 0.25 s
@@ -519,23 +521,23 @@ namespace MistWorms.Colony
         /// Asks the owner of this colony to recreate <paramref name="n"/> fleeing worms where the mass stood <paramref name="position"/>. The owner of the
         /// colony applies it directly; any other peer sends the routed RPC <c>MW_Dissolve</c> (the pool of the mass travels in <paramref name="pool"/>, phase 6).
         /// </summary>
-        public void RequestDissolve(ZDOID mass, int n, Vector3 position, ZPackage pool)
+        public void RequestDissolve(ZDOID mass, int n, Vector3 position, ZPackage pool, bool sleep = false)
         {
             if (!_initialized || !_nview.IsValid()) return;
             if (_nview.IsOwner())
             {
-                ReceiveDissolve(mass, n, position, pool);
+                ReceiveDissolve(mass, n, position, pool, sleep);
                 return;
             }
-            _nview.InvokeRPC(MWNames.RpcMassDissolve, mass, n, position, pool ?? new ZPackage());
+            _nview.InvokeRPC(MWNames.RpcMassDissolve, mass, n, position, pool ?? new ZPackage(), sleep);
         }
 
-        private void RPC_MassDissolve(long sender, ZDOID mass, int n, Vector3 position, ZPackage pool)
+        private void RPC_MassDissolve(long sender, ZDOID mass, int n, Vector3 position, ZPackage pool, bool sleep)
         {
             try
             {
                 if (!_initialized || !_nview.IsValid() || !_nview.IsOwner()) return;
-                ReceiveDissolve(mass, n, position, pool);
+                ReceiveDissolve(mass, n, position, pool, sleep);
             }
             catch (Exception e)
             {
@@ -595,14 +597,14 @@ namespace MistWorms.Colony
             for (int k = 0; k < _massCount; k++)
             {
                 WritheMassState m = _masses[k].State;
-                sb.Append($" [mass {_masses[k].Id} n={_masses[k].N} pending={_masses[k].Pending} colonyMatch={(m != null && m.ColonyId == ZdoId)} synced={_massPos[k]} real={(m != null ? m.transform.position : Vector3.zero)} load={_massLoad[k]}]");
+                sb.Append($" [mass {_masses[k].Id} n={_masses[k].N} pending={_masses[k].Pending} colonyMatch={(m != null && Key != 0L && m.ColonyKey == Key)} synced={_massPos[k]} real={(m != null ? m.transform.position : Vector3.zero)} load={_massLoad[k]}]");
             }
             foreach (WritheMassState m in WritheMassState.All)
             {
                 if (m == null || !m.Valid) continue;
                 bool known = false;
                 for (int k = 0; k < _massCount; k++) if (_masses[k].Id == m.ZdoId) known = true;
-                if (!known) sb.Append($" [UNKNOWN mass {m.ZdoId} n={m.N} colonyMatch={m.ColonyId == ZdoId} state={MassStateCodes.Describe(m.StateCode)} dissolving={m.Dissolving} at {m.transform.position}]");
+                if (!known) sb.Append($" [UNKNOWN mass {m.ZdoId} n={m.N} colonyMatch={Key != 0L && m.ColonyKey == Key} state={MassStateCodes.Describe(m.StateCode)} dissolving={m.Dissolving} at {m.transform.position}]");
             }
             return sb.Length > 0 ? sb.ToString() : " (no mass)";
         }
@@ -618,7 +620,7 @@ namespace MistWorms.Colony
         /// Creates <paramref name="n"/> worms in the Fleeing state, each leaping (0.3 to 0.6 m high, 0.5 to 1.5 m away from the centre) from the place of a
         /// visible worm of the heap, then fleeing for Worm.FleeDuration. They are worms that already existed, so the population cap does not apply.
         /// </summary>
-        private void ReceiveDissolve(ZDOID mass, int n, Vector3 position, ZPackage pool)
+        private void ReceiveDissolve(ZDOID mass, int n, Vector3 position, ZPackage pool, bool sleep = false)
         {
             DissolveLost = 0;
 #if MW_DEV
@@ -637,6 +639,12 @@ namespace MistWorms.Colony
             PrepareDissolvePool(pool, n);
             _dissolveNests.ReadTail(pool);        // the nests of origin of the worms of the heap: each released worm takes one back
             _dissolveNests.FitTo(n);
+            if (sleep)
+            {
+                // The mass went back to sleep (spec §5.2): the position is where it lays its worms down.
+                LayDownSleepers(mass, n, position);
+                return;
+            }
             if (_releaseBuf == null || _releaseBuf.Length < n) _releaseBuf = new Vector3[n];
             int drawn = 0;
             WritheMassVisual visual = null;

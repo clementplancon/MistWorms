@@ -125,6 +125,9 @@ namespace MistWorms.Colony
 #endif
             Character attacker = hit.GetAttacker();
             Vector3 pos = s.pos[i];
+            // Spec §3.3, §5.1: damage dealt by a player wakes the worm, its group and the sleepers within 5 m, killing blow included; any other attacker, or none
+            // (a cobra strike, a creature, a trap), wakes nothing.
+            if (attacker is Player) OnPlayerHit(pos, s.nestIndex[i], Time.time);
             Game game = Game.instance;
             if (attacker != null && !attacker.IsPlayer() && game != null)
             {

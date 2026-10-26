@@ -68,6 +68,33 @@ namespace MistWorms.Colony
         public long OwnerUid => _nview != null && _nview.IsValid() ? _nview.GetZDO().GetOwner() : 0L;
         public ZDOID ZdoId => _nview != null && _nview.IsValid() ? _nview.GetZDO().m_uid : ZDOID.None;
 
+        /// <summary>
+        /// Stable identity of this colony (<see cref="MineKey"/>), 0 until it is configured. Nests and masses refer to their colony by it, never by <see cref="ZdoId"/>, which Valheim
+        /// changes at every load of the world (decision 211).
+        /// </summary>
+        public long Key { get; private set; }
+
+        /// <summary>Network time (ticks) of the creation of this colony, 0 = unknown (written before the key existed).</summary>
+        public long CreatedTicks { get; private set; }
+
+        /// <summary>The data that decides the deduplication (<see cref="MineOwnership.CompareKeeper"/>), read from the ZDO.</summary>
+        public KeeperCandidate Candidate
+        {
+            get
+            {
+                ZDOID id = ZdoId;
+                ZDO zdo = _nview != null && _nview.IsValid() ? _nview.GetZDO() : null;
+                return new KeeperCandidate
+                {
+                    Seeded = Seeded,
+                    Worms = zdo != null ? SnapshotFormat.PeekCount(zdo.GetByteArray(HashSnapshot, null)) : 0,
+                    CreatedTicks = CreatedTicks,
+                    User = id.UserID,
+                    Id = id.ID,
+                };
+            }
+        }
+
         // ------------------------------------------------------------------ creation
 
         /// <summary>Instantiates a colony at <paramref name="position"/> with its box; null if the prefab is not registered.</summary>
@@ -100,6 +127,13 @@ namespace MistWorms.Colony
             BoxCenter = boxCenter;
             BoxHalfSize = boxHalfSize;
             _boxBounds = new Bounds(boxCenter, boxHalfSize * 2f);
+            if (Key == 0L)
+            {
+                // A mine: the same key whoever creates it and in every session (the colony sits at the root of the dungeon). A test colony: any.
+                Vector3 root = transform.position;
+                Key = kind == ColonyKind.Mine ? MineKey.FromPosition(root.x, root.y, root.z) : MineKey.NewRandom();
+                CreatedTicks = ZNet.instance != null ? ZNet.instance.GetTime().Ticks : 0L;
+            }
             _configured = true;
 
             ZDO zdo = _nview.GetZDO();
@@ -108,6 +142,8 @@ namespace MistWorms.Colony
                 zdo.Set(MWNames.ZdoKind, (int)kind);
                 zdo.Set(MWNames.ZdoBoxCenter, boxCenter);
                 zdo.Set(MWNames.ZdoBoxExtents, boxHalfSize);
+                zdo.Set(MWNames.ZdoColonyKey, Key);
+                if (CreatedTicks != 0L) zdo.Set(MWNames.ZdoCreated, CreatedTicks);
             }
         }
 
@@ -126,6 +162,7 @@ namespace MistWorms.Colony
 
         private void OnDestroy()
         {
+            if (_initialized && !_snapClosed) WriteSnapshotOnDestroy();   // a zone unload keeps the ZDO: leave the worms in it
             ColonyRegistry.Remove(this);
             if (_registeredWithRenderer && WormRenderer.Existing != null) WormRenderer.Existing.Unregister(this);
             _registeredWithRenderer = false;
@@ -149,23 +186,37 @@ namespace MistWorms.Colony
             _rng = new System.Random(Environment.TickCount ^ GetInstanceID());
             _dropRng = WormDrops.NewRng(GetInstanceID());
             _nview.Register<int, int, ZPackage>(MWNames.RpcWormHit, RPC_WormHit);
-            _nview.Register<ZDOID, int, Vector3, ZPackage>(MWNames.RpcMassDissolve, RPC_MassDissolve);
-            _nview.Register<int, Vector3>(MWNames.RpcNestGone, RPC_NestGone);
+            _nview.Register<ZDOID, int, Vector3, ZPackage, bool>(MWNames.RpcMassDissolve, RPC_MassDissolve);
+            _nview.Register<int, Vector3, bool>(MWNames.RpcNestGone, RPC_NestGone);
+            _nview.Register<ZPackage, Vector3>(MWNames.RpcSnapAbsorb, RPC_SnapAbsorb);
             InitNests();
+            InitWake();
             InitPaths();
             InitTargetCache(capacity);
             InitMassLink(capacity);
 
             ZDO zdo = _nview.GetZDO();
+            _zdo = zdo;
             Kind = (ColonyKind)zdo.GetInt(MWNames.ZdoKind, 0);
             Vector3 half = zdo.GetVec3(MWNames.ZdoBoxExtents, Vector3.zero);
             if (half != Vector3.zero)
             {
-                // A reloaded colony: the box is persisted (spec §8.4); worms are not before phase 7, so it will empty out and vanish.
+                // A reloaded colony: the box is persisted (spec §8.4) and its worms come back from mw_snap on the first owner tick (WormSnapshot.cs).
                 BoxCenter = zdo.GetVec3(MWNames.ZdoBoxCenter, transform.position);
                 BoxHalfSize = half;
                 _boxBounds = new Bounds(BoxCenter, half * 2f);
                 _configured = true;
+
+                // The identity is in the ZDO. A colony saved before the key existed gets the one its position gives (a mine is created at the root of its dungeon), and the owner writes it.
+                Key = zdo.GetLong(MWNames.ZdoColonyKey, 0L);
+                CreatedTicks = zdo.GetLong(MWNames.ZdoCreated, 0L);
+                if (Key == 0L)
+                {
+                    Vector3 root = zdo.GetPosition();
+                    Key = MineKey.FromPosition(root.x, root.y, root.z);
+                    if (zdo.IsOwner()) zdo.Set(MWNames.ZdoColonyKey, Key);
+                    Plugin.Log.LogInfo($"[Colony] colony {ZdoId} (saved without a key): key {MineKey.Describe(Key)} from its position {root}");
+                }
             }
             _lastTickTime = Time.time;
             _initialized = true;
@@ -191,14 +242,20 @@ namespace MistWorms.Colony
             if (!_nview.IsOwner())
             {
                 // Phase 8: deltas + dead reckoning. Until then only the owner simulates and non owners show nothing.
+                _wakeAdopted = false;   // a later owner starts from the awake bits in the ZDO
+                if (_snapSettled) HandOffSnapshot();   // its worms are the new owner's, restored from mw_snap
+                if (_absorbQueue.Count > 0) ForwardAbsorbQueue();   // the snapshots of duplicate colonies it had not merged yet go to the new owner
                 return;
             }
             if (Frozen) return;
 
             try
             {
+                // The worms of a reloaded colony come back from mw_snap before anything else runs (spec §11.4).
+                if (!_snapSettled && !SettleSnapshot(Time.time)) return;
                 Tick();
                 UpdateIdleSounds(Time.time);
+                TickSnapshot(Time.time);
             }
             catch (Exception e)
             {
@@ -212,6 +269,7 @@ namespace MistWorms.Colony
         /// <summary>Removes the colony object and its ZDO; the owner only.</summary>
         public void DestroyColony()
         {
+            _snapClosed = true;   // the ZDO goes with the object: nothing to leave in it
             if (ZNetScene.instance != null) ZNetScene.instance.Destroy(gameObject);
             else Destroy(gameObject);
         }
@@ -242,6 +300,7 @@ namespace MistWorms.Colony
                 s.prevPos[i] = hit.point;
                 s.groundNormal[i] = hit.normal;
                 s.home[i] = hit.point;
+                s.den[i] = hit.point;
                 s.progressPos[i] = hit.point;
             }
             // Spread the first steps and de-synchronise the wandering and the crawl animation.
@@ -357,6 +416,7 @@ namespace MistWorms.Colony
                 KillWorm(i, false);
                 n++;
             }
+            ResetWake();
             return n;
         }
 

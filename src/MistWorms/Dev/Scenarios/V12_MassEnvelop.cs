@@ -58,7 +58,7 @@ namespace MistWorms.Dev.Scenarios
                 // open ground with a vanilla rock 6 to 16 m away, no built piece, no water
                 var site = new OpenGroundResult();
                 yield return DevWorld.MoveToOpenGround(3f, p => !V14_GpuMassSandbox.NearBuilt(p, V14_GpuMassSandbox.BuiltClearance) && !V14_GpuMassSandbox.NearWater(p, V14_GpuMassSandbox.WaterClearance)
-                                                               && V14_GpuMassSandbox.FindRock(p, 6f, 16f) != null, site, ctx.Log);
+                                                               && V14_GpuMassSandbox.FindRock(p, 6f, 16f) != null, site, ctx.Log, new FlatSpec(6f, 0.5f, 1f));
                 ctx.Assert("rock_site_found", site.Found, "flat ground with a vanilla rock 6 to 16 m away", site.Found ? site.Spot.ToString() : site.Error);
                 if (!site.Found) yield break;
                 ctx.Console($"{VanillaNames.CmdTimeOfDay} 0.5");
@@ -189,9 +189,8 @@ namespace MistWorms.Dev.Scenarios
                     DevCamera.Follow();
                     player = Player.m_localPlayer;
                     S18_GroupCoherence.ClearCreatures(ctx, player);
-                    Vector3 fwd = player.transform.forward; fwd.y = 0f; fwd = fwd.sqrMagnitude > 1e-4f ? fwd.normalized : Vector3.forward;
                     float lowH = 0.5f * 0.45f * r;
-                    Vector3 blockAt = player.transform.position + fwd * 7f;
+                    Vector3 blockAt = LowStoneSite(ctx, player.transform.position, r);
                     placed = V14_GpuMassSandbox.PlaceBlock(blockAt, new Vector3(1.6f, lowH, 1.0f), "MW_V12_Low");
                     Collider stone = placed.GetComponent<Collider>();
                     Bounds sb = stone.bounds;
@@ -212,7 +211,7 @@ namespace MistWorms.Dev.Scenarios
                         DevCamera.Free(sb.center + camSide * 3.5f + Vector3.up * 1.2f, sb.center);
                         DevCamera.Provider = new V14_GpuMassSandbox.FollowCam(() => mass != null ? mass.transform.position : sb.center, camSide, 3.5f, 1.2f, 0.3f).Pose;
                         float t0 = Time.time;
-                        float maxOn = 0f, maxInside = 0f, closest = float.MaxValue;
+                        float maxOn = 0f, maxInside = 0f, maxInsideAny = 0f, closest = float.MaxValue;
                         int snapshots = 0;
                         bool reachedEnd = false;
                         while (Time.time - t0 < 40f && mass != null)
@@ -227,7 +226,9 @@ namespace MistWorms.Dev.Scenarios
                                 while (!snap.Done && Time.time < until) yield return null;
                                 if (snap.Done && !snap.Error)
                                 {
-                                    Measure(snap, stone, out _, out float inside);
+                                    Measure(snap, stone, out _, out float insideAny);
+                                    float inside = InsideBox(snap, stone);
+                                    maxInsideAny = Mathf.Max(maxInsideAny, insideAny);
                                     int on = 0, total = 0;
                                     for (int i = 0; i < snap.Worms * 8; i++)
                                     {
@@ -245,7 +246,7 @@ namespace MistWorms.Dev.Scenarios
                         }
                         DevCamera.Provider = null;
                         bool crossed = closest < 0.6f;
-                        ctx.Log($"low stone ({sb.size.x:0.0} x {sb.size.y:0.00} x {sb.size.z:0.0} m): {snapshots} snapshots, up to {maxOn:0.0} % of the nodes over it, {maxInside:0.00} % inside it, closest approach of the centre {closest:0.0} m ({(crossed ? "went over" : "went round")})");
+                        ctx.Log($"low stone ({sb.size.x:0.0} x {sb.size.y:0.00} x {sb.size.z:0.0} m): {snapshots} snapshots, up to {maxOn:0.0} % of the nodes over it, {maxInside:0.00} % deeper than 4 mm inside it ({maxInsideAny:0.00} % touching any collider within 4 mm, the stone included), closest approach of the centre {closest:0.0} m ({(crossed ? "went over" : "went round")})");
                         ctx.Assert("low_no_node_in_the_stone", maxInside < 2f, "< 2 % of the sampled nodes inside the stone", maxInside.ToString("0.00"));
                         if (crossed) ctx.Assert("low_nodes_over_the_stone", maxOn >= 8f, ">= 8 % of the nodes over the stone when the centre goes over it", maxOn.ToString("0.0"));
                         ctx.Assert("low_reaches_the_objective", reachedEnd, "the mass reaches the far side", reachedEnd);
@@ -338,6 +339,52 @@ namespace MistWorms.Dev.Scenarios
         }
 
         /// <summary>Share (percent) of the nodes of a snapshot within 5 cm of a collider and inside it (every 7th node).</summary>
+        /// <summary>
+        /// Where the low stone goes: 7 m from the player in the direction (of 16) whose path, 5.5 m before and 4.5 m beyond the stone, is free of any collider but the terrain and whose ground is the
+        /// flattest (a 13 cm stone on a slope is buried on one side, and a rock or a tree on the path is a collider the mass meets and the measures count). Logged.
+        /// </summary>
+        private static Vector3 LowStoneSite(ScenarioContext ctx, Vector3 from, float r)
+        {
+            int mask = LayerMask.GetMask(VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, VanillaNames.LayerDefaultSmall, VanillaNames.LayerPiece);
+            Vector3 best = from + Vector3.forward * 7f;
+            float bestDev = float.MaxValue;
+            bool bestFree = false;
+            for (int k = 0; k < 16; k++)
+            {
+                Vector3 dir = Quaternion.AngleAxis(k * 22.5f, Vector3.up) * Vector3.forward;
+                Vector3 c = from + dir * 7f;
+                c.y = V14_GpuMassSandbox.GroundOf(c, from.y);
+                Vector3 mid = c + dir * -0.5f + Vector3.up * 0.9f;
+                bool free = !Physics.CheckBox(mid, new Vector3(Mathf.Max(1.5f, r + 0.6f), 0.8f, 5f), Quaternion.LookRotation(dir, Vector3.up), mask, QueryTriggerInteraction.Ignore);
+                float dev = DevWorld.FlatDeviation(c, 3f);
+                if (free && !bestFree || free == bestFree && dev < bestDev)
+                {
+                    best = c;
+                    bestDev = dev;
+                    bestFree = free;
+                }
+            }
+            ctx.Log($"low stone site at ({best.x:0.0},{best.z:0.0}): path free of colliders {bestFree}, ground level within {(bestDev < float.MaxValue ? bestDev.ToString("0.00") : "?")} m over 3 m");
+            return best;
+        }
+
+        /// <summary>Percentage of the sampled nodes more than 4 mm inside the collider of a box (nodes resting on its surface are not inside it).</summary>
+        private static float InsideBox(GpuMassDev.NodeSnapshot snap, Collider box)
+        {
+            Transform t = box.transform;
+            Vector3 half = new Vector3(t.lossyScale.x, t.lossyScale.y, t.lossyScale.z) * 0.5f;   // a unit cube primitive
+            int sampled = 0, inside = 0;
+            for (int i = 0; i < snap.Worms * 8; i += 7)
+            {
+                Vector3 p = new Vector3(snap.Nodes[i].x + snap.Origin.x, snap.Nodes[i].y + snap.Origin.y, snap.Nodes[i].z + snap.Origin.z);
+                sampled++;
+                Vector3 l = t.InverseTransformPoint(p);
+                l = new Vector3(l.x * t.lossyScale.x, l.y * t.lossyScale.y, l.z * t.lossyScale.z);
+                if (Mathf.Abs(l.x) < half.x - 0.004f && Mathf.Abs(l.y) < half.y - 0.004f && Mathf.Abs(l.z) < half.z - 0.004f) inside++;
+            }
+            return 100f * inside / Mathf.Max(1, sampled);
+        }
+
         private static void Measure(GpuMassDev.NodeSnapshot snap, Collider col, out float near, out float inside)
         {
             int mask = LayerMask.GetMask(VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, VanillaNames.LayerDefaultSmall, VanillaNames.LayerPiece);

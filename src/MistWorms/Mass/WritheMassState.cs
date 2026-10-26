@@ -105,7 +105,42 @@ namespace MistWorms.Mass
         /// <summary>Network time of the birth, in ticks (growth animation, phase 4B-4); 0 = unknown.</summary>
         public long BornTicks => Valid ? _nview.GetZDO().GetLong(HashBorn, 0L) : 0L;
 
-        public ZDOID ColonyId => Valid ? _nview.GetZDO().GetZDOID(MWNames.ZdoMassColony) : ZDOID.None;
+        private static readonly int HashColonyRef = MWNames.ZdoColonyRef.GetStableHashCode();
+        private float _keyRetryAt;
+
+        /// <summary>
+        /// Stable key of the colony the worms come from and return to (<c>mw_ckey</c>, see <see cref="MineKey"/>), 0 = none. A ZDOID would be wrong after the next reload of the world (Valheim renumbers
+        /// the ZDOs it loads). A mass written before the key existed (it carries an old ZDOID, a marker only) belongs to the mine colony whose box holds it; the owner then writes the key.
+        /// </summary>
+        public long ColonyKey
+        {
+            get
+            {
+                if (!Valid) return 0L;
+                ZDO zdo = _nview.GetZDO();
+                long key = zdo.GetLong(HashColonyRef, 0L);
+                if (key != 0L || Time.time < _keyRetryAt) return key;
+                _keyRetryAt = Time.time + 1f;
+                if (zdo.GetZDOID(MWNames.ZdoLegacyColony) == ZDOID.None) return 0L;
+                WormColony colony = ColonyRegistry.FindFor(transform.position);
+                if (colony == null || !colony.IsConfigured || colony.Kind != WormColony.ColonyKind.Mine || colony.Key == 0L) return 0L;
+                if (IsOwner) zdo.Set(HashColonyRef, colony.Key);
+                return colony.Key;
+            }
+        }
+
+        /// <summary>
+        /// The ZDOID, in this session, of the colony of the mass (what a colony calls <see cref="WormColony.ZdoId"/>), ZDOID.None when it is not loaded here. Only for the code that compares with a
+        /// <c>ZdoId</c>; anything that compares two colonies uses <see cref="ColonyKey"/>.
+        /// </summary>
+        public ZDOID ColonyId
+        {
+            get
+            {
+                WormColony colony = ColonyRegistry.FindByKey(ColonyKey);
+                return colony != null ? colony.ZdoId : ZDOID.None;
+            }
+        }
 
         /// <summary>The Stream bit of <c>mw_state</c>: the mass flows through a narrow passage as a ribbon (spec 4.7).</summary>
         public bool IsStream => MassStateCodes.IsStream(StateCode);
@@ -130,7 +165,11 @@ namespace MistWorms.Mass
         /// Instantiates a mass of <paramref name="n"/> worms standing at <paramref name="position"/> (the floor). The calling peer owns it.
         /// Returns null when the prefab is not registered. Used by the colony (<paramref name="newborn"/>: a formation, the heap grows from nothing in 0.5 s) and by the dev tools.
         /// </summary>
-        public static WritheMassState Create(Vector3 position, int n, ZDOID colony, bool newborn = false)
+        public static WritheMassState Create(Vector3 position, int n, ZDOID colony, bool newborn = false) =>
+            Create(position, n, ColonyRegistry.FindById(colony)?.Key ?? 0L, newborn);
+
+        /// <summary>Same, for the colony with this stable key (<see cref="WormColony.Key"/>), 0 = none.</summary>
+        public static WritheMassState Create(Vector3 position, int n, long colonyKey, bool newborn = false)
         {
             GameObject prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(MWNames.MassPrefab) : null;
             if (prefab == null)
@@ -148,7 +187,7 @@ namespace MistWorms.Mass
                 else Destroy(go);
                 return null;
             }
-            state.Initialize(n, colony, newborn);
+            state.Initialize(n, colonyKey, newborn);
             return state;
         }
 
@@ -173,7 +212,10 @@ namespace MistWorms.Mass
         }
 
         /// <summary>Fresh mass: writes the ZDO fields and imposes the exact health n x Worm.Health. Owner only.</summary>
-        public void Initialize(int n, ZDOID colony, bool newborn = false)
+        public void Initialize(int n, ZDOID colony, bool newborn = false) => Initialize(n, ColonyRegistry.FindById(colony)?.Key ?? 0L, newborn);
+
+        /// <summary>Same, for the colony with this stable key.</summary>
+        public void Initialize(int n, long colonyKey, bool newborn = false)
         {
             if (!IsOwner) return;
             n = Math.Max(1, Math.Min(n, MWConfig.Mass.MaxCount.Value));
@@ -181,7 +223,7 @@ namespace MistWorms.Mass
             zdo.Set(HashN, n);
             zdo.Set(HashPartial, 0f);
             zdo.Set(HashState, (int)MassStateCodes.Idle);
-            zdo.Set(MWNames.ZdoMassColony, colony);
+            zdo.Set(HashColonyRef, colonyKey);
             // The growth animation (spec §12.4) is for a mass born of a formation; a dev mass appears at its size (mw_born 0 = unknown).
             zdo.Set(HashBorn, newborn && ZNet.instance != null ? ZNet.instance.GetTime().Ticks : 0L);
             zdo.Set(MWNames.ZdoMassPool, Array.Empty<byte>());
@@ -212,6 +254,10 @@ namespace MistWorms.Mass
         private void Start()
         {
             if (!Valid) return;
+            // mw_target is a ZDOID: right in the session that wrote it, wrong after a reload of the world (Valheim renumbers the ZDOs it loads). A mass instantiated from an object that this
+            // session did not create forgets it and looks for a target again.
+            if (IsOwner && ZDOMan.instance != null && _nview.GetZDO().m_uid.UserID != ZDOMan.GetSessionID() && TargetId != ZDOID.None)
+                _nview.GetZDO().Set(MWNames.ZdoMassTarget, ZDOID.None);
             if (IsOwner && !_imposed)
             {
                 int n = N;
@@ -632,26 +678,27 @@ namespace MistWorms.Mass
         /// A loss took the mass under Mass.DissolveThreshold: the colony recreates the worms (fleeing) where the mass stands, and the
         /// mass is destroyed after the dome shrank. Without a colony the worms are lost (logged).
         /// </summary>
-        private void BeginDissolve(int n)
+        private void BeginDissolve(int n, bool sleep = false, Vector3 deposit = default)
         {
             if (_dissolving) return;
             if (_merging) CancelMerge();
             _dissolving = true;
-            DestroyReason = $"dissolution (n={n} left, under Mass.DissolveThreshold)";
+            DestroyReason = sleep ? $"dormancy (n={n} laid down asleep around {deposit})" : $"dissolution (n={n} left, under Mass.DissolveThreshold)";
             WriteState(MassStateCodes.With(StateCode, MassStateCodes.Dissolving, true));
 
             Vector3 position = transform.position;
-            ZDOID colonyId = ColonyId;
-            WormColony colony = colonyId != ZDOID.None ? ColonyRegistry.FindById(colonyId) : null;
+            long colonyKey = ColonyKey;
+            WormColony colony = ColonyRegistry.FindByKey(colonyKey);
             if (colony == null)
             {
-                Plugin.Log.LogWarning($"[Mass] {ZdoId} dissolved with {n} worms but colony {colonyId} is not loaded here: the worms are lost");
+                Plugin.Log.LogWarning($"[Mass] {ZdoId} dissolved with {n} worms but colony {MineKey.Describe(colonyKey)} is not loaded here: the worms are lost");
                 PoolOnDeath();   // nobody to hand the pool to: it is dropped (nothing is lost silently)
             }
             else
             {
                 // The loot pool of the mass travels in this package and is shared among the worms released (spec Â§7.1).
-                colony.RequestDissolve(ZdoId, n, position, TakePoolPackage());
+                // Asleep (spec §5.2): the worms are laid down around the deposit point instead of leaping away from the mass.
+                colony.RequestDissolve(ZdoId, n, sleep ? deposit : position, TakePoolPackage(), sleep);
             }
             Invoke(nameof(DestroyMass), DissolveDestroyDelay);
         }

@@ -78,6 +78,7 @@ namespace MistWorms.Colony
             RefreshFire(now);
             RefreshPathBudget(now);
             MassTick(now);
+            TickWake(now);
             bool gridRebuilt = false;
             if (now >= _nextGridTime) { RebuildGrid(now); gridRebuilt = true; }
 
@@ -104,6 +105,7 @@ namespace MistWorms.Colony
             }
 
             TickNests(now);
+            TickCalm(now);
 
             // A test colony vanishes when it has no worm, no mass and no nest. It also stays while it has a mass (the worms of a dissolving mass come
             // back to it, spec §4.4). A mine colony stays: it carries the seeded flag of the mine, which must outlive its last worm (decision 194).
@@ -165,8 +167,10 @@ namespace MistWorms.Colony
             switch ((WormState)s.state[i])
             {
                 case WormState.Sleeping:
-                    // Phase 7: dormant worms wake up through the nest and DormantViewRange/DormantHearRange.
-                    GroundMaintain(i, now);
+                    StepSleeping(i, now);   // keeps its floor and watches for a player (spec §3.1, §5.1)
+                    break;
+                case WormState.Calming:
+                    StepCalming(i, now, dt);
                     break;
                 case WormState.Striking:
                     StepStriking(i, now, dt);
@@ -388,6 +392,9 @@ namespace MistWorms.Colony
             return tp + s.approachOffset[i];
         }
 
+        private const int MaxStrikesPerFrame = 1;
+        private int _strikeFrame = -1, _strikesThisFrame;
+
         private void StepStriking(int i, float now, float dt)
         {
             WormStore s = Store;
@@ -400,8 +407,20 @@ namespace MistWorms.Colony
                 : StrikePhase.Recovery;
             if ((byte)phase != s.subPhase[i])
             {
-                s.subPhase[i] = (byte)phase;
-                if (phase == StrikePhase.Strike) OnStrike(i, now);
+                if (phase == StrikePhase.Strike)
+                {
+                    // At most MaxStrikesPerFrame strikes land in a frame: a group that winds up together would otherwise pay for 2 to 4 bites (the vanilla damage and its
+                    // effects, 0.6 to 0.8 ms each) in the same frame. The strike window lasts 0.25 s, the others land a frame or two later.
+                    int frame = Time.frameCount;
+                    if (frame != _strikeFrame) { _strikeFrame = frame; _strikesThisFrame = 0; }
+                    if (_strikesThisFrame >= MaxStrikesPerFrame) phase = StrikePhase.Windup;
+                    else _strikesThisFrame++;
+                }
+                if ((byte)phase != s.subPhase[i])
+                {
+                    s.subPhase[i] = (byte)phase;
+                    if (phase == StrikePhase.Strike) OnStrike(i, now);
+                }
             }
 
             bool haveTarget = ResolveTarget(i, out TargetView target);
@@ -716,10 +735,10 @@ namespace MistWorms.Colony
         }
 
         /// <summary>No 0.5 m of progress in 3 s while it wants to move (spec §11.1). Resets its window every time it is evaluated.</summary>
-        private bool CheckStuck(int i, float now)
+        private bool CheckStuck(int i, float now, float window = StuckWindow)
         {
             WormStore s = Store;
-            if (now - s.progressTime[i] < StuckWindow) return false;
+            if (now - s.progressTime[i] < window) return false;
             Vector3 d = s.pos[i] - s.progressPos[i];
             d.y = 0f;
             s.progressPos[i] = s.pos[i];

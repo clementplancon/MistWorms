@@ -81,8 +81,42 @@ namespace MistWorms.Dev.Scenarios
                     visual.SetActive(false);
                 }
 
-                if (!ChooseSpot(player, out Vector3 spot, out Vector3 toCamera))
+                Vector3 spot = default, toCamera = default;
+                bool spotFound = ChooseSpot(player.transform.position, player.transform.forward, out spot, out toCamera);
+                if (!spotFound && inMine)
                 {
+                    // Cramped around the entrance: another loaded room of the mine, the player moved there.
+                    Vector3 roomPoint = default;
+                    yield return FindRoomSpot(ctx, player, (ok, p) => { spotFound = ok; roomPoint = p; });
+                    if (spotFound)
+                    {
+                        var move = new TeleportOutcome();
+                        yield return DevWorld.TeleportPlayer(roomPoint + Vector3.up * 0.1f, player.transform.rotation, false, 30f, move);
+                        player = Player.m_localPlayer;
+                        spotFound = move.Ok && ChooseSpot(player.transform.position, player.transform.forward, out spot, out toCamera);
+                        if (spotFound) yield return ctx.Wait(0.5f);
+                    }
+                    if (!spotFound)
+                    {
+                        // No room fits: the open ground, as without the mine.
+                        ctx.Log("no free spot in the loaded rooms of the mine: falling back to open ground");
+                        if (ClutterSystem.instance != null)
+                        {
+                            ClutterSystem.instance.enabled = false;
+                            ClutterSystem.instance.ClearAll();
+                            clutterHidden = true;
+                        }
+                        yield return ctx.MoveToOpenGround(5f);
+                        if (!ctx.LastOpenGround.Found) yield break;
+                        player = Player.m_localPlayer;
+                        player.SetGhostMode(false);
+                        inMine = false;
+                        spotFound = ChooseSpot(player.transform.position, player.transform.forward, out spot, out toCamera);
+                    }
+                }
+                if (!spotFound)
+                {
+                    ctx.Log($"last spot search rejected: {LastRejects}");
                     ctx.Assert("spot_with_a_free_camera", false, "a flat floor with room for both cameras", "none within reach");
                     yield break;
                 }
@@ -96,7 +130,18 @@ namespace MistWorms.Dev.Scenarios
                 int worldMask = LayerMask.GetMask("terrain", "static_solid", "Default", "Default_small", "piece");
                 yield return Frame(ctx, "1m", spot + toCamera * 1f + Vector3.up * 0.45f, look);
                 yield return Frame(ctx, "3m", spot + toCamera * 3f + Vector3.up * 0.9f, look);
-                ctx.Assert("camera_has_a_clear_line", !Physics.Linecast(spot + toCamera * 3f + Vector3.up * 0.9f, look, worldMask, QueryTriggerInteraction.Ignore), true, "clear");
+                // The line to the nest, from where the 3 m camera really is. The nest itself does not count, nor does the flat stuff lying on the floor (a dvergr slime puddle).
+                Vector3 cam3 = spot + toCamera * 3f + Vector3.up * 0.9f;
+                RaycastHit[] hits = Physics.RaycastAll(cam3, look - cam3, (look - cam3).magnitude, worldMask, QueryTriggerInteraction.Ignore);
+                string blocker = null;
+                foreach (RaycastHit h in hits)
+                {
+                    if (h.collider.transform.IsChildOf(nest.transform)) continue;
+                    if (h.collider.bounds.max.y <= spot.y + 0.2f && h.collider.gameObject.layer != LayerMask.NameToLayer("terrain")) continue;
+                    blocker = h.collider.name;
+                    break;
+                }
+                ctx.Assert("camera_has_a_clear_line", blocker == null, "clear", blocker ?? "clear");
 
                 // ---- destruction, from 3 m
                 Vector3 where3 = nest.transform.position;
@@ -152,37 +197,74 @@ namespace MistWorms.Dev.Scenarios
         /// A flat floor about 3.5 m from the player in the direction nearest to the player's facing, clear of walls and with a free camera on one side at 1 m
         /// (45 cm up) and at 3 m (90 cm up). <paramref name="toCamera"/> is the horizontal direction from the nest to the cameras.
         /// </summary>
-        private static bool ChooseSpot(Player player, out Vector3 spot, out Vector3 toCamera)
+        private static bool ChooseSpot(Vector3 origin, Vector3 forward, out Vector3 spot, out Vector3 toCamera)
         {
-            Vector3 face = player.transform.forward;
+            Vector3 face = forward;
             face.y = 0f;
             face = face.sqrMagnitude > 1e-4f ? face.normalized : Vector3.forward;
             int mask = LayerMask.GetMask("terrain", "static_solid", "Default", "Default_small", "piece");
-            Vector3 origin = player.transform.position;
+            int noFloor = 0, steep = 0, crowded = 0, camBlocked = 0, camNoView = 0;
 
             for (int k = 0; k < Directions; k++)
             {
                 int step = (k + 1) / 2 * (k % 2 == 1 ? 1 : -1);
                 Vector3 dir = Quaternion.Euler(0f, step * 360f / Directions, 0f) * face;
                 Vector3 probe = origin + dir * SpawnDistance;
-                if (!Physics.Raycast(probe + Vector3.up * 1f, Vector3.down, out RaycastHit floor, 2.5f, mask, QueryTriggerInteraction.Ignore) || floor.normal.y < 0.95f) continue;
-                if (Physics.CheckSphere(floor.point + Vector3.up * 0.4f, 0.7f, mask, QueryTriggerInteraction.Ignore)) continue;
+                if (!Physics.Raycast(probe + Vector3.up * 1f, Vector3.down, out RaycastHit floor, 3f, mask, QueryTriggerInteraction.Ignore)) { noFloor++; continue; }
+                if (floor.normal.y < 0.9f) { steep++; continue; }      // about 25 degrees: the mound sits on it
+                // Room for the mound above the floor: the sphere's bottom is 40 cm over the floor (it used to be centred 40 cm up with a 70 cm radius, so it always hit the floor itself).
+                if (Physics.CheckSphere(floor.point + Vector3.up * 1.1f, 0.7f, mask, QueryTriggerInteraction.Ignore)) { crowded++; continue; }
                 Vector3 look = floor.point + Vector3.up * 0.25f;
                 for (int side = 0; side < 8; side++)
                 {
                     Vector3 away = Quaternion.Euler(0f, side * 45f, 0f) * -dir;
                     Vector3 near = floor.point + away * 1f + Vector3.up * 0.45f;
                     Vector3 far = floor.point + away * 3f + Vector3.up * 0.9f;
-                    if (Physics.CheckSphere(near, 0.15f, mask, QueryTriggerInteraction.Ignore) || Physics.CheckSphere(far, 0.3f, mask, QueryTriggerInteraction.Ignore)) continue;
-                    if (Physics.Linecast(near, look, mask, QueryTriggerInteraction.Ignore) || Physics.Linecast(far, look, mask, QueryTriggerInteraction.Ignore)) continue;
+                    if (Physics.CheckSphere(near, 0.15f, mask, QueryTriggerInteraction.Ignore) || Physics.CheckSphere(far, 0.3f, mask, QueryTriggerInteraction.Ignore)) { camBlocked++; continue; }
+                    if (Physics.Linecast(near, look, mask, QueryTriggerInteraction.Ignore) || Physics.Linecast(far, look, mask, QueryTriggerInteraction.Ignore)) { camNoView++; continue; }
                     spot = floor.point;
                     toCamera = away;
                     return true;
                 }
             }
+            LastRejects = $"{noFloor} without floor, {steep} too steep, {crowded} too crowded, {camBlocked} camera inside geometry, {camNoView} camera without a line";
             spot = default;
             toCamera = default;
             return false;
+        }
+
+        private static string LastRejects = "";
+
+        /// <summary>A floor point in one of the loaded rooms of the mine, closest to the player first, from which <see cref="ChooseSpot"/> succeeds (a grid of 2 m over each room).</summary>
+        private static IEnumerator FindRoomSpot(ScenarioContext ctx, Player player, Action<bool, Vector3> done)
+        {
+            DungeonGenerator generator = DevWorld.NearestGenerator(player.transform.position);
+            Room[] rooms = generator != null ? generator.GetComponentsInChildren<Room>() : new Room[0];
+            Vector3 from = player.transform.position;
+            Array.Sort(rooms, (a, b) => (a.transform.position - from).sqrMagnitude.CompareTo((b.transform.position - from).sqrMagnitude));
+            int mask = LayerMask.GetMask("terrain", "static_solid", "Default", "Default_small", "piece");
+            int tested = 0;
+            foreach (Room room in rooms)
+            {
+                Vector3 size = new Vector3(room.m_size.x, room.m_size.y, room.m_size.z);
+                Transform t = room.transform;
+                for (float x = -size.x * 0.5f; x <= size.x * 0.5f; x += 2f)
+                {
+                    for (float z = -size.z * 0.5f; z <= size.z * 0.5f; z += 2f)
+                    {
+                        Vector3 top = t.TransformPoint(new Vector3(x, size.y * 0.5f, z));
+                        if (!Physics.Raycast(top, Vector3.down, out RaycastHit floor, size.y + 4f, mask, QueryTriggerInteraction.Ignore) || floor.normal.y < 0.9f) continue;
+                        tested++;
+                        if (!ChooseSpot(floor.point + Vector3.up * 0.1f, t.forward, out _, out _)) continue;
+                        ctx.Log($"free spot found in room {room.name} after {tested} floor points");
+                        done(true, floor.point);
+                        yield break;
+                    }
+                }
+                yield return null;
+            }
+            ctx.Log($"no free spot in {rooms.Length} rooms ({tested} floor points); last rejects: {LastRejects}");
+            done(false, default);
         }
 
         private static int ItemsNear(Vector3 where)

@@ -314,6 +314,51 @@ namespace MistWorms.Drops
             return pkg.GetArray();
         }
 
+        // The same bytes as Write / Read, into and out of a byte array at an offset (the colony snapshot embeds pools without allocating, phase 7-3).
+
+        /// <summary>Bytes <see cref="WriteTo"/> writes.</summary>
+        public int SerializedSize => 2 + _count * 12;
+
+        /// <summary>Writes the form of <see cref="Write"/> at <paramref name="at"/> (room checked by the caller); returns the position after it.</summary>
+        public int WriteTo(byte[] buf, int at)
+        {
+            buf[at++] = FormatVersion;
+            buf[at++] = (byte)_count;
+            for (int i = 0; i < _count; i++)
+            {
+                MistWorms.Colony.ByteIO.PutInt(buf, at, _hash[i]);
+                MistWorms.Colony.ByteIO.PutFloat(buf, at + 4, _qty[i]);
+                MistWorms.Colony.ByteIO.PutFloat(buf, at + 8, _carry[i]);
+                at += 12;
+            }
+            return at;
+        }
+
+        /// <summary>
+        /// Reads a pool written by <see cref="WriteTo"/> (or <see cref="Write"/>) at <paramref name="at"/>, which moves past it. Same refusals as <see cref="Read"/>,
+        /// plus a truncated array; the pool is then empty.
+        /// </summary>
+        public bool ReadFrom(byte[] data, ref int at)
+        {
+            _count = 0;
+            if (data == null || at < 0 || at + 2 > data.Length || data[at] != FormatVersion) return false;
+            int count = data[at + 1];
+            if (count > MaxEntries || at + 2 + count * 12 > data.Length) return false;
+            at += 2;
+            for (int i = 0; i < count; i++, at += 12)
+            {
+                int hash = MistWorms.Colony.ByteIO.GetInt(data, at);
+                float q = MistWorms.Colony.ByteIO.GetFloat(data, at + 4), c = MistWorms.Colony.ByteIO.GetFloat(data, at + 8);
+                if (!IsGood(q) || !IsGood(c)) { _count = 0; return false; }
+                if (q + c <= 0f) continue;
+                int e = Slot(hash);
+                if (e < 0) { _count = 0; return false; }
+                _qty[e] += q;
+                _carry[e] += c;
+            }
+            return true;
+        }
+
         public bool ReadBytes(byte[] data) => data == null || data.Length == 0 ? FinishEmpty() : Read(new ZPackage(data));
 
         private bool FinishEmpty()

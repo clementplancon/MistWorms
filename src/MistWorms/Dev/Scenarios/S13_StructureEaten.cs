@@ -45,7 +45,7 @@ namespace MistWorms.Dev.Scenarios
                 Player player = Player.m_localPlayer;
                 player.SetGodMode(true);
                 player.SetGhostMode(false);
-                yield return ctx.MoveToOpenGround(12f);
+                yield return ctx.MoveToOpenGround(12f, null, flatRadius: 12f, flatTolerance: 0.8f, lenientTolerance: 1.5f);   // the door stands 6 m + the radius of the mass ahead: level over all of it
                 if (!ctx.LastOpenGround.Found) yield break;
                 player = Player.m_localPlayer;
                 S18_GroupCoherence.ClearCreatures(ctx, player);
@@ -147,12 +147,12 @@ namespace MistWorms.Dev.Scenarios
                     ctx.Log($"{tag}door not targeted: mass at {from:0.0}, door at {door.transform.position:0.0} ({Vector3.Distance(from, door.transform.position):0.0} m); " +
                             TargetScanner.Diagnose(door, from, from + Vector3.up * 0.8f, MWConfig.Mass.TargetRange.Value, EngulfMath.MaxHeightGap));
                 }
-                ctx.Assert(tag + "door_targeted", targeted, "the mass targets a Structure", ai.CurrentKind);
+                if (!ctx.Assert(tag + "door_targeted", targeted, "the mass targets a Structure", ai.CurrentKind)) { Destroy(door); yield break; }
                 yield return ctx.WaitUntil(() => door == null || MassStateCodes.Mode(mass.StateCode) == MassStateCodes.Engulf, 30f);
                 bool engulfed = door == null || MassStateCodes.Mode(mass.StateCode) == MassStateCodes.Engulf;
                 if (!engulfed)
                     ctx.Log($"{tag}door not engulfed: target {ai.CurrentKind}, mass at {mass.transform.position:0.00}, door at {door.transform.position:0.00}; last refusal: {(string.IsNullOrEmpty(ai.EngulfNote) ? "none (TryBeginEngulf was not reached)" : ai.EngulfNote)}");
-                ctx.Assert(tag + "door_engulfed", engulfed, "Engulf", MassStateCodes.Describe(mass.StateCode));
+                if (!ctx.Assert(tag + "door_engulfed", engulfed, "Engulf", MassStateCodes.Describe(mass.StateCode))) { Destroy(door); yield break; }   // no 120 s wait for a door that nobody eats
             }
 
             float deadline = Time.time + DestroyTimeout;
