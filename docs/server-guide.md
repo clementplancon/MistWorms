@@ -1,6 +1,6 @@
 # Guide du serveur dédié
 
-Pour l'administrateur d'un serveur Valheim dédié qui héberge MistWorms (spec §17.2). Les points marqués **à confirmer** dépendent de l'hébergeur (HG Hosting) et n'ont pas encore été vérifiés avec son support.
+Pour l'administrateur d'un serveur Valheim dédié qui héberge MistWorms (spec §17.2). Il est générique : le mod s'installe comme n'importe quel autre mod, sans hébergeur particulier. Les remarques propres aux hébergeurs sont dans l'annexe facultative en fin de document.
 
 ## 1. Avant de commencer
 
@@ -10,7 +10,7 @@ Pour l'administrateur d'un serveur Valheim dédié qui héberge MistWorms (spec 
 
 ## 2. Installation
 
-1. **BepInExPack_Valheim** : option du panel de l'hébergeur si elle existe ; sinon dépôt du contenu du zip à la racine du serveur par SFTP. Sous Linux, le démarrage doit passer par `start_server_bepinex.sh` (ou la ligne de commande équivalente qui exporte les variables `DOORSTOP_*` et `LD_PRELOAD`), à adapter au panel. **À confirmer avec le support HG Hosting** : système d'exploitation du serveur, prise en charge de BepInEx, script de démarrage modifiable.
+1. **BepInExPack_Valheim** : option du panel de l'hébergeur si elle existe ; sinon dépôt du contenu du zip à la racine du serveur par SFTP. Sous Linux, le démarrage doit passer par `start_server_bepinex.sh` (ou la ligne de commande équivalente qui exporte les variables `DOORSTOP_*` et `LD_PRELOAD`), à adapter au panel.
 2. Déposez `BepInEx/plugins/Jotunn/` et `BepInEx/plugins/MistWorms/` (le zip du mod contient `plugins/MistWorms/` ; Jötunn est un paquet à part de Thunderstore). Le dossier `MistWorms` contient la DLL, `Localization/` et `assets/` (dont le bundle `mistworms_shaders`) : copiez-le en entier.
 3. Démarrez le serveur et lisez `BepInEx/LogOutput.log` : vous devez voir `Loading [Jotunn ...]` puis `Loading [MistWorms 1.0.0]`, et aucune erreur.
 
@@ -29,7 +29,7 @@ Enabled = false
 
 ## 4. Mot de passe et accès
 
-MistWorms n'ajoute aucun mot de passe : celui du serveur reste celui de Valheim (`-password` dans la ligne de commande de démarrage ou le champ du panel). Les clés de jeu sont marquées « réservées à l'administrateur » pour Jötunn ; le fichier du serveur reste la référence. **À confirmer avec le support HG Hosting** : où se règle le mot de passe sur le panel et si la liste des administrateurs (`adminlist.txt`) est éditable.
+MistWorms n'ajoute aucun mot de passe : celui du serveur reste celui de Valheim (`-password` dans la ligne de commande de démarrage ou le champ du panel). Les clés de jeu sont marquées « réservées à l'administrateur » pour Jötunn ; le fichier du serveur reste la référence.
 
 ## 5. Compatibilité
 
@@ -47,3 +47,7 @@ MistWorms n'ajoute aucun mot de passe : celui du serveur reste celui de Valheim 
 | Les clients sont tous refusés | Versions différentes du mod ou de Jötunn entre serveur et clients |
 | Aucun ver visible | `General.Enabled`, ou mines non encore générées dans cette zone ; les vers n'existent que dans les mines |
 | Vers rendus de façon dégradée | `Performance.GpuWorms` (client) : repli CPU si le bundle de shaders est absent ou refusé ; un avertissement est écrit dans le journal du client |
+
+## Annexe (facultative) : serveurs loués
+
+Aucun hébergeur n'est imposé et aucun n'a été testé. Si vous louez un serveur, vérifiez auprès de lui : (a) le système d'exploitation (Linux ou Windows) ; (b) la prise en charge de BepInEx, par une option du panel ou par dépôt SFTP à la racine ; (c) que le script de démarrage est modifiable (sous Linux, `start_server_bepinex.sh` ou la ligne de commande équivalente qui exporte `DOORSTOP_*` et `LD_PRELOAD`) ; (d) où se règlent le mot de passe et la liste des administrateurs (`adminlist.txt`). Sans accès à BepInEx et au dossier `BepInEx/config/`, la configuration imposée par le serveur n'est pas possible.

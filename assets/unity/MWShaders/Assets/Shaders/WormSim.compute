@@ -238,7 +238,7 @@ float ResolvePrims(uint mi, MassParams m, inout float3 x)
     for (uint k = 0; k < m.ranges.z; k++)
     {
         Prim pr = _Prims[mi * 24 + k];
-        float3 n;
+        float3 n = float3(0, 1, 0);
         float d = PrimDist(pr, x, n);
         if (d < RAD)
         {
@@ -289,6 +289,8 @@ float DomeThick(uint mi, MassParams m, float x, float z, float qh)
 // and moving, and a few members fall and climb again. Returns whether the worm is a member.
 bool SleeveParams(uint mi, MassParams m, uint seed, float t, out Prim pr, out float h, out float a, out float thick, out float phi, out float sgn)
 {
+    pr = (Prim)0;
+    h = 0.0; a = 0.0; thick = 0.0; phi = 0.0; sgn = 1.0;
     uint kc = (uint)(m.sleeve.x + 0.5);
     float tot = 0.0;
     for (uint c0 = 0; c0 < kc; c0++)
@@ -574,7 +576,7 @@ float3 HomePoint(uint mi, MassParams m, uint seed, float t)
 {
     if (m.sleeve.x > 0.5 && m.skin.x < 0.5)
     {
-        Prim spr; float sh, sa, sth, sphi, ssg;
+        Prim spr = (Prim)0; float sh = 0.0, sa = 0.0, sth = 0.0, sphi = 0.0, ssg = 1.0;
         if (SleeveParams(mi, m, seed, t, spr, sh, sa, sth, sphi, ssg)) return SleeveNode(spr, sh, sa, sth, sphi, ssg, 3.5);
     }
     float a2 = Hash01(seed, 0) * 6.2831853;
@@ -762,7 +764,7 @@ void KPredict(uint3 id : SV_DispatchThreadID)
         float timer = st.z;
         float off = SkinOff(wd.seed);
         float rk = SkinRank(w, m, wd.seed);
-        uint slotA;
+        uint slotA = 0u;
         bool elig = SkinEligible(mi, m, wd.seed, t, rk, mode, slotA);
         bool entered = false;
         if (mode == 0u)
@@ -877,9 +879,9 @@ void KPredict(uint3 id : SV_DispatchThreadID)
     bool arm = mode == 0u && ArmIs(m, wd.seed);
     if (arm)
     {
-        float3 ahp, af;
-        float afade;
-        bool atip;
+        float3 ahp = float3(0, 0, 0), af = float3(0, 0, 1);
+        float afade = 0.0;
+        bool atip = false;
         ArmFrame(wd.mass, m, wd.seed, t, ahp, af, afade, atip);
         [unroll] for (int ja = 0; ja < K; ja++)
         {

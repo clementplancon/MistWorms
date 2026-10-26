@@ -36,11 +36,23 @@ All values live in `BepInEx/config/dev.pointvirgule.mistworms.cfg`. Gameplay key
 
 ## Installation
 
-**Players**: install `MistWorms` with r2modman or Thunderstore Mod Manager (BepInExPack and Jotunn come with it), then launch from the manager. Share your profile code so everyone runs the exact same versions.
+Source code, issues and documentation: https://github.com/clementplancon/MistWorms. This page: https://thunderstore.io/c/valheim/p/kplir/MistWorms/.
 
-Manual install: extract BepInExPack_Valheim into the game folder, then copy `Jotunn` and `MistWorms` into `BepInEx/plugins/`.
+**With a mod manager (recommended)**: install `MistWorms` with r2modman or Thunderstore Mod Manager (BepInExPack and Jotunn come with it), then launch the game from the manager. Share your profile code so everyone runs the exact same versions.
 
-**Dedicated server**: back up the world first. Install BepInExPack_Valheim (host panel option, or upload over SFTP; Linux servers must start through `start_server_bepinex.sh`), drop `BepInEx/plugins/Jotunn/` and `BepInEx/plugins/MistWorms/`, start, and check `BepInEx/LogOutput.log` for `Loading [MistWorms ...]`. The server's config file applies to everyone. Clients without the mod, or with a different minor version, are refused with a Jotunn message. Update the server first, then the clients.
+**Manual install**: extract BepInExPack_Valheim into the game folder, then copy the `Jotunn` and `MistWorms` folders into `BepInEx/plugins/`. Keep the `MistWorms` folder as is (DLL, `Localization/` and `assets/` together).
+
+## Dedicated server
+
+Any dedicated Valheim server works; no particular host is required.
+
+1. Back up the world first.
+2. Install BepInExPack_Valheim on the server (host panel option, or upload over SFTP; Linux servers must start through `start_server_bepinex.sh`).
+3. Put `BepInEx/plugins/Jotunn/` and `BepInEx/plugins/MistWorms/` on the server, start it, and check `BepInEx/LogOutput.log` for `Loading [MistWorms ...]`.
+4. The mod must be installed on the server **and** on every client. The server's config file (`BepInEx/config/dev.pointvirgule.mistworms.cfg`) is enforced on all clients, except the local `Performance` section.
+5. A client without the mod, or with a different minor version, is refused with a Jotunn message. Update the server first, then the clients.
+
+The server does not simulate any colony: clients own them, the server only relays messages and enforces its config.
 
 ## Compatibility
 
@@ -68,7 +80,7 @@ Les mines infestées des Terres brumeuses accueillent un parasite : le **Ver des
 
 **Configuration** : `BepInEx/config/dev.pointvirgule.mistworms.cfg`, imposée par le serveur (sauf la section `Performance`). Voir le tableau ci-dessus.
 
-**Installation** : joueurs via r2modman ou Thunderstore Mod Manager (partagez le code de profil) ; serveur dédié : sauvegarder le monde, installer BepInExPack_Valheim, déposer `BepInEx/plugins/Jotunn/` et `BepInEx/plugins/MistWorms/`, vérifier `BepInEx/LogOutput.log`. Mettre à jour le serveur d'abord, puis les clients.
+**Installation** : r2modman ou Thunderstore Mod Manager (partagez le code de profil), ou copie manuelle de `Jotunn` et `MistWorms` dans `BepInEx/plugins/`. **Serveur dédié** (n'importe lequel) : sauvegarder le monde, installer BepInExPack_Valheim, déposer `BepInEx/plugins/Jotunn/` et `BepInEx/plugins/MistWorms/`, vérifier `BepInEx/LogOutput.log`. Le mod doit être sur le serveur et sur chaque client ; la config du serveur s'impose, un client sans le mod est refusé. Mettre à jour le serveur d'abord, puis les clients. Code et documentation : https://github.com/clementplancon/MistWorms
 
 **Compatibilité** : Valheim 1.0.x (testé en 1.0.20), aucun autre mod testé.
 
