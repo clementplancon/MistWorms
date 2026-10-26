@@ -494,6 +494,73 @@ namespace MistWorms.Render.Gpu
             return x;
         }
 
+        // ---------------------------------------------------------------- pseudopod (exact port of WormSim.compute; the shape is Arm() of MassLayout.cs)
+
+        /// <summary>
+        /// The <see cref="GpuMassParams.Pseudo"/> of a mass: (direction x, direction z, length of the net past its start, ramp). <paramref name="dirX"/>, <paramref name="dirZ"/> is the horizontal unit
+        /// direction to the target in the local frame, <paramref name="targetDist"/> the horizontal distance to it, <paramref name="radius"/> the radius of the mass. Zero (no net) when the ramp is 0,
+        /// when the target is on top of the mass or when it is too close for a net (the same length as Arm(): ArmMax or what is left before the target, less the margin, times the ramp).
+        /// </summary>
+        public static Vector4 PseudoParams(float dirX, float dirZ, float targetDist, float ramp, float radius)
+        {
+            if (!(ramp > 0f) || !(targetDist > 0f)) return Vector4.zero;
+            float lim = targetDist - WormSimConst.ArmMargin - WormSimConst.ArmStart * radius;
+            float ln = WormSimConst.ArmMax < lim ? WormSimConst.ArmMax : lim;
+            ln = (ln > 0f ? ln : 0f) * Sat(ramp);
+            if (!(ln > 0f)) return Vector4.zero;
+            return new Vector4(dirX, dirZ, ln, Sat(ramp));
+        }
+
+        /// <summary>The ramp of the net given to the GPU: follows the ramp of the visual when it grows, falls at most <see cref="WormSimConst.ArmRetractRate"/> per second (the worms come back to the dome as the net shortens).</summary>
+        public static float SmoothRamp(float current, float want, float dt)
+        {
+            if (want >= current) return want;
+            float fall = current - WormSimConst.ArmRetractRate * dt;
+            return fall > want ? fall : want;
+        }
+
+        /// <summary>Whether the worm is of the net toward the target.</summary>
+        public static bool ArmIs(in GpuMassParams m, uint seed) =>
+            m.Pseudo.z > 0f && m.Pseudo.w > 0f && m.Sleeve.x < 0.5f && Hash01(seed, 36) < WormSimConst.ArmFrac * m.Pseudo.w - 0.5f * WormSimConst.ArmSoft;
+
+        public static bool ArmTip(uint seed) => Hash01(seed, 36) < WormSimConst.ArmTipFrac;
+
+        /// <summary>Place of the worm on the conveyor of the net: 0 at the root, 1 at the tip (a worm that rears up stays at the tip).</summary>
+        public static float ArmS(uint seed, float t)
+        {
+            if (ArmTip(seed)) return 1f;
+            float c = Hash01(seed, 37) + t * WormSimConst.ArmFlow;
+            return c - (float)Math.Floor(c);
+        }
+
+        /// <summary>Size of the worm at place s: grows from nothing at the root and shrinks to nothing at the tip (a rearing worm keeps its size).</summary>
+        public static float ArmFadeOf(float s, bool tip) => tip ? 1f : Smooth(0f, WormSimConst.ArmFade, s) * (1f - Smooth(1f - WormSimConst.ArmFade, 1f, s));
+
+        /// <summary>
+        /// Place of the worm in the net at time t: <paramref name="hp"/> the centre of its line, <paramref name="f"/> the direction of its line (a rearing worm: hp is its root and f points up), its size.
+        /// </summary>
+        public void ArmFrame(int mi, in GpuMassParams m, uint seed, float t, out Vector3 hp, out Vector3 f, out float fade, out bool tip)
+        {
+            tip = ArmTip(seed);
+            float s = ArmS(seed, t);
+            float ln = m.Pseudo.z;
+            float dx = m.Pseudo.x, dz = m.Pseudo.y;
+            float px = -dz, pz = dx;
+            float waveA = 6.2831853f * (s * WormSimConst.ArmWaveK - t / WormSimConst.ArmWavePer);
+            float sw = (float)Math.Sin(waveA);
+            float wave = WormSimConst.ArmWave * s * sw;
+            float wid = L(WormSimConst.ArmWidth, WormSimConst.ArmWidth * WormSimConst.ArmTaper, s);
+            float lat = (Hash01(seed, 38) - 0.5f) * wid;
+            float dist = WormSimConst.ArmStart * m.Center.w + s * ln;
+            float x = m.Center.x + dx * dist + px * (wave + lat);
+            float z = m.Center.z + dz * dist + pz * (wave + lat);
+            hp = new Vector3(x, Ground(mi, m, x, z) + WormSimConst.Radius + WormSimConst.ArmThick * Hash01(seed, 39) * (1f - 0.4f * s), z);
+            float dw = WormSimConst.ArmWave * (sw + s * WormSimConst.ArmWaveK * 6.2831853f * (float)Math.Cos(waveA)) / Math.Max(ln, 0.2f);
+            f = Norm(new Vector3(dx + px * dw, 0f, dz + pz * dw), new Vector3(dx, 0f, dz));
+            if (tip) f = Scale(f, (float)Math.Cos(WormSimConst.ArmTipPitch)) + Scale(new Vector3(0f, 1f, 0f), (float)Math.Sin(WormSimConst.ArmTipPitch));
+            fade = ArmFadeOf(s, tip);
+        }
+
         public Vector3 HomePoint(int mi, in GpuMassParams m, uint seed, float t)
         {
             if (m.Sleeve.x > 0.5f && m.Skin.x < 0.5f)
@@ -791,6 +858,25 @@ namespace MistWorms.Render.Gpu
             bool onBody = mode == 1u || mode == 2u;
             bool dropping = m.Skin.x > 0.5f && mode == 3u;
 
+            // Pseudopod: the nodes are pulled toward their place in the net (kinematic): a share of the gap per step, at most ArmPullMax; a worm that is invisible (fade near 0: the wrap
+            // of the conveyor, a worm just recruited at the root) goes straight to its place.
+            bool arm = mode == 0u && ArmIs(m, wd.Seed);
+            if (arm)
+            {
+                ArmFrame((int)wd.Mass, m, wd.Seed, t, out Vector3 ahp, out Vector3 af, out float afade, out bool atip);
+                for (int ja = 0; ja < K; ja++)
+                {
+                    Vector3 kd = ahp + Scale(af, (ja - (atip ? 0f : 3.5f)) * WormSimConst.SegLen) - p[ja];
+                    if (afade >= WormSimConst.ArmSnap)
+                    {
+                        kd = Scale(kd, WormSimConst.ArmK);
+                        float kl2 = Dot(kd, kd);
+                        if (kl2 > WormSimConst.ArmPullMax * WormSimConst.ArmPullMax) kd = Scale(Div(kd, (float)Math.Sqrt(kl2)), WormSimConst.ArmPullMax);
+                    }
+                    kx[ja] = kd;
+                }
+            }
+
             var pn = new Vector3[K];
             for (int j = 0; j < K; j++)
             {
@@ -809,6 +895,10 @@ namespace MistWorms.Render.Gpu
                 {
                     pj = Vector3.zero;
                     a.y = -9.8f * dt * dt;
+                }
+                else if (arm)
+                {
+                    pj = Vector3.zero;                  // the net is pulled by kx
                 }
                 else if (member)
                 {
@@ -929,7 +1019,21 @@ namespace MistWorms.Render.Gpu
             bool onBody = sMode == 1u || sMode == 2u;
             bool pend = sMode == 2u && Hash01(wd.Seed, 19) < WormSimConst.PendantShare;
             float off = SkinOff(wd.Seed);
-            bool skipContain = sMode != 0u;
+            float tNow = (float)StepIndex * WormSimConst.Dt;
+            bool arm = sMode == 0u && ArmIs(m, wd.Seed);       // a worm of the net is not contained in the dome
+            // A worm that has just left the net (the ramp falls) is far outside the dome: the containment would throw it back in one step. While a net is on it shrinks to nothing in
+            // ArmLeaveTime instead, where it is, and once it is gone the containment brings it back (it grows again in the dome).
+            bool leaving = false;
+            if (sMode == 0u && !arm && m.Pseudo.w > 0f && rs[3] > WormSimConst.ArmGone)
+            {
+                Vector3 lc = Vector3.zero;
+                for (int lk = 0; lk < K; lk++) lc += x[lk];
+                Vector3 ld = Scale(lc, 0.125f) - V3(m.Center);
+                Vector3 lf = V3(m.Heading);
+                float lqx = (Dot(ld, lf) - m.Shape.w) / m.Shape.x, lqz = Dot(ld, Side(lf)) / m.Shape.z;
+                leaving = lqx * lqx + lqz * lqz > WormSimConst.ArmOut * WormSimConst.ArmOut;
+            }
+            bool skipContain = sMode != 0u || arm || leaving;
             var nodeA = new uint[K];
             for (int na = 0; na < K; na++) nodeA[na] = onBody ? NodeAnchor[w * K + na] : 0u;
             for (int i = 0; i < K; i++) _attached[i] = 0f;
@@ -978,6 +1082,9 @@ namespace MistWorms.Render.Gpu
                 vel = Scale(vel, 1f + (WormSimConst.BodyDamp - 1f) * _attached[e]);
                 float rsn = rs[e];
                 if (m.Plan2.y > 0.5f) rsn = (uint)(w - (int)m.FirstWorm) < (uint)(m.Plan2.y + 0.5f) ? Math.Min(1f, rsn + WormSimConst.Dt / WormSimConst.BirthTime) : Math.Max(0f, rsn - WormSimConst.Dt / WormSimConst.BirthTime);
+                if (m.Plan2.y <= 0.5f && rsn < 1f) rsn = Math.Min(1f, rsn + WormSimConst.Dt / WormSimConst.BirthTime);     // a worm that left the net grows back
+                if (arm) rsn = Math.Min(rsn, ArmFadeOf(ArmS(wd.Seed, tNow), ArmTip(wd.Seed)));
+                if (leaving) rsn = Math.Max(0f, Math.Min(rsn, rs[e] - WormSimConst.Dt / WormSimConst.ArmLeaveTime));
                 Pos[w * K + e] = new Vector4(x[e].x, x[e].y, x[e].z, rsn);
                 Prev[w * K + e] = new Vector4(x[e].x - vel.x, x[e].y - vel.y, x[e].z - vel.z, rsn);
             }
