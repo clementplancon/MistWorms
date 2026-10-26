@@ -214,6 +214,10 @@ namespace MistWorms.Dev.Scenarios
                     GpuWormHost.MeasureAlloc = false;
                     ctx.Assert($"{tag}_no_allocation_in_steady_state", GpuWormHost.OwnAllocBytes == 0, "0 bytes over the window", $"{GpuWormHost.OwnAllocBytes} bytes over {GpuWormHost.Frames} frames");
 
+                    // The player stops and the sleeve settles for 2 s before the final readback: a worm within 4 cm of a leg that walks is a matter of the phase of the stride and of the speed the
+                    // ground allows (r7 71 %, r8 52 % of the n50 sleeve on two sites, 81 % earlier; the left leg alone held 101 of 246 worms in one and 59 of 242 in the other).
+                    DevInput.Release();
+                    yield return ctx.WaitGame(2f);
                     GpuMassDev.NodeSnapshot nodes = GpuMassDev.RequestNodes(GpuMassDev.Mass);
                     yield return ctx.WaitUntil(() => nodes.Done, 10f);
                     ctx.Assert($"{tag}_readback_ok", nodes.Done && !nodes.Error, "nodes read back", nodes.Done ? (nodes.Error ? "error" : "ok") : "timed out");

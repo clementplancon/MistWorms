@@ -34,6 +34,10 @@ namespace MistWorms.Colony
         public int SnapshotWrites { get; private set; }
         public int SnapshotRestored { get; private set; }
 
+        /// <summary>Hit points of the worms restored and quantity of loot (their pools and the reserve) read from a snapshot, as they were at the moment of the restore (the dev scenarios compare them before the worms gather).</summary>
+        public float SnapshotRestoredHp { get; private set; }
+        public float SnapshotRestoredPool { get; private set; }
+
         /// <summary>Worms of the last restore that were left out (outside the box, no slot, nothing to restore) and what the last restore found wrong, or null.</summary>
         public int SnapshotSkipped { get; private set; }
         public string SnapshotProblem { get; private set; }
@@ -102,6 +106,7 @@ namespace MistWorms.Colony
                 int slot = AddWorm(p, state, heading, force: true);   // restored worms already existed: the cap of the mine does not apply
                 if (slot < 0) { skipped++; continue; }
                 s.hp[slot] = Mathf.Max(0.1f, hp);
+                SnapshotRestoredHp += s.hp[slot];
                 s.nestIndex[slot] = (short)nest;
                 s.lone[slot] = lone;
                 s.home[slot] = s.pos[slot];
@@ -119,11 +124,13 @@ namespace MistWorms.Colony
                 int w = ByteIO.GetUShort(data, at);
                 at += 2;
                 _snapPool.ReadFrom(data, ref at);          // validated by TryOpen
+                SnapshotRestoredPool += _snapPool.TotalAll();
                 MassPool pool = _snapSlots[w] >= 0 ? EnsureWormPool(_snapSlots[w]) : null;
                 if (pool != null) pool.CopyFrom(_snapPool);
                 else ReserveMerge(_snapPool);              // the worm is not there any more: what it carried is not lost
             }
             _snapPool.ReadFrom(data, ref at);
+            SnapshotRestoredPool += _snapPool.TotalAll();
             ReserveMerge(_snapPool);
             _snapPool.Clear();
 

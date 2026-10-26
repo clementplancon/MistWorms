@@ -22,6 +22,7 @@ namespace MistWorms.Dev.Scenarios
         private const float LayoutDy = 8f;            // height difference to the player the nests and the lone worm tolerate
         private const float LayoutAngle = 40f;        // steepest ground for them
         private const float FarMargin = 5f;           // the far nest lies at least AlertRadius + this from the chain nests
+        private const float ViewerEyeHeight = 1.6f;      // the eyes of a standing player over his feet
         private const float WalkNoise = 15f;          // Character.AddNoise(15) of a walking player (Character.cs:1857)
 
         public string Name => "S14b_WakeRules";
@@ -155,12 +156,32 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert("nest_4_sleeps_on", wokeAt[3] < 0f && CountAsleep(colony, 3) == PerNest, "group 4 and its 5 worms asleep", $"group 4 woke at {wokeAt[3]:0.00}, {CountAsleep(colony, 3)} asleep");
 
                 // ---- (c) the sight of a nest: 9 m from nest 4 in line of sight wakes it, behind a wall it does not
-                Vector3 toward = nestPoints[3] - nestPoints[2];
-                toward.y = 0f;
-                toward = toward.sqrMagnitude > 1e-4f ? toward.normalized : u;
-                Vector3 viewer = nestPoints[3] - toward * 9f;
-                if (FloorAt(viewer, nestPoints[3].y, out Vector3 viewerFloor, LayoutDy, LayoutAngle))
+                // The nest looks from NestEyeHeight over its floor point with the view blockers of the worms: on open ground a bump of the terrain between the nest and the viewer hides him
+                // (r8: nest 4 on a ridge, no wake in 3 s). The viewer's place is the first of the 12 directions around the nest, 9 m out, where the ray from the nest to his eyes is clear.
+                Vector3 towardBase = nestPoints[3] - nestPoints[2];
+                towardBase.y = 0f;
+                towardBase = towardBase.sqrMagnitude > 1e-4f ? towardBase.normalized : u;
+                Vector3 nestEye = nestPoints[3] + Vector3.up * 0.4f;
+                Vector3 toward = towardBase, viewerFloor = default;
+                bool viewerFound = false;
+                string blocked = null;
+                for (int k = 0; k < 12 && !viewerFound; k++)
                 {
+                    float angle = k % 2 == 0 ? k / 2 * 30f : -(k / 2 + 1) * 30f;
+                    Vector3 away = Quaternion.AngleAxis(angle, Vector3.up) * -towardBase;      // from the nest to the viewer
+                    if (!FloorAt(nestPoints[3] + away * 9f, nestPoints[3].y, out Vector3 floor, LayoutDy, LayoutAngle)) { blocked = $"no floor at {angle:0} degrees"; continue; }
+                    if (Physics.Linecast(nestEye, floor + Vector3.up * ViewerEyeHeight, out RaycastHit block, WormPhysics.ViewBlockMask, QueryTriggerInteraction.Ignore))
+                    {
+                        blocked = $"{angle:0} degrees: {block.collider.name} (layer {LayerMask.LayerToName(block.collider.gameObject.layer)}) at {block.point}";
+                        continue;
+                    }
+                    toward = -away;
+                    viewerFloor = floor;
+                    viewerFound = true;
+                }
+                if (viewerFound)
+                {
+                    Vector3 viewer = viewerFloor;
                     wall = new GameObject("MW_DevWall");
                     wall.transform.position = nestPoints[3] - toward * 3f + Vector3.up * 2f;
                     wall.transform.rotation = Quaternion.LookRotation(toward);
@@ -182,10 +203,16 @@ namespace MistWorms.Dev.Scenarios
                         if (colony.IsGroupAwake(3)) seenAt = Time.time - seen0;
                     }
                     ctx.Assert("a_player_in_sight_9_m_from_the_nest_wakes_it", seenAt >= 0f && seenAt <= 1.2f, "within 1.2 s", seenAt < 0f ? "never" : $"{seenAt:0.00} s");
+                    if (seenAt < 0f)
+                    {
+                        Player seer = Player.m_localPlayer;
+                        bool hit = Physics.Linecast(nestEye, seer.GetEyePoint(), out RaycastHit now, WormPhysics.ViewBlockMask, QueryTriggerInteraction.Ignore);
+                        ctx.Log($"diagnosis: player eye {Vector3.Distance(nestEye, seer.GetEyePoint()):0.0} m from the nest eye (viewer wanted at {viewer}, is at {seer.transform.position}), ghost {seer.InGhostMode()}, teleporting {seer.IsTeleporting()}, ray {(hit ? $"blocked by {now.collider.name} at {now.point}" : "clear")}, WakeRadius {MWConfig.Nest.WakeRadius.Value:0.#}");
+                    }
                 }
                 else
                 {
-                    ctx.Log("no floor 9 m from nest 4: the sight of the nest is not tested");
+                    ctx.Log($"no place 9 m from nest 4 with a clear line to the nest: the sight of the nest is not tested (last: {blocked})");
                 }
 
                 // ---- (d) the senses of a sleeping worm: standing still (a crouching player makes no noise) 5 m away, then the noise of a walk

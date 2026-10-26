@@ -43,20 +43,20 @@ namespace MistWorms.Colony
     }
 
     /// <summary>
-    /// The <c>mw_snap</c> byte array of the ZDO of a colony (spec §11.4, phase 7-3, decision 209), little-endian: version (1 byte), worm count (ushort); per worm 10 bytes
-    /// (3 x int16 position in cm relative to the centre of the box, int8 heading in 256 steps, int8 state with bit 7 = lone, int8 hit points x 10 capped at 127, int8 nest
-    /// index -1 to 63); the pools of the worms that have one (ushort count, then worm index in the snapshot order + a <see cref="MassPool"/> in its own byte format);
+    /// The <c>mw_snap</c> byte array of the ZDO of a colony (spec §11.4, phase 7-3, decision 209), little-endian: version (1 byte), worm count (ushort); per worm 11 bytes
+    /// (3 x int16 position in cm relative to the centre of the box, int8 heading in 256 steps, int8 state with bit 7 = lone, uint16 hit points in hundredths (0 to 655.35, the
+    /// config caps a worm at 200), int8 nest index -1 to 63). Version 1 (hit points x 10 in an int8, capped at 12.7) is no longer read: it falls under the unknown version rule; the pools of the worms that have one (ushort count, then worm index in the snapshot order + a <see cref="MassPool"/> in its own byte format);
     /// the reserve of the colony (a pool). Pure data, no game access: unit tested.
     /// </summary>
     internal static class SnapshotFormat
     {
-        public const byte Version = 1;
+        public const byte Version = 2;
         public const int HeaderBytes = 3;
-        public const int WormBytes = 10;
+        public const int WormBytes = 11;
 
         public const float PositionUnitsPerMetre = 100f;
-        public const int MaxHpCode = 127;
-        public const float HpPerCode = 0.1f;
+        public const int MaxHpCode = ushort.MaxValue;
+        public const float HpPerCode = 0.01f;
         public const byte LoneBit = 0x80;
         public const int MaxNestIndex = 63;
 
@@ -82,15 +82,15 @@ namespace MistWorms.Colony
 
         public static float HeadingFromCode(sbyte code) => (float)(code * (TwoPi / 256.0));
 
-        /// <summary>Hit points x 10 rounded, 0 to 127 (above 12.7 hit points the value is capped, below 0.05 it reads as 0).</summary>
-        public static sbyte HpCode(float hp)
+        /// <summary>Hit points in hundredths rounded, 0 to 65535 (above 655.35 hit points the value is capped, below 0.005 it reads as 0).</summary>
+        public static int HpCode(float hp)
         {
             if (!(hp > 0f)) return 0;
-            double q = Math.Round(hp * 10.0);
-            return (sbyte)(q > MaxHpCode ? MaxHpCode : (int)q);
+            double q = Math.Round(hp * 100.0);
+            return q > MaxHpCode ? MaxHpCode : (int)q;
         }
 
-        public static float HpFromCode(sbyte code) => Math.Max(0, (int)code) * HpPerCode;
+        public static float HpFromCode(int code) => code * HpPerCode;
 
         public static sbyte NestCode(int nestIndex) => (sbyte)(nestIndex < 0 || nestIndex > MaxNestIndex ? -1 : nestIndex);
 
@@ -129,8 +129,8 @@ namespace MistWorms.Colony
             ByteIO.PutShort(b, at + 4, PositionCode(rel.z));
             b[at + 6] = unchecked((byte)HeadingCode(heading));
             b[at + 7] = StateCode(state, lone);
-            b[at + 8] = (byte)HpCode(hp);
-            b[at + 9] = unchecked((byte)NestCode(nestIndex));
+            ByteIO.PutUShort(b, at + 8, HpCode(hp));
+            b[at + 10] = unchecked((byte)NestCode(nestIndex));
         }
 
         /// <summary>Worm <paramref name="index"/> of a snapshot that <see cref="TryOpen"/> accepted.</summary>
@@ -142,8 +142,8 @@ namespace MistWorms.Colony
             byte raw = data[at + 7];
             lone = (raw & LoneBit) != 0;
             stateCode = (byte)(raw & 0x7F);
-            hp = HpFromCode(unchecked((sbyte)data[at + 8]));
-            nestIndex = unchecked((sbyte)data[at + 9]);
+            hp = HpFromCode(ByteIO.GetUShort(data, at + 8));
+            nestIndex = unchecked((sbyte)data[at + 10]);
         }
 
         // ------------------------------------------------------------------ the whole array

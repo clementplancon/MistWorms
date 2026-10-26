@@ -62,7 +62,7 @@ namespace MistWorms.Tests
                 Assert.Equal(i % 2 == 0 ? (byte)WormState.Hunting : (byte)WormState.Sleeping, state);
                 Assert.Equal(i % 3 == 0, lone);
                 Assert.Equal(i % 5 == 0 ? -1 : i % 64, nest);
-                Assert.True(Math.Abs(hp - Math.Min(i * 0.25f, 12.7f)) <= 0.05f + 1e-4f, $"worm {i}: hp {hp}");
+                Assert.True(Math.Abs(hp - i * 0.25f) <= 0.005f + 1e-4f, $"worm {i}: hp {hp}");
             }
         }
 
@@ -93,13 +93,14 @@ namespace MistWorms.Tests
         [InlineData(0f, 0)]
         [InlineData(-1f, 0)]
         [InlineData(float.NaN, 0)]
-        [InlineData(0.04f, 0)]
-        [InlineData(0.05f, 1)]
-        [InlineData(10f, 100)]
-        [InlineData(12.7f, 127)]
-        [InlineData(12.8f, 127)]
-        [InlineData(500f, 127)]
-        public void HitPointsAreTenthsCappedAt127(float hp, int code)
+        [InlineData(0.004f, 0)]
+        [InlineData(0.01f, 1)]
+        [InlineData(10f, 1000)]
+        [InlineData(20f, 2000)]
+        [InlineData(200f, 20000)]
+        [InlineData(655.35f, 65535)]
+        [InlineData(5000f, 65535)]
+        public void HitPointsAreHundredthsCappedAtTheUShort(float hp, int code)
         {
             Assert.Equal(code, SnapshotFormat.HpCode(hp));
         }
@@ -108,8 +109,9 @@ namespace MistWorms.Tests
         public void HitPointsOfAHealthyWormComeBackExactly()
         {
             Assert.Equal(10f, SnapshotFormat.HpFromCode(SnapshotFormat.HpCode(10f)), 4);
-            Assert.True(Math.Abs(SnapshotFormat.HpFromCode(SnapshotFormat.HpCode(4.35f)) - 4.35f) <= 0.0501f);   // a tenth, the error is half of it
-            Assert.Equal(12.7f, SnapshotFormat.HpFromCode(SnapshotFormat.HpCode(40f)), 4);
+            Assert.True(Math.Abs(SnapshotFormat.HpFromCode(SnapshotFormat.HpCode(4.35f)) - 4.35f) <= 0.0051f);   // a hundredth, the error is half of it
+            Assert.Equal(200f, SnapshotFormat.HpFromCode(SnapshotFormat.HpCode(200f)), 3);   // the most the config allows for a worm
+            Assert.Equal(20f, SnapshotFormat.HpFromCode(SnapshotFormat.HpCode(20f)), 3);
         }
 
         [Fact]
@@ -144,7 +146,7 @@ namespace MistWorms.Tests
         public void UnknownVersionIsRefused()
         {
             byte[] data = Build(w => w.AddWorm(Vector3.zero, 0f, (byte)WormState.Idle, false, 10f, 0));
-            data[0] = 2;
+            data[0] = 1;   // the previous format (int8 hit points): refused
             Assert.False(SnapshotFormat.TryOpen(data, new MassPool(), out int n, out string problem));
             Assert.Equal(0, n);
             Assert.Contains("version", problem);

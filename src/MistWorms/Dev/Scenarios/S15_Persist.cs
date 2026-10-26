@@ -24,7 +24,7 @@ namespace MistWorms.Dev.Scenarios
     internal sealed class S15_Persist : IDevScenario
     {
         private const float PoolTolerance = 1e-3f;
-        private const float HpTolerancePerWorm = 0.06f;      // hit points are kept to a tenth
+        private const float HpTolerancePerWorm = 0.006f;     // hit points are kept to a hundredth (half of it of error)
         private const float NestPositionTolerance = 0.05f;
         private const float NestHealthTolerance = 0.01f;
         private const float FarEnough = 1000f;
@@ -37,7 +37,7 @@ namespace MistWorms.Dev.Scenarios
             public string Id;
             public string Key;      // the stable identity of the colony (MineKey), what "the same colony" means after a restart
             public int Free, Total, RunsBefore;
-            public float Hp, FreePool, Reserve;
+            public float Hp, FreePool, Reserve, PoolAll;   // PoolAll: worms + masses + reserve
             public Vector3 Door;
             public readonly List<float[]> Nests = new List<float[]>();   // index, x, y, z, health
         }
@@ -226,7 +226,7 @@ namespace MistWorms.Dev.Scenarios
             WormStore s = colony.Store;
             // The worms the snapshot keeps: a worm being absorbed (or dying) is alive in the store but is not saved, nor is it restored.
             var e = new Expect { Door = door, RunsBefore = MineSeeder.Runs, Free = KeptCount(colony) };
-            colony.DevTotals(out e.Total, out _);
+            colony.DevTotals(out e.Total, out e.PoolAll);
             e.Total += e.Free - s.AliveCount;
             for (int i = 0; i < s.HighWater; i++)
             {
@@ -290,23 +290,19 @@ namespace MistWorms.Dev.Scenarios
             ctx.Assert("one_colony_for_the_mine", sameKey == 1, 1, sameKey);
             ctx.Assert("worms_come_from_the_snapshot", colony.SnapshotRestored >= e.Free - WormTolerance, $">= {e.Free - WormTolerance} restored", $"{colony.SnapshotRestored} restored, {colony.SnapshotSkipped} left out, problem {colony.SnapshotProblem ?? "none"}");
 
-            float hp = 0f, pool = 0f;
+            // The worms of the restored colony gather into masses within a second of the restore (the game was running before the scenario could stop it), so the free worms, their hit
+            // points and their pools are no longer what was saved. Two strict comparisons instead: what the restore itself read (counters of the colony, taken at that moment), and what
+            // is conserved afterwards (worms free + in masses, loot in worms + masses + reserve).
             int outside = 0;
             for (int i = 0; i < s.HighWater; i++)
-            {
-                if (!colony.SnapshotKeeps(i)) continue;
-                hp += s.hp[i];
-                if (s.poolIndex[i] >= 0) pool += s.Pools.Get(s.poolIndex[i]).TotalAll();
-                if (!WormMath.InsideBox(s.pos[i], colony.BoxCenter, colony.BoxHalfSize)) outside++;
-            }
-            colony.DevTotals(out int total, out _);
+                if (colony.SnapshotKeeps(i) && !WormMath.InsideBox(s.pos[i], colony.BoxCenter, colony.BoxHalfSize)) outside++;
+            colony.DevTotals(out int total, out float poolAll);
             int kept = KeptCount(colony);
             total += kept - s.AliveCount;
-            ctx.Assert("free_worms_same", Mathf.Abs(kept - e.Free) <= WormTolerance, $"{e.Free} +- {WormTolerance}", kept);
-            ctx.Assert("total_worms_same", Mathf.Abs(total - e.Total) <= WormTolerance, $"{e.Total} +- {WormTolerance}", total);
-            ctx.Assert("hit_points_same", Mathf.Abs(hp - e.Hp) <= HpTolerancePerWorm * e.Free, $"{e.Hp:0.##} +- {HpTolerancePerWorm} per worm", hp);
-            ctx.Assert("worm_pools_same", Mathf.Abs(pool - e.FreePool) <= PoolTolerance, $"{e.FreePool:0.####} +- {PoolTolerance}", pool);
-            ctx.Assert("reserve_same", Mathf.Abs(colony.DevReserveTotal() - e.Reserve) <= PoolTolerance, $"{e.Reserve:0.####} +- {PoolTolerance}", colony.DevReserveTotal());
+            ctx.Assert("total_worms_same", Mathf.Abs(total - e.Total) <= WormTolerance, $"{e.Total} +- {WormTolerance} (free + in masses)", $"{total} ({kept} free)");
+            ctx.Assert("hit_points_restored_same", Mathf.Abs(colony.SnapshotRestoredHp - e.Hp) <= HpTolerancePerWorm * e.Free, $"{e.Hp:0.##} +- {HpTolerancePerWorm} per worm", colony.SnapshotRestoredHp);
+            ctx.Assert("loot_restored_same", Mathf.Abs(colony.SnapshotRestoredPool - (e.FreePool + e.Reserve)) <= PoolTolerance, $"{e.FreePool + e.Reserve:0.####} +- {PoolTolerance} (worms {e.FreePool:0.####} + reserve {e.Reserve:0.####})", colony.SnapshotRestoredPool);
+            ctx.Assert("loot_total_same", Mathf.Abs(poolAll - e.PoolAll) <= PoolTolerance, $"{e.PoolAll:0.####} +- {PoolTolerance} (worms + masses + reserve)", poolAll);
             ctx.Assert("nothing_outside_the_box", outside == 0, 0, outside);
 
             int bad = 0;
@@ -324,7 +320,7 @@ namespace MistWorms.Dev.Scenarios
             }
             ctx.Assert("nests_same", found.Count == e.Nests.Count && bad == 0, $"{e.Nests.Count} nests, same place and health", $"{found.Count} nests, {bad} different");
             ctx.Assert("not_seeded_twice", colony.Seeded && MineSeeder.Runs == expectedRuns, $"seeded, {expectedRuns} seeding(s) this session", $"seeded {colony.Seeded}, {MineSeeder.Runs} seeding(s)");
-            ctx.Log($"after: {s.AliveCount} free worms ({total} with the masses), {colony.DevCountState(WormState.Sleeping)} asleep, hit points {hp:0.##}, pool {pool:0.####} + reserve {colony.DevReserveTotal():0.####}, {found.Count} nests");
+            ctx.Log($"after: {s.AliveCount} free worms ({total} with the masses), {colony.DevCountState(WormState.Sleeping)} asleep, restored hit points {colony.SnapshotRestoredHp:0.##}, restored loot {colony.SnapshotRestoredPool:0.####}, loot now {poolAll:0.####} (reserve {colony.DevReserveTotal():0.####}), {found.Count} nests");
         }
 
         // ------------------------------------------------------------------ the notes of the save step
@@ -338,7 +334,7 @@ namespace MistWorms.Dev.Scenarios
             var doc = new Dictionary<string, object>
             {
                 ["user"] = e.User, ["id"] = e.Id, ["key"] = e.Key, ["free"] = e.Free, ["total"] = e.Total,
-                ["hp"] = e.Hp, ["pool"] = e.FreePool, ["reserve"] = e.Reserve,
+                ["hp"] = e.Hp, ["pool"] = e.FreePool, ["reserve"] = e.Reserve, ["poolAll"] = e.PoolAll,
                 ["door"] = new Dictionary<string, object> { ["x"] = e.Door.x, ["y"] = e.Door.y, ["z"] = e.Door.z },
                 ["nests"] = nests,
             };
@@ -363,7 +359,7 @@ namespace MistWorms.Dev.Scenarios
             {
                 User = MiniJson.GetString(doc, "user"), Id = MiniJson.GetString(doc, "id"), Key = MiniJson.GetString(doc, "key"),
                 Free = MiniJson.GetInt(doc, "free"), Total = MiniJson.GetInt(doc, "total"), RunsBefore = 0,
-                Hp = MiniJson.GetFloat(doc, "hp"), FreePool = MiniJson.GetFloat(doc, "pool"), Reserve = MiniJson.GetFloat(doc, "reserve"),
+                Hp = MiniJson.GetFloat(doc, "hp"), FreePool = MiniJson.GetFloat(doc, "pool"), Reserve = MiniJson.GetFloat(doc, "reserve"), PoolAll = MiniJson.GetFloat(doc, "poolAll"),
             };
             Dictionary<string, object> door = MiniJson.GetObject(doc, "door");
             e.Door = new Vector3(MiniJson.GetFloat(door, "x"), MiniJson.GetFloat(door, "y"), MiniJson.GetFloat(door, "z"));

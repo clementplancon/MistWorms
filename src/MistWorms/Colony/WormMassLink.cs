@@ -34,6 +34,7 @@ namespace MistWorms.Colony
         private const float GatherGoalInterval = 0.25f;
         private const float GatherGrace = 0.6f;              // a worm that just began to gather keeps going while the scan tables catch up
         private const float GatherStuckWindow = 1.5f;       // a worm that runs for a mass at 5.6 m/s and gains less than 0.5 m in this long is blocked (the 3 s window of §11.1 cost a straggler 6 to 9 s)
+        private const float GatherOverObstacleSeconds = 4f;   // a gatherer still stalled this long after it started to gather is pulled in over whatever lies between it and the mass (r8: a prop or a steep rock on the way kept a straggler out for 45 s)
         private const float GatherDirectSeconds = 2f;       // a stalled gatherer steers by its goal alone this long
         private const float GatherPatience = 12f;            // a gathering worm of a group that never forms hunts after this long
         private const int MaxFormPerTick = 2;
@@ -302,7 +303,8 @@ namespace MistWorms.Colony
             {
                 // Still stalled after a 2 s try by the goal alone (directUntil was set): the worm is stuck for a reason of the terrain (a ledge, a prop it stands on, a pit). With a clear
                 // line to the mass, within StalledAbsorbReach, it is pulled in over the obstacle rather than waiting for ever.
-                if (s.directUntil[i] > 0f && TryBeginAbsorb(i, mk, now, WormGather.StalledAbsorbReach)) return;
+                // After GatherOverObstacleSeconds the line need not be clear: a prop that the worm cannot climb (a wall, a steep rock) would keep it out for ever.
+                if (s.directUntil[i] > 0f && TryBeginAbsorb(i, mk, now, WormGather.StalledAbsorbReach, s.stateTime[i] >= GatherOverObstacleSeconds)) return;
                 // Waiting outside the reach of the mass for something that cannot come: for the next 2 s only the goal steers (avoidance and separation may cancel it).
                 s.directUntil[i] = now + GatherDirectSeconds;
                 GatherStalls++;
@@ -427,9 +429,10 @@ namespace MistWorms.Colony
 
         /// <summary>
         /// The worm starts to climb onto mass <paramref name="k"/> when it touches its visible envelope (<see cref="WormGather.AbsorbReach"/>) and the mass has room.
-        /// With <paramref name="farReach"/> (a stalled worm) the reach is that distance instead, and nothing solid may lie on the straight line to the mass.
+        /// With <paramref name="farReach"/> (a stalled worm) the reach is that distance instead, and nothing solid may lie on the straight line to the mass unless
+        /// <paramref name="overObstacles"/> (a worm stalled for good: it is pulled in over what blocks it).
         /// </summary>
-        private bool TryBeginAbsorb(int i, int k, float now, float farReach = 0f)
+        private bool TryBeginAbsorb(int i, int k, float now, float farReach = 0f, bool overObstacles = false)
         {
             WormStore s = Store;
             if (_masses[k].N + _masses[k].Pending >= MWConfig.Mass.MaxCount.Value) return false;
@@ -437,8 +440,8 @@ namespace MistWorms.Colony
             Vector3 q = _masses[k].Pos;
             float dx = q.x - p.x, dz = q.z - p.z;
             float reach = farReach > 0f ? farReach : WormGather.AbsorbReach(_masses[k].R);
-            if (dx * dx + dz * dz > reach * reach || Mathf.Abs(q.y - p.y) > AbsorbMaxDy) return false;
-            if (farReach > 0f)
+            if (dx * dx + dz * dz > reach * reach || Mathf.Abs(q.y - p.y) > (overObstacles ? GatherMaxDy : AbsorbMaxDy)) return false;   // a worm stalled for good at the foot of a slope is pulled in up to the height the gathering allows
+            if (farReach > 0f && !overObstacles)
             {
                 Vector3 lift = Vector3.up * WormPhysics.WallHeight;
                 if (Physics.Linecast(p + lift, q + lift, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore)) return false;
