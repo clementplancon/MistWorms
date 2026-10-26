@@ -70,8 +70,7 @@ namespace MistWorms.Mass
     }
 
     /// <summary>
-    /// Port of assets/blender/mass_layout.py, line by line (that file is the reference; assets/build/mass_layout_golden.json is the
-    /// parity contract). Floats only, hash `lowbias32`, trigonometry only through the 256 entry sine table (argument in TURNS),
+    /// Port of assets/blender/mass_layout.py, line by line (that file is the reference; parity closed, decision 176). Floats only, hash `lowbias32`, trigonometry only through the 256 entry sine table (argument in TURNS),
     /// no allocation. Local frame: +X forward, +Y up, +Z left; local -> Unity world is x*F + y*U + z*L (L = left), a proper rotation,
     /// so a worm's right axis is cross(U, F) in both frames.
     /// </summary>
@@ -111,9 +110,6 @@ namespace MistWorms.Mass
             t[256] = 0f;
             return t;
         }
-
-        /// <summary>Sum of the table (checked against the golden file).</summary>
-        public static double SinLutSum() { double s = 0; for (int i = 0; i < SinLut.Length; i++) s += SinLut[i]; return s; }
 
         // ------------------------------------------------------------------------------------------ hash
         public static uint LowBias32(uint x)

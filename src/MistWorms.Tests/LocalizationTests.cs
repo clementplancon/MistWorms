@@ -15,14 +15,14 @@ namespace MistWorms.Tests
         // Every player-visible token listed in spec §2, without the leading '$'.
         private static readonly string[] SpecTokens =
         {
-            "mw_worm", "mw_mass", "mw_mass_count", "mw_nest",
+            "mw_mass", "mw_mass_count", "mw_nest",
             "mw_se_infested_name", "mw_se_infested_desc", "mw_text_eq",
         };
 
         // Pure format strings ("{0} ({1})") are legitimately identical in both languages.
         private static readonly string[] DisplayTokens =
         {
-            "mw_worm", "mw_mass", "mw_nest", "mw_se_infested_name", "mw_se_infested_desc", "mw_text_eq",
+            "mw_mass", "mw_nest", "mw_se_infested_name", "mw_se_infested_desc", "mw_text_eq",
         };
 
         // string.Format style ({0}) and vanilla Localization.Localize(text, words) style ($1).
@@ -83,6 +83,39 @@ namespace MistWorms.Tests
                 .Where(k => PlaceholderSet(en[k]) != PlaceholderSet(fr[k]))
                 .ToList();
             Assert.Empty(mismatched);
+        }
+
+        [Fact]
+        public void EveryTokenUsedInSourceExistsInBothLanguages()
+        {
+            var used = new SortedSet<string>(StringComparer.Ordinal);
+            foreach (string file in Directory.EnumerateFiles(SourceDir(), "*.cs", SearchOption.AllDirectories))
+            {
+                string rel = file.Replace('/', '.').Replace((char)92, '.');
+                if (rel.Contains(".obj.") || rel.Contains(".bin.")) continue;
+                foreach (Match m in SourceToken.Matches(File.ReadAllText(file, Encoding.UTF8)))
+                    used.Add(m.Groups[1].Value);
+            }
+            Assert.NotEmpty(used);
+            foreach (string lang in new[] { "en", "fr" })
+            {
+                var map = Load(lang);
+                var missing = used.Where(t => !map.ContainsKey(t)).ToList();
+                Assert.True(missing.Count == 0, lang + ".json misses: " + string.Join(", ", missing));
+            }
+        }
+
+        // A token literal in the code: "$mw_something" (ZDO keys and command names carry no '$').
+        private static readonly Regex SourceToken = new Regex(@"\$(mw_[a-z0-9_]+)", RegexOptions.Compiled);
+
+        private static string SourceDir()
+        {
+            for (var dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory); dir != null; dir = dir.Parent)
+            {
+                string candidate = Path.Combine(dir.FullName, "src", "MistWorms");
+                if (Directory.Exists(candidate)) return candidate;
+            }
+            throw new DirectoryNotFoundException("src/MistWorms not found above " + AppDomain.CurrentDomain.BaseDirectory);
         }
 
         private static string PlaceholderSet(string s) =>

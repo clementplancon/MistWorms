@@ -105,6 +105,10 @@ namespace MistWorms.Colony
             view.m_distant = false;
             view.m_type = ZDO.ObjectType.Default;
 
+            // 6. The name shown on hover: Destructible is not Hoverable, so a HoverText carries the token (the vanilla egg has none).
+            HoverText hover = go.GetComponent<HoverText>() ?? go.AddComponent<HoverText>();
+            hover.m_text = MWNames.NestNameToken;
+
             go.AddComponent<WormNest>();
             summary = $"{removed} components, {children} children, {visuals} visuals and {colliders} colliders removed, box {ColliderSize}, health {d.m_health}";
         }
