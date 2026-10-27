@@ -66,11 +66,13 @@ namespace MistWorms.Dev
         /// <summary>When true each frame also sums the rises of the managed heap seen around our own Update (adds its own cost: measure the timing apart).</summary>
         public static bool MeasureAlloc;
         public static long OwnAllocBytes;
-        public static int OwnAllocFrames;       // frames of the window in which the heap rose around our own Frame (a real allocation does it in every frame, noise in a few)
+        public static int OwnAllocFrames;
+        public static long ControlAllocBytes;   // the same measure around a busy wait of the same length as our Frame: what the rest of the process allocates meanwhile (the probe reads the whole heap)
+        public static int ControlAllocFrames;       // frames of the window in which the heap rose around our own Frame (a real allocation does it in every frame, noise in a few)
 
         public static void ResetStats()
         {
-            LastMs = 0; MaxMs = 0; Frames = 0; s_sumMs = 0; OwnAllocBytes = 0; OwnAllocFrames = 0;
+            LastMs = 0; MaxMs = 0; Frames = 0; s_sumMs = 0; OwnAllocBytes = 0; OwnAllocFrames = 0; ControlAllocBytes = 0; ControlAllocFrames = 0;
         }
 
         // ---------------------------------------------------------------- load
@@ -260,6 +262,10 @@ namespace MistWorms.Dev
             {
                 long rise = Profiler.GetMonoUsedSizeLong() - heap0;
                 if (rise > 0) { OwnAllocBytes += rise; OwnAllocFrames++; }
+                long span = Stopwatch.GetTimestamp() - t0, c0 = Profiler.GetMonoUsedSizeLong(), until = Stopwatch.GetTimestamp() + span;
+                while (Stopwatch.GetTimestamp() < until) { }
+                long crise = Profiler.GetMonoUsedSizeLong() - c0;
+                if (crise > 0) { ControlAllocBytes += crise; ControlAllocFrames++; }
             }
         }
 

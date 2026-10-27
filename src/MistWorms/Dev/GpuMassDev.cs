@@ -437,6 +437,10 @@ namespace MistWorms.Dev
             public float InitMm, MaxMm;
             public int Worms, Steps;
             public string Stages, Env;
+            public float Stage10Mm;              // largest error after 10 steps, before the contacts amplify the rounding
+            public float P50Mm, P99Mm;           // percentiles of the error per node after the last stage
+            public int WormsOver1Mm;             // worms with a node over 1 mm after the last stage
+            public long StartStep = -1;          // dev A/B: the step index (time of the waves) the run starts at; -1 = whatever the host is at
         }
 
         /// <summary>
@@ -459,6 +463,7 @@ namespace MistWorms.Dev
                 Vector3 center = player != null ? player.transform.position : Vector3.zero;
                 m = GpuWormHost.CreateMass(64, center, 2.2f, 77u);
                 if (m == null) { res.Error = "no room in the GPU pool"; res.Done = true; yield break; }
+                if (res.StartStep >= 0) GpuWormHost.DevSetStepIndex((uint)res.StartStep);
                 m.ManualEnvironment = true;
                 m.DomeHeight = 0.02f;                // a layer of 5 cm: the worms lie on the ground instead of falling from a metre (the rounding of a fall is amplified by the impacts)
                 m.ForceSimulated = true;
@@ -544,11 +549,20 @@ namespace MistWorms.Dev
                     while (!snap.Done) yield return null;
                     if (snap.Error) { res.Error = "readback failed"; res.Done = true; yield break; }
                     max = 0f;
+                    var errs = new float[snap.Nodes.Length];
+                    var over = new HashSet<int>();
                     for (int i = 0; i < snap.Nodes.Length; i++)
                     {
                         Vector3 d = new Vector3(snap.Nodes[i].x - r.Pos[i].x, snap.Nodes[i].y - r.Pos[i].y, snap.Nodes[i].z - r.Pos[i].z);
-                        max = Mathf.Max(max, d.magnitude);
+                        errs[i] = d.magnitude;
+                        max = Mathf.Max(max, errs[i]);
+                        if (errs[i] > 0.001f) over.Add(i / WormSimConst.Nodes);
                     }
+                    Array.Sort(errs);
+                    res.P50Mm = errs[errs.Length / 2] * 1000f;
+                    res.P99Mm = errs[(int)(errs.Length * 0.99f)] * 1000f;
+                    res.WormsOver1Mm = over.Count;
+                    if (target == 10) res.Stage10Mm = max * 1000f;
                     stages.Append($"{target} steps {max * 1000f:0.000} mm; ");
                 }
                 res.Stages = stages.ToString();

@@ -62,8 +62,7 @@ namespace MistWorms.Render.Gpu
         public const float TransitK = 0.7f;               // pull of the head toward the next anchor of its path
         public const float AdvanceRadius = 0.12f;         // the head is at the anchor of the path when it is this close (1.5 anchor spacings: a head that must touch each anchor lost most of its time hopping)
         public const float FallTime = 2.5f;               // a worm that lets go falls for this long at most
-        public const float SolidMaxPush = 0.3f;          // a node is not pushed sideways out of the hull of the obstacles when the nearest vertical face is farther than this: the hull of two parallel walls
-                                                          // spans the passage between them, and a node there would be thrown through a wall (S08). A node on a thick obstacle is not that deep: it enters it a step at a time.
+        public const float SolidEdgePush = 0.3f;         // a node in the hull of the obstacles but not under a solid column (the nearest sample of the top map is open) is pushed out only when a vertical face is this close: the edge of a rock yes, the passage between two parallel walls (faces 1 m away) no
         public const float DispMax = 0.25f;               // largest displacement of a node of the dome in one step (15 m/s): a push, a containment or a pull can no longer throw a node tens of metres (S08)
         public const float SlideGain = 1.0f;              // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
         public const float HopTime = 0.2f;                // a head that has not reached the anchor of its path in this time goes on to the next one

@@ -126,23 +126,31 @@ namespace MistWorms.Dev.Scenarios
                 foreach (long v in drawn) minDrawn = Math.Min(minDrawn, v);
                 foreach (long v in hidden) minHidden = Math.Min(minHidden, v);
                 ctx.Log($"lowest windows: drawn {minDrawn} bytes, hidden {minHidden} bytes (difference {minDrawn - minHidden})");
-                if (operative) ctx.Assert("no_allocation_differential", minDrawn - minHidden <= DifferentialGuard, $"<= {DifferentialGuard / 1024} KB more than hidden per window (lowest windows, the floor of the noise of the process; as P4)", minDrawn - minHidden);
+                // As P4 (G, gpu): the game itself allocates 1 to 4 MB per window of 300 frames and the windows swing by 3 MB, so no differential of windows can bound the free worms; it is
+                // informative here, and the proof is the heap rise around our own Frame below, judged against a control.
+                if (operative) ctx.Note("no_allocation_differential", true, "informative: the whole process swings by MBs per window", minDrawn - minHidden);
 
                 // The heap rises around our own Update: the direct proof. Several windows (the first absorbs what the runtime does once); a real allocation rises in nearly every frame of
                 // every window, the noise of other threads in a few frames of some windows: the median window must be exactly 0 bytes, and every window is logged.
                 var ownBytes = new List<long>();
                 var ownFrames = new List<long>();
+                var ctlBytes = new List<long>();
+                var ctlFrames = new List<long>();
                 for (int w = 0; w < 6; w++)
                 {
                     GpuWorms.ResetStats();
                     GpuWorms.MeasureAlloc = true;
                     yield return ctx.WaitFrames(window);
                     GpuWorms.MeasureAlloc = false;
-                    if (w >= 1) { ownBytes.Add(GpuWorms.OwnAllocBytes); ownFrames.Add(GpuWorms.OwnAllocFrames); }
+                    if (w >= 1) { ownBytes.Add(GpuWorms.OwnAllocBytes); ownFrames.Add(GpuWorms.OwnAllocFrames); ctlBytes.Add(GpuWorms.ControlAllocBytes); ctlFrames.Add(GpuWorms.ControlAllocFrames); }
                 }
                 long medianOwn = Median(ownBytes);
-                ctx.Log($"heap rise around our own Frame per window of {window} frames: bytes [{string.Join(", ", ownBytes)}], frames with a rise [{string.Join(", ", ownFrames)}]");
-                ctx.Assert("no_allocation_own_update", medianOwn == 0 && Median(ownFrames) == 0, "0 bytes in the median window of 5 (repeated windows, first dropped)", $"median {medianOwn} bytes, windows [{string.Join(", ", ownBytes)}]");
+                ctx.Log($"heap rise around our own Frame per window of {window} frames: bytes [{string.Join(", ", ownBytes)}], frames with a rise [{string.Join(", ", ownFrames)}]; control (a busy wait of the same length, nothing of ours in it) bytes [{string.Join(", ", ctlBytes)}], frames [{string.Join(", ", ctlFrames)}]");
+                // The control: the same measure around a busy wait of the same length (nothing of ours in it) rises in as many frames and by as many bytes (a timer of the process, about
+                // once a second: 5 frames of 300, 41 to 53 KB, with or without our Frame). A real allocation of ours rises in nearly every frame.
+                long medianCtl = Median(ctlBytes), medianCtlFrames = Median(ctlFrames), medianOwnFrames = Median(ownFrames);
+                ctx.Assert("no_allocation_own_update", medianOwnFrames <= medianCtlFrames + 2 && medianOwn <= medianCtl + 16384, "no more rises than the control around a busy wait (+2 frames, +16 KB; median of 5 windows)",
+                    $"own {medianOwn} bytes in {medianOwnFrames} frames, control {medianCtl} bytes in {medianCtlFrames} frames");
 
                 // ---- lighting comparison: one GPU worm and one current worm (flipbook, Custom/Creature) side by side at 1 m, same light, same frame.
                 // Both lie along the same line (the flipbook worm faces the player, who stands 1 m behind them); the camera looks from the side.

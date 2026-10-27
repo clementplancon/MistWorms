@@ -65,8 +65,8 @@ static const float TRANSIT_K = 0.7;           // pull of the head toward the nex
 static const float ADV_R = 0.12;              // the head is at the anchor of the path when it is this close
 static const float FALL_TIME = 2.5;           // a worm that lets go falls for this long at most
 static const float HOP_TIME = 0.2;            // a head that has not reached the anchor of its path in this time goes on to the next one
-static const float SOLID_MAX_PUSH = 0.3;        // a node is not pushed sideways out of the hull when the nearest vertical face is farther than this (WormSimConst.SolidMaxPush)
-static const float DISP_MAX = 0.25;             // largest displacement of a node of the dome in one step (WormSimConst.DispMax)
+float _DevDisp;      // WormSimConst.DispMax (set every step by the host; a dev A/B can change it)
+float _DevEdge;      // WormSimConst.SolidEdgePush
 static const float SLIDE_GAIN = 1.0;           // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
 static const float BIRTH_TIME = 0.5;           // a newborn worm grows from nothing in this time, a dying one shrinks to nothing in it
 static const float PEND_SHARE = 0.08;         // share of the worms of the sleeve that hang by one end
@@ -508,6 +508,9 @@ float3 SolidPush(uint mi, MassParams m, float3 x, bool glide)
         nmax = max(nmax, _Sides[b + 768u + (uint)((iy + dy) * 16 + ix + du)]);
         tmax = max(tmax, _Sides[b + 1024u + (uint)((iz + dy) * 16 + ix + du)]);
     }
+    // The column the node is in must itself be under an obstacle (the nearest sample of the top map, not the highest of the four around it): the passage between two parallel walls is
+    // inside the hull of the side maps, and a node in it, within a cell of a wall, was thrown out through the wall (S08).
+    float tnear = _Sides[b + 1024u + (uint)(min((int)(fz + 0.5), 15) * 16 + min((int)(fx + 0.5), 15))];
     if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax)) return x;
     float best = tmax - x.y;
     int dir = 4;
@@ -516,9 +519,9 @@ float3 SolidPush(uint mi, MassParams m, float3 x, bool glide)
     if (pe < best) { best = pe; dir = 1; }
     if (ps < best) { best = ps; dir = 2; }
     if (pn < best) { best = pn; dir = 3; }
-    if (dir < 4 && best > SOLID_MAX_PUSH) return x;      // the hull of two parallel walls spans the passage between them: no push through a wall
     // Pushed out of a vertical face, the node also slides along it, toward the direction of the walk (on a face that is hit square, toward the nearer end of the face): the mass
     // flows round the obstacle instead of piling up against the face it arrived at.
+    if (dir < 4 && x.y >= tnear && best > _DevEdge) return x;      // not under a solid column and far from every face: the passage between two walls, not an edge of a rock
     float slide = glide ? (best + RAD) * SLIDE_GAIN : 0.0;
     if (dir == 0 || dir == 1)
     {
@@ -1122,14 +1125,14 @@ void KSolve(uint3 id : SV_DispatchThreadID)
             x[e] = SkinSurface(mi, nodeA[e], x[e], !pend || e == 0, off, att2);
         }
         x[e] = SolidPush(mi, m, x[e], false);       // the nodes end the step outside the obstacles (the slide of the iterations can leave one a few millimetres in)
-        float g = Ground(mi, m, x[e].x, x[e].z) + RAD;
-        if (x[e].y < g) x[e].y = g;
         if (sMode == 0u)
         {
             float3 dd = x[e] - o[e];
             float dl2 = dot(dd, dd);
-            if (dl2 > DISP_MAX * DISP_MAX) x[e] = o[e] + dd * (DISP_MAX / sqrt(dl2));
+            if (dl2 > _DevDisp * _DevDisp) x[e] = o[e] + dd * (_DevDisp / sqrt(dl2));
         }
+        float g = Ground(mi, m, x[e].x, x[e].z) + RAD;
+        if (x[e].y < g) x[e].y = g;
         float3 vel = x[e] - o[e];
         float tg = saturate(1.0 - (x[e].y - g) / 0.004);
         vel.x *= 1.0 - m.sleeve.w * tg;

@@ -445,6 +445,9 @@ namespace MistWorms.Render.Gpu
                     nmax = Math.Max(nmax, Sides[b + 768 + (iy + dy) * 16 + ix + du]);
                     tmax = Math.Max(tmax, Sides[b + 1024 + (iz + dy) * 16 + ix + du]);
                 }
+            // The column the node is in must itself be under an obstacle (the nearest sample of the top map, not the highest of the four around it): the passage between two parallel walls is
+            // inside the hull of the side maps, and a node in it, within a cell of a wall, was thrown out through the wall (S08).
+            float tnear = Sides[b + 1024 + Math.Min((int)(fz + 0.5f), 15) * 16 + Math.Min((int)(fx + 0.5f), 15)];
             if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax)) return x;
             float best = tmax - x.y;
             int dir = 4;
@@ -453,7 +456,7 @@ namespace MistWorms.Render.Gpu
             if (pe < best) { best = pe; dir = 1; }
             if (ps < best) { best = ps; dir = 2; }
             if (pn < best) { best = pn; dir = 3; }
-            if (dir < 4 && best > WormSimConst.SolidMaxPush) return x;
+            if (dir < 4 && x.y >= tnear && best > WormSimConst.SolidEdgePush) return x;      // not under a solid column and far from every face: the passage between two walls, not an edge of a rock
             float slide = glide ? (best + WormSimConst.Radius) * WormSimConst.SlideGain : 0f;
             if (dir == 0 || dir == 1)
             {
@@ -1082,14 +1085,14 @@ namespace MistWorms.Render.Gpu
                     x[e] = SkinSurface(mi, nodeA[e], x[e], !pend || e == 0, off, ref att2);
                 }
                 x[e] = SolidPush(mi, m, x[e], false);
-                float g = Ground(mi, m, x[e].x, x[e].z) + WormSimConst.Radius;
-                if (x[e].y < g) x[e].y = g;
                 if (sMode == 0u)
                 {
                     Vector3 dd = x[e] - o[e];
                     float dl2 = Dot(dd, dd);
                     if (dl2 > WormSimConst.DispMax * WormSimConst.DispMax) x[e] = o[e] + Scale(dd, WormSimConst.DispMax / (float)Math.Sqrt(dl2));
                 }
+                float g = Ground(mi, m, x[e].x, x[e].z) + WormSimConst.Radius;
+                if (x[e].y < g) x[e].y = g;
                 Vector3 vel = x[e] - o[e];
                 float tg = Sat(1f - (x[e].y - g) / 0.004f);
                 vel.x *= 1f - m.Sleeve.w * tg;

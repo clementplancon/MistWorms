@@ -178,6 +178,10 @@ namespace MistWorms.Render.Gpu
 
         /// <summary>Resets the clock of the creep waves (the parity check runs the same steps twice).</summary>
         internal static void ResetStepIndex() => StepIndex = 0;
+#if MW_DEV
+        /// <summary>Dev (V14 parity A/B): the time of the simulation, the argument of the waves.</summary>
+        internal static void DevSetStepIndex(uint v) => StepIndex = v;
+#endif
 
         // ---- main thread cost of Tick (environment capture, upload, dispatches, submission)
         public static double LastMs { get; private set; }
@@ -194,6 +198,12 @@ namespace MistWorms.Render.Gpu
         /// <summary>When true each Tick also sums the rises of the managed heap seen around itself (adds its own cost: measure the timing apart).</summary>
         public static bool MeasureAlloc;
         public static long OwnAllocBytes;
+        /// <summary>Dev A/B (V12 params disp, edge): the displacement cap and the edge push of the shader (the constants of WormSimConst by default).</summary>
+        public static float DevDispMax = WormSimConst.DispMax, DevEdgePush = WormSimConst.SolidEdgePush;
+        private static readonly int DevDispId = Shader.PropertyToID("_DevDisp"), DevEdgeId = Shader.PropertyToID("_DevEdge");
+        public static int OwnAllocFrames;           // frames of the window with a rise around the Tick
+        public static long ControlAllocBytes;       // the same measure around a busy wait as long as the Tick (nothing of ours in it): what the rest of the process allocates meanwhile
+        public static int ControlAllocFrames;
 
         public static GraphicsBuffer PosBuffer => s_pos;
         internal static GraphicsBuffer AnchorsBuffer => s_anchors;
@@ -207,7 +217,7 @@ namespace MistWorms.Render.Gpu
 
         public static void ResetStats()
         {
-            LastMs = 0; MaxMs = 0; Frames = 0; s_sumMs = 0; OwnAllocBytes = 0;
+            LastMs = 0; MaxMs = 0; Frames = 0; s_sumMs = 0; OwnAllocBytes = 0; OwnAllocFrames = 0; ControlAllocBytes = 0; ControlAllocFrames = 0;
         }
 
         // ---------------------------------------------------------------- init
@@ -666,6 +676,8 @@ namespace MistWorms.Render.Gpu
         {
             int n = WormsInUse;
             if (n == 0) return;
+            s_cs.SetFloat(DevDispId, DevDispMax);
+            s_cs.SetFloat(DevEdgeId, DevEdgePush);
             s_cs.SetInt(StepIndexId, (int)StepIndex);
             s_cs.Dispatch(kClear, WormSimConst.GridCells * WormSimConst.GridSlots / 256, 1, 1);
             s_cs.Dispatch(kPredict, (n + 63) / 64, 1, 1);
@@ -749,7 +761,11 @@ namespace MistWorms.Render.Gpu
             if (MeasureAlloc)
             {
                 long rise = UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong() - heap0;
-                if (rise > 0) OwnAllocBytes += rise;
+                if (rise > 0) { OwnAllocBytes += rise; OwnAllocFrames++; }
+                long span = Stopwatch.GetTimestamp() - t0, c0 = UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong(), until = Stopwatch.GetTimestamp() + span;
+                while (Stopwatch.GetTimestamp() < until) { }
+                long crise = UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong() - c0;
+                if (crise > 0) { ControlAllocBytes += crise; ControlAllocFrames++; }
             }
         }
 

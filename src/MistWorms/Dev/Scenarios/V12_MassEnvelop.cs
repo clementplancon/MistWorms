@@ -43,6 +43,8 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert("gpu_available", gpu, true, gpu ? "ready" : (GpuWormHost.Error ?? GpuWormBundle.Error ?? "off"));
                 if (!gpu) yield break;
 
+                GpuWormHost.DevDispMax = ctx.ParamFloat("disp", WormSimConst.DispMax);        // dev A/B of the shader constants
+                GpuWormHost.DevEdgePush = ctx.ParamFloat("edge", WormSimConst.SolidEdgePush);
                 ctx.Console("mw_kill");
                 DevPreview.Instance.Clear();
                 if (ClutterSystem.instance != null)
@@ -267,6 +269,8 @@ namespace MistWorms.Dev.Scenarios
             }
             finally
             {
+                GpuWormHost.DevDispMax = WormSimConst.DispMax;
+                GpuWormHost.DevEdgePush = WormSimConst.SolidEdgePush;
                 DevCamera.Provider = null;
                 DevCamera.Follow();
                 if (mass != null) MassDev.Destroy(mass);
