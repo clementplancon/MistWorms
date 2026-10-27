@@ -398,8 +398,8 @@ namespace MistWorms.Dev.Scenarios
                 // the rock site is searched from the fixed site, with nothing remembered: the same rock on every run
                 yield return ReturnToSite(ctx, fixedSite);
                 DevWorld.ResetLastGoodSite();
-                yield return DevWorld.MoveToOpenGround(3f, p => !NearBuilt(p, BuiltClearance) && !NearWater(p, WaterClearance) && FindRock(p, 6f, 16f) != null, rockSite, ctx.Log);
-                ctx.Assert("rock_site_found", rockSite.Found, "flat ground with a vanilla rock 6 to 16 m away", rockSite.Found ? rockSite.Spot.ToString() : rockSite.Error);
+                yield return DevWorld.MoveToOpenGround(3f, p => !NearBuilt(p, BuiltClearance) && !NearWater(p, WaterClearance) && V12_MassEnvelop.EnvelopRock(p, GpuMassDev.RadiusOf(Counts[Counts.Length - 1])) != null, rockSite, ctx.Log);
+                ctx.Assert("rock_site_found", rockSite.Found, "flat ground with a vanilla rock 6 to 16 m away, 1.8 to 3.5 m high and 2 to 4 m across (decision 261)", rockSite.Found ? rockSite.Spot.ToString() : rockSite.Error);
                 onRockSite = rockSite.Found;
                 player = Player.m_localPlayer;
                 if (player == null) yield break;
@@ -425,7 +425,7 @@ namespace MistWorms.Dev.Scenarios
                     GpuMassDev.Clear();
 
                     // a high obstacle: a vanilla rock, higher than the dome, which the mass goes round
-                    Collider rock = onRockSite ? FindRock(player.transform.position, 4f, 20f) : null;
+                    Collider rock = onRockSite ? V12_MassEnvelop.EnvelopRock(rockSite.Spot, r) : null;      // the rule of V12 (decision 257): tall enough that the mass goes round it, the same call as the site test
                     string kind = rock != null ? "vanilla rock " + rock.transform.root.name : null;
                     if (rock == null)
                     {
@@ -781,30 +781,6 @@ namespace MistWorms.Dev.Scenarios
             return !(attrs.Length > 0 && ((DebuggableAttribute)attrs[0]).IsJITOptimizerDisabled);
         }
 
-        /// <summary>The closest vanilla rock between <paramref name="min"/> and <paramref name="max"/> metres from <paramref name="from"/>: a solid collider of a rock prefab, 1 to 6 m across.</summary>
-        internal static Collider FindRock(Vector3 from, float min, float max)
-        {
-            int mask = LayerMask.GetMask(VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, VanillaNames.LayerDefaultSmall);
-            Collider best = null;
-            float bestDist = float.MaxValue;
-            foreach (Collider col in Physics.OverlapSphere(from, max, mask, QueryTriggerInteraction.Ignore))
-            {
-                if (col == null || col.GetType().Name == "TerrainCollider") continue;
-                string root = col.transform.root.name;
-                bool rock = root.IndexOf("rock", StringComparison.OrdinalIgnoreCase) >= 0 || col.GetComponentInParent<MineRock5>() != null || col.GetComponentInParent<MineRock>() != null;
-                if (!rock) continue;
-                Vector3 e = col.bounds.extents;
-                float across = Mathf.Max(e.x, e.z) * 2f;
-                if (across < 1f || across > 6f || e.y * 2f < 0.6f) continue;
-                Vector3 d = col.bounds.center - from; d.y = 0f;
-                float dist = d.magnitude;
-                if (dist < min || dist >= bestDist) continue;
-                best = col;
-                bestDist = dist;
-            }
-            return best;
-        }
-
         /// <summary>A stone piece (or a plain solid block when the prefab is not there) of 2 x 1 x 0.6 m standing on the ground at <paramref name="pos"/>.</summary>
         /// <summary>A solid block of the given size standing on the ground at <paramref name="pos"/> (the low and the fallback high obstacle).</summary>
         internal static GameObject PlaceBlock(Vector3 pos, Vector3 size, string name, Quaternion? rotation = null)
@@ -829,6 +805,7 @@ namespace MistWorms.Dev.Scenarios
         private static IEnumerator CrossObstacle(ScenarioContext ctx, Player player, Vector3 fwd, string tag, int n, Collider obst, float obstH, bool high, bool clip)
         {
             float r = GpuMassDev.RadiusOf(n);
+            bool debug = ctx.ParamBool("debug", false);       // debug=1: for each snapshot, the depth in the hull and the branch of SolidPush of the nodes found inside the obstacle
             Bounds b = obst.bounds;
             Vector3 toPlayer = player.transform.position - b.center; toPlayer.y = 0f;
             toPlayer = toPlayer.sqrMagnitude > 1e-3f ? toPlayer.normalized : -fwd;
@@ -890,7 +867,8 @@ namespace MistWorms.Dev.Scenarios
             float upOn = Mathf.Min(0.3f, 0.5f * obstH), upFlank = Mathf.Min(0.1f, 0.25f * obstH);
             var pTops = new List<float>(); var pFlanks = new List<float>(); var pFoots = new List<float>(); var pNears = new List<float>();
             float pInWorst = 0f, lowestOverall = float.MaxValue, highestNode = float.MinValue;
-            int belowTotal = 0, taken = 0, sampledLast = 0, sideLast = 0, farLast = 0;
+            int belowTotal = 0, taken = 0, sampledLast = 0, sideLast = 0, farLast = 0, insideLogged = 0;
+            var insideBranches = new Dictionary<string, int>();
             for (int w = 0; w < Windows; w++)
             {
                 if (w > 0) yield return ctx.WaitSteps(WindowGapSteps);
@@ -912,7 +890,17 @@ namespace MistWorms.Dev.Scenarios
                     if (e >= 1f && e < 1.8f && up < 0.15f) foot++;
                     if (i % 7 != 0) continue;
                     sampled++;
-                    if (Physics.CheckSphere(p, 0.004f, mask, QueryTriggerInteraction.Ignore)) inside++;
+                    if (Physics.CheckSphere(p, 0.004f, mask, QueryTriggerInteraction.Ignore))
+                    {
+                        inside++;
+                        if (debug && snap.Sides != null)
+                        {
+                            string branch = WormSimRef.SolidProbe(snap.Sides, snap.Params, new Vector3(snap.Nodes[i].x, snap.Nodes[i].y, snap.Nodes[i].z), out float hullDepth);
+                            insideBranches.TryGetValue(branch, out int seen);
+                            insideBranches[branch] = seen + 1;
+                            if (insideLogged++ < 12) ctx.Log($"{tag} snapshot {w}: node {i} in the obstacle, {hullDepth * 1000f:0} mm deep in the hull, SolidPush branch '{branch}', {up:0.00} m over the bare ground, e {e:0.00}");
+                        }
+                    }
                     if (Vector3.Dot(d, toPlayer) > 0f) sideCount++; else farCount++;
                     bool close = false;
                     foreach (Collider c in Physics.OverlapSphere(p, 0.05f, mask, QueryTriggerInteraction.Ignore)) if (c == obst) { close = true; break; }
@@ -925,6 +913,12 @@ namespace MistWorms.Dev.Scenarios
                 belowTotal += below;
                 taken++;
                 sampledLast = sampled; sideLast = sideCount; farLast = farCount;
+            }
+            if (debug && insideBranches.Count > 0)
+            {
+                var parts = new List<string>();
+                foreach (KeyValuePair<string, int> kv in insideBranches) parts.Add($"{kv.Key} {kv.Value}");
+                ctx.Log($"{tag} nodes in the obstacle by SolidPush branch (all snapshots, sampled nodes): {string.Join(", ", parts.ToArray())}");
             }
             if (taken > 0)
             {

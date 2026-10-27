@@ -237,6 +237,7 @@ namespace MistWorms.Dev
             public GpuSleevePlan Plan;
             public float SurfaceArea;
             public GpuMassParams Params;
+            public float[] Sides;                  // the 5 obstacle maps the host published (a copy at the time of the request; the GPU holds them with up to 1/8 s of delay), for the dev diagnostic WormSimRef.SolidProbe
             public float Time;
             public uint MassSeed;
             public Vector3 Right, BodyCenter;
@@ -381,6 +382,8 @@ namespace MistWorms.Dev
             snap.Plan = m.SleevePlan;
             snap.SurfaceArea = m.SurfaceArea;
             snap.MassSeed = m.Seed;
+            snap.Sides = new float[m.Sides.Length];
+            m.Sides.CopyTo(snap.Sides);
             if (Target != null) { snap.Right = Target.transform.right; snap.BodyCenter = Target.bounds.center; }
             for (int i = 0; i < hn; i++) snap.Heights[i] = m.Heights[i];
             snap.Pending = m.AnchorCount > 0 ? 5 : 4;

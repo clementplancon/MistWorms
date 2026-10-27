@@ -803,6 +803,12 @@ namespace MistWorms.Dev.Scenarios
             }
             ctx.Log($"EXCESS node {node % WormSimConst.Nodes} of worm {w} at world {world}, lateral {lateral:0.00} m (limit {corridor.Width * 0.5f + 0.1f:0.00}); skin mode {mode}, arm {arm}, pseudo {snap.Params.Pseudo}, plan2 {snap.Params.Plan2}, worms {snap.Worms}; " +
                     $"origin: snapshot {snap.Origin}, params {snap.Params.Origin}, live {gm.Origin}, centre live {gm.Center}, params centre {snap.Params.Center}, mass {mass.transform.position}; local nodes{sb}");
+            if (snap.Sides != null)
+            {
+                string branch = WormSimRef.SolidProbe(snap.Sides, snap.Params, new Vector3(snap.Nodes[node].x, snap.Nodes[node].y, snap.Nodes[node].z), out float hullDepth);
+                float gx = (snap.Nodes[node].x - snap.Params.GridRect.x) * snap.Params.GridRect.w, gz = (snap.Nodes[node].z - snap.Params.GridRect.y) * snap.Params.GridRect.w;
+                ctx.Log($"EXCESS node: SolidPush branch '{branch}', {hullDepth * 1000f:0} mm deep in the hull, grid cell ({gx:0.0}, {gz:0.0}) of 0..15, grid rect {snap.Params.GridRect}");
+            }
             int far = 0, total = snap.Worms * WormSimConst.Nodes;
             for (int q = 0; q < total; q++)
             {

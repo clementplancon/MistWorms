@@ -301,6 +301,83 @@ namespace MistWorms.Tests
             else Assert.True(west > 0.01f * n * K, "the worms pile at the foot of the tall block");
         }
 
+        private const float WallX = -0.9f;
+
+        /// <summary>A mass of 3 m radius with a wall of depth maps: the solid fills x from <see cref="WallX"/> to 3 m, 3 m high; worm 0 is laid straight along z, <paramref name="depth"/> inside its west face.</summary>
+        private static WormSimRef SunkWorm(float depth)
+        {
+            const int n = 50;
+            WormSimRef sim = Build(n, 3f);
+            GpuMassParams m = sim.Masses[0];
+            m.Side = new Vector4(-0.5f, 0.3f, 1f / 0.3f, 1f);
+            sim.Masses[0] = m;
+            GpuSolidMaps.FillBox(sim.Sides, 0, m, new Vector3(WallX, 0f, -3f), new Vector3(3f, 3f, 3f));
+            sim.Init(0, n);
+            sim.Step(2);
+            for (int i = 0; i < K; i++)
+            {
+                var p = new Vector4(WallX + depth, 0.3f, (i - 3.5f) * WormSimConst.SegLen, 1f);
+                sim.Pos[i] = p; sim.Prev[i] = p; sim.Pred[i] = p;
+            }
+            return sim;
+        }
+
+        private static float Depth(WormSimRef sim)
+        {
+            float d = float.MinValue;
+            for (int i = 0; i < K; i++) d = Math.Max(d, sim.Pos[i].x - WallX);
+            return d;       // the deepest node (positive: inside the solid)
+        }
+
+        [Fact]
+        public void ANodeSunkByTenCentimetresLeavesTheObstacleInOneStep()
+        {
+            WormSimRef sim = SunkWorm(0.1f);
+            sim.Step(1);
+            _out.WriteLine($"deepest node after one step: {Depth(sim) * 1000f:0.0} mm");
+            Assert.True(Depth(sim) < 0.004f, $"still {Depth(sim) * 1000f} mm inside");
+        }
+
+        [Fact]
+        public void ANodeSunkByOneMetreLeavesByAtMostTwoCapsAStep()
+        {
+            // The displacement is capped to DispMax first, then the push out of the obstacle (capped to DispMax as well) has the last word: 0.25 m for the cap, up to 0.25 m more for the push.
+            // Before (the push, then the cap toward the old position) it was 0.25 m a step at best, and the cap undid the push of a node that was deep.
+            WormSimRef sim = SunkWorm(1f);
+            var depths = new System.Collections.Generic.List<float> { Depth(sim) };
+            for (int s = 0; s < 6; s++) { sim.Step(1); depths.Add(Depth(sim)); }
+            _out.WriteLine("deepest node per step: " + string.Join(", ", depths.ConvertAll(d => (d * 1000f).ToString("0")).ToArray()) + " mm");
+            for (int s = 1; s < depths.Count; s++)
+            {
+                float gain = depths[s - 1] - depths[s];
+                if (depths[s - 1] > 0.02f) Assert.True(gain >= WormSimConst.DispMax - 0.02f, $"step {s}: only {gain * 1000f} mm out");
+                Assert.True(gain <= 2f * WormSimConst.DispMax + 0.02f, $"step {s}: {gain * 1000f} mm out in one step, more than the cap and the push");
+            }
+            Assert.True(depths[depths.Count - 1] < 0.004f, "out of the solid after 6 steps");
+        }
+
+        [Fact]
+        public void ANodeOutsideTheGridIsPushedOutByTheEdgeCell()
+        {
+            // a rock wider than the grid: its depth maps stop at the edge of the grid (1.1 m) but the solid goes on to 6 m; a node 0.5 m beyond the edge, inside it, is pushed out like one inside the grid
+            WormSimRef sim = Build(50, 0.5f);
+            GpuMassParams m = sim.Masses[0];
+            m.Side = new Vector4(-0.5f, 0.3f, 1f / 0.3f, 1f);
+            sim.Masses[0] = m;
+            GpuSolidMaps.FillBox(sim.Sides, 0, m, new Vector3(0.5f, 0f, -6f), new Vector3(6f, 3f, 6f));
+            float edge = m.GridRect.x + 15f * m.GridRect.z;
+            var inGrid = new Vector3(0.8f, 0.3f, 0f);
+            var beyond = new Vector3(edge + 0.5f, 0.3f, 0f);
+            Assert.True(beyond.x > edge);
+            Assert.Equal(0.5f - WormSimConst.Radius, sim.SolidPush(0, m, inGrid, false).x, 4);
+            Assert.Equal(0.5f - WormSimConst.Radius, sim.SolidPush(0, m, beyond, false).x, 4);
+            // above the rows of the maps there is nothing to read
+            var above = new Vector3(beyond.x, 6f, 0f);
+            Assert.Equal(above, sim.SolidPush(0, m, above, false));
+            Assert.Equal("edge west", WormSimRef.SolidProbe(sim.Sides, m, beyond, out float depth));
+            Assert.Equal(beyond.x - 0.5f, depth, 3);
+        }
+
         [Fact]
         public void TwoRunsGiveTheSameBits()
         {

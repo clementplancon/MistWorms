@@ -429,10 +429,12 @@ namespace MistWorms.Render.Gpu
         public Vector3 SolidPush(int mi, in GpuMassParams m, Vector3 x, bool glide = true)
         {
             if (m.Side.w < 0.5f) return x;
-            float fx = (x.x - m.GridRect.x) * m.GridRect.w;
-            float fz = (x.z - m.GridRect.y) * m.GridRect.w;
+            // Beyond the grid sideways the maps are read at their edge cell (the obstacle goes on past the edge: a wall thicker than the margin of the grid, a rock wider than it, S08/V12);
+            // above and below the rows there is nothing to read.
+            float fx = Math.Min(Math.Max((x.x - m.GridRect.x) * m.GridRect.w, 0f), 15f);
+            float fz = Math.Min(Math.Max((x.z - m.GridRect.y) * m.GridRect.w, 0f), 15f);
             float fy = (x.y - m.Side.x) * m.Side.z;
-            if (fx < 0f || fz < 0f || fy < 0f || fx > 15f || fz > 15f || fy > 15f) return x;
+            if (fy < 0f || fy > 15f) return x;
             int ix = (int)Math.Min(fx, 14f), iz = (int)Math.Min(fz, 14f), iy = (int)Math.Min(fy, 14f);
             int b = mi * WormSimConst.SideMaps * WormSimConst.SideMapSize;
             float wmin = 1e6f, emax = -1e6f, smin = 1e6f, nmax = -1e6f, tmax = -1e6f;
@@ -474,6 +476,46 @@ namespace MistWorms.Render.Gpu
             else if (dir == 3) x.z = nmax + WormSimConst.Radius;
             else x.y = tmax + WormSimConst.Radius;
             return x;
+        }
+
+        /// <summary>
+        /// Dev diagnostic, not a port: which branch of <see cref="SolidPush"/> treats a node and how deep it is in the hull of the obstacles. <paramref name="sides"/> is the 5 maps of one mass
+        /// (offset 0). Returns "rows" (above or below the rows of the maps: nothing is read), "free (...)" (outside the hull, with the edges read), "open" (inside the hull, not under a solid column and far from every
+        /// face: not pushed) or the face it leaves by ("west", "east", "south", "north", "top"); an "edge " prefix says the node is beyond the grid sideways (read at the edge cell).
+        /// <paramref name="depth"/> is the penetration along that axis (m).
+        /// </summary>
+        public static string SolidProbe(float[] sides, in GpuMassParams m, Vector3 x, out float depth)
+        {
+            depth = 0f;
+            if (m.Side.w < 0.5f) return "rows";
+            float rx = (x.x - m.GridRect.x) * m.GridRect.w, rz = (x.z - m.GridRect.y) * m.GridRect.w;
+            string edge = rx < 0f || rx > 15f || rz < 0f || rz > 15f ? "edge " : string.Empty;
+            float fx = Math.Min(Math.Max(rx, 0f), 15f), fz = Math.Min(Math.Max(rz, 0f), 15f);
+            float fy = (x.y - m.Side.x) * m.Side.z;
+            if (fy < 0f || fy > 15f) return "rows";
+            int ix = (int)Math.Min(fx, 14f), iz = (int)Math.Min(fz, 14f), iy = (int)Math.Min(fy, 14f);
+            float wmin = 1e6f, emax = -1e6f, smin = 1e6f, nmax = -1e6f, tmax = -1e6f;
+            for (int dy = 0; dy < 2; dy++)
+                for (int du = 0; du < 2; du++)
+                {
+                    wmin = Math.Min(wmin, sides[(iy + dy) * 16 + iz + du]);
+                    emax = Math.Max(emax, sides[256 + (iy + dy) * 16 + iz + du]);
+                    smin = Math.Min(smin, sides[512 + (iy + dy) * 16 + ix + du]);
+                    nmax = Math.Max(nmax, sides[768 + (iy + dy) * 16 + ix + du]);
+                    tmax = Math.Max(tmax, sides[1024 + (iz + dy) * 16 + ix + du]);
+                }
+            float tnear = sides[1024 + Math.Min((int)(fz + 0.5f), 15) * 16 + Math.Min((int)(fx + 0.5f), 15)];
+            if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax)) return edge + $"free (x {x.x:0.00} y {x.y:0.00} z {x.z:0.00}; west {wmin:0.00} east {emax:0.00} south {smin:0.00} north {nmax:0.00} top {tmax:0.00})";
+            float best = tmax - x.y;
+            int dir = 4;
+            float pw = x.x - wmin, pe = emax - x.x, ps = x.z - smin, pn = nmax - x.z;
+            if (pw < best) { best = pw; dir = 0; }
+            if (pe < best) { best = pe; dir = 1; }
+            if (ps < best) { best = ps; dir = 2; }
+            if (pn < best) { best = pn; dir = 3; }
+            depth = best;
+            if (dir < 4 && x.y >= tnear && best > WormSimConst.SolidEdgePush) return edge + "open";
+            return edge + (dir == 0 ? "west" : dir == 1 ? "east" : dir == 2 ? "south" : dir == 3 ? "north" : "top");
         }
 
         /// <summary>A node behind the surface of the nearest anchor is pushed out along its normal (the worms do not go through the body).</summary>
@@ -1084,13 +1126,21 @@ namespace MistWorms.Render.Gpu
                     float att2 = 0f;
                     x[e] = SkinSurface(mi, nodeA[e], x[e], !pend || e == 0, off, ref att2);
                 }
-                x[e] = SolidPush(mi, m, x[e], false);
+                // the displacement is capped first and the obstacle has the last word: the push out of the obstacle (itself capped to the same DispMax, so that a deep node leaves a step at a
+                // time and is not thrown through a wall) is never undone by the cap
                 if (sMode == 0u)
                 {
                     Vector3 dd = x[e] - o[e];
                     float dl2 = Dot(dd, dd);
                     if (dl2 > WormSimConst.DispMax * WormSimConst.DispMax) x[e] = o[e] + Scale(dd, WormSimConst.DispMax / (float)Math.Sqrt(dl2));
                 }
+                Vector3 dpush = SolidPush(mi, m, x[e], false) - x[e];
+                if (sMode == 0u)
+                {
+                    float dp2 = Dot(dpush, dpush);
+                    if (dp2 > WormSimConst.DispMax * WormSimConst.DispMax) dpush = Scale(dpush, WormSimConst.DispMax / (float)Math.Sqrt(dp2));
+                }
+                x[e] += dpush;
                 float g = Ground(mi, m, x[e].x, x[e].z) + WormSimConst.Radius;
                 if (x[e].y < g) x[e].y = g;
                 Vector3 vel = x[e] - o[e];

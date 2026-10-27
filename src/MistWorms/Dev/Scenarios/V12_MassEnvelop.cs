@@ -149,7 +149,7 @@ namespace MistWorms.Dev.Scenarios
                     // the AI hunts the player; when the rock hides him the dev goal (his position) takes over after 3 s so that the test measures the crossing, not the sight
                     float t0 = Time.time;
                     bool devGoal = false;
-                    float maxNear = 0f, maxInside = 0f, minRockDistance = float.MaxValue;
+                    float maxNear = 0f, maxInside = 0f, maxTouching = 0f, minRockDistance = float.MaxValue;
                     int snapshots = 0;
                     bool reached = false, passShot = false, contactShot = false;
                     float flatStop = r + Mathf.Max(0.3f, 0.6f);
@@ -172,7 +172,7 @@ namespace MistWorms.Dev.Scenarios
                             while (!snap.Done && Time.time < until) yield return null;
                             if (snap.Done && !snap.Error)
                             {
-                                Measure(snap, rock, out float near, out float inside);
+                                Measure(snap, rock, out float near, out float inside, out float touching);
                                 if (near > maxNear && near >= 0.1f && !contactShot)
                                 {
                                     contactShot = true;
@@ -180,15 +180,16 @@ namespace MistWorms.Dev.Scenarios
                                 }
                                 maxNear = Mathf.Max(maxNear, near);
                                 maxInside = Mathf.Max(maxInside, inside);
+                                maxTouching = Mathf.Max(maxTouching, touching);
                                 snapshots++;
                             }
                         }
                         float next = Time.time + PollSeconds;
                         while (Time.time < next) yield return null;
                     }
-                    ctx.Log($"round the rock: {snapshots} snapshots, nodes within 5 cm of the rock up to {maxNear:0.0} %, inside it up to {maxInside:0.00} %, closest approach of the centre {minRockDistance:0.0} m, reached the player {reached}");
+                    ctx.Log($"round the rock: {snapshots} snapshots, nodes within 5 cm of the rock up to {maxNear:0.0} %, inside it (in its box and within 4 mm of its collider) up to {maxInside:0.00} %, within 4 mm of any collider (the rock included) up to {maxTouching:0.00} %, closest approach of the centre {minRockDistance:0.0} m, reached the player {reached}");
                     ctx.Assert("round_snapshots", snapshots >= 3, ">= 3 snapshots of the nodes while it passes the rock", snapshots);
-                    ctx.Assert("round_no_node_in_the_rock", maxInside < 2f, "< 2 % of the sampled nodes inside the rock", maxInside.ToString("0.00"));
+                    ctx.Assert("round_no_node_in_the_rock", maxInside < 2f, "< 2 % of the sampled nodes inside the rock (in the box of its bounds, shrunk by 4 mm, and within 4 mm of its collider; touching another collider does not count)", maxInside.ToString("0.00"));
                     ctx.Assert("round_nodes_against_the_rock", maxNear >= 0.1f, ">= 0.1 % of the sampled nodes within 5 cm of the rock while it goes round (measured 0.3 to 1.3 % in game: the mass flows past the flank and only its leading nodes touch it; 0.1 % fails a mass that keeps away or goes through; judge the captures round_the_rock_*)", maxNear.ToString("0.0"));
                     ctx.Assert("round_reaches_the_player", reached, "the mass reaches the player (within its engulf range)", reached);
                     yield return V14_GpuMassSandbox.Shots(ctx, "round_end", () => mass != null ? mass.transform.position : rb.center, side, dir, 0.3f, rock);
@@ -264,8 +265,25 @@ namespace MistWorms.Dev.Scenarios
                                 while (!snap.Done && Time.time < until) yield return null;
                                 if (snap.Done && !snap.Error)
                                 {
-                                    Measure(snap, stone, out _, out float insideAny);
+                                    Measure(snap, stone, out _, out _, out float insideAny);
                                     float inside = InsideBox(snap, stone);
+                                    if (ctx.ParamBool("debug", false) && snap.Sides != null)
+                                    {
+                                        // debug=1: the nodes more than 4 mm inside the stone: depth in the hull and branch of SolidPush, rows of the side maps (their heights over the bare ground)
+                                        Transform st = stone.transform;
+                                        Vector3 sh = new Vector3(st.lossyScale.x, st.lossyScale.y, st.lossyScale.z) * 0.5f;
+                                        int shown = 0;
+                                        for (int i = 0; i < snap.Worms * 8 && shown < 8; i += 7)
+                                        {
+                                            Vector3 wp = new Vector3(snap.Nodes[i].x + snap.Origin.x, snap.Nodes[i].y + snap.Origin.y, snap.Nodes[i].z + snap.Origin.z);
+                                            Vector3 l = st.InverseTransformPoint(wp);
+                                            l = new Vector3(l.x * st.lossyScale.x, l.y * st.lossyScale.y, l.z * st.lossyScale.z);
+                                            if (!(Mathf.Abs(l.x) < sh.x - 0.004f && Mathf.Abs(l.y) < sh.y - 0.004f && Mathf.Abs(l.z) < sh.z - 0.004f)) continue;
+                                            string br = WormSimRef.SolidProbe(snap.Sides, snap.Params, new Vector3(snap.Nodes[i].x, snap.Nodes[i].y, snap.Nodes[i].z), out float hd);
+                                            ctx.Log($"stone node {i}: {(sh.y - l.y) * 1000f:0} mm under its top, {hd * 1000f:0} mm deep in the hull, branch '{br}', side rows from {snap.Params.Side.x + snap.Origin.y - sb.min.y:0.00} m step {snap.Params.Side.y:0.00} m (relative to the stone base)");
+                                            shown++;
+                                        }
+                                    }
                                     maxInsideAny = Mathf.Max(maxInsideAny, insideAny);
                                     int on = 0, total = 0;
                                     for (int i = 0; i < snap.Worms * 8; i++)
@@ -425,20 +443,30 @@ namespace MistWorms.Dev.Scenarios
             return 100f * inside / Mathf.Max(1, sampled);
         }
 
-        private static void Measure(GpuMassDev.NodeSnapshot snap, Collider col, out float near, out float inside)
+        /// <summary>
+        /// Percentages of the sampled nodes: within 5 cm of <paramref name="col"/> (near), inside it (<paramref name="inside"/>: in the box of its bounds shrunk by 4 mm, as <see cref="InsideBox"/>, and
+        /// within 4 mm of its collider, so that the corners of the box of a round rock do not count), and within 4 mm of any collider of the mask, <paramref name="col"/> included (touching).
+        /// </summary>
+        private static void Measure(GpuMassDev.NodeSnapshot snap, Collider col, out float near, out float inside, out float touching)
         {
             int mask = LayerMask.GetMask(VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, VanillaNames.LayerDefaultSmall, VanillaNames.LayerPiece);
-            int sampled = 0, nearCount = 0, insideCount = 0;
+            Bounds box = col.bounds;
+            box.Expand(-0.008f);       // 4 mm on each side
+            int sampled = 0, nearCount = 0, insideCount = 0, touchCount = 0;
             for (int i = 0; i < snap.Worms * 8; i += 7)
             {
                 Vector3 p = new Vector3(snap.Nodes[i].x + snap.Origin.x, snap.Nodes[i].y + snap.Origin.y, snap.Nodes[i].z + snap.Origin.z);
                 sampled++;
-                if (Physics.CheckSphere(p, 0.004f, mask, QueryTriggerInteraction.Ignore)) insideCount++;
+                if (Physics.CheckSphere(p, 0.004f, mask, QueryTriggerInteraction.Ignore)) touchCount++;
                 foreach (Collider c in Physics.OverlapSphere(p, 0.05f, mask, QueryTriggerInteraction.Ignore))
                     if (c == col) { nearCount++; break; }
+                if (!box.Contains(p)) continue;
+                foreach (Collider c in Physics.OverlapSphere(p, 0.004f, mask, QueryTriggerInteraction.Ignore))
+                    if (c == col) { insideCount++; break; }
             }
             near = 100f * nearCount / Mathf.Max(1, sampled);
             inside = 100f * insideCount / Mathf.Max(1, sampled);
+            touching = 100f * touchCount / Mathf.Max(1, sampled);
         }
     }
 }

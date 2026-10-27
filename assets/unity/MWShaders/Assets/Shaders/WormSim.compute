@@ -492,10 +492,12 @@ float3 SkinPush(uint mi, MassParams m, float3 x)
 float3 SolidPush(uint mi, MassParams m, float3 x, bool glide)
 {
     if (m.side.w < 0.5) return x;
-    float fx = (x.x - m.gridRect.x) * m.gridRect.w;
-    float fz = (x.z - m.gridRect.y) * m.gridRect.w;
+    // Beyond the grid sideways the maps are read at their edge cell (the obstacle goes on past the edge: a wall thicker than the margin of the grid, a rock wider than it, S08/V12);
+    // above and below the rows there is nothing to read.
+    float fx = clamp((x.x - m.gridRect.x) * m.gridRect.w, 0.0, 15.0);
+    float fz = clamp((x.z - m.gridRect.y) * m.gridRect.w, 0.0, 15.0);
     float fy = (x.y - m.side.x) * m.side.z;
-    if (fx < 0.0 || fz < 0.0 || fy < 0.0 || fx > 15.0 || fz > 15.0 || fy > 15.0) return x;
+    if (fy < 0.0 || fy > 15.0) return x;
     int ix = (int)min(fx, 14.0), iz = (int)min(fz, 14.0), iy = (int)min(fy, 14.0);
     uint b = mi * 1280u;
     float wmin = 1e6, emax = -1e6, smin = 1e6, nmax = -1e6, tmax = -1e6;
@@ -1124,13 +1126,21 @@ void KSolve(uint3 id : SV_DispatchThreadID)
             float att2 = 0.0;
             x[e] = SkinSurface(mi, nodeA[e], x[e], !pend || e == 0, off, att2);
         }
-        x[e] = SolidPush(mi, m, x[e], false);       // the nodes end the step outside the obstacles (the slide of the iterations can leave one a few millimetres in)
+        // the displacement is capped first and the obstacle has the last word: the push out of the obstacle (itself capped to the same DispMax, so that a deep node leaves a step at a time
+        // and is not thrown through a wall) is never undone by the cap
         if (sMode == 0u)
         {
             float3 dd = x[e] - o[e];
             float dl2 = dot(dd, dd);
             if (dl2 > _DevDisp * _DevDisp) x[e] = o[e] + dd * (_DevDisp / sqrt(dl2));
         }
+        float3 dpush = SolidPush(mi, m, x[e], false) - x[e];       // the nodes end the step outside the obstacles (the slide of the iterations can leave one a few millimetres in)
+        if (sMode == 0u)
+        {
+            float dp2 = dot(dpush, dpush);
+            if (dp2 > _DevDisp * _DevDisp) dpush *= _DevDisp / sqrt(dp2);
+        }
+        x[e] += dpush;
         float g = Ground(mi, m, x[e].x, x[e].z) + RAD;
         if (x[e].y < g) x[e].y = g;
         float3 vel = x[e] - o[e];
