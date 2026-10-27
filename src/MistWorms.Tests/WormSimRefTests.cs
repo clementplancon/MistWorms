@@ -378,6 +378,41 @@ namespace MistWorms.Tests
             Assert.Equal(beyond.x - 0.5f, depth, 3);
         }
 
+        private static WormSimRef MapsWithABox(float minY, float maxY, out GpuMassParams m)
+        {
+            WormSimRef sim = Build(50, 0.5f);
+            m = sim.Masses[0];
+            m.Side = new Vector4(-0.5f, 0.32f, 1f / 0.32f, 1f);        // rows at -0.50, -0.18, 0.14, 0.46, ...: nothing lower than 0.32 m is sure to be met by one
+            sim.Masses[0] = m;
+            GpuSolidMaps.FillBox(sim.Sides, 0, m, new Vector3(-0.5f, minY, -0.5f), new Vector3(0.5f, maxY, 0.5f));
+            return sim;
+        }
+
+        [Fact]
+        public void AStoneLowerThanTheRowsOfTheSideMapsIsStillLeftByTheTop()
+        {
+            WormSimRef sim = MapsWithABox(0f, 0.13f, out GpuMassParams m);
+            var sunk = new Vector3(0.1f, 0.08f, 0.1f);
+            Assert.StartsWith("low", WormSimRef.SolidProbe(sim.Sides, m, sunk, out _));      // no side map sees the stone
+            Vector3 pushed = sim.SolidPush(0, m, sunk, false);
+            Assert.Equal(0.13f + WormSimConst.Radius, pushed.y, 4);
+            Assert.Equal(sunk.x, pushed.x, 5);
+            Assert.Equal(sunk.z, pushed.z, 5);
+            // a node on top of it, or beside it, is left alone
+            Assert.Equal(new Vector3(0.1f, 0.2f, 0.1f), sim.SolidPush(0, m, new Vector3(0.1f, 0.2f, 0.1f), false));
+            Assert.Equal(new Vector3(0.9f, 0.08f, 0.1f), sim.SolidPush(0, m, new Vector3(0.9f, 0.08f, 0.1f), false));
+        }
+
+        [Fact]
+        public void ANodeUnderAnOverhangAMetreAboveIsNotLiftedOntoIt()
+        {
+            // a slab 1.5 to 1.6 m high (an arch, the underside of a bridge) that no row of the side maps meets: its top is 1.3 m over the node, more than a row
+            WormSimRef sim = MapsWithABox(1.5f, 1.6f, out GpuMassParams m);
+            var under = new Vector3(0.1f, 0.3f, 0.1f);
+            Assert.StartsWith("free", WormSimRef.SolidProbe(sim.Sides, m, under, out _));
+            Assert.Equal(under, sim.SolidPush(0, m, under, false));
+        }
+
         [Fact]
         public void TwoRunsGiveTheSameBits()
         {

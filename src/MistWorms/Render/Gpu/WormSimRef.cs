@@ -450,7 +450,12 @@ namespace MistWorms.Render.Gpu
             // The column the node is in must itself be under an obstacle (the nearest sample of the top map, not the highest of the four around it): the passage between two parallel walls is
             // inside the hull of the side maps, and a node in it, within a cell of a wall, was thrown out through the wall (S08).
             float tnear = Sides[b + 1024 + Math.Min((int)(fz + 0.5f), 15) * 16 + Math.Min((int)(fx + 0.5f), 15)];
-            if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax)) return x;
+            if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax))
+            {
+                // Not inside the hull, but under the top map by a row at most: no side face concerns the node (a stone lower than the spacing of the rows of the side maps is seen by none of them)
+                if (x.y < tnear && tnear - x.y <= WormSimConst.SolidRowGap) x.y = tnear + WormSimConst.Radius;
+                return x;
+            }
             float best = tmax - x.y;
             int dir = 4;
             float pw = x.x - wmin, pe = emax - x.x, ps = x.z - smin, pn = nmax - x.z;
@@ -505,7 +510,11 @@ namespace MistWorms.Render.Gpu
                     tmax = Math.Max(tmax, sides[1024 + (iz + dy) * 16 + ix + du]);
                 }
             float tnear = sides[1024 + Math.Min((int)(fz + 0.5f), 15) * 16 + Math.Min((int)(fx + 0.5f), 15)];
-            if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax)) return edge + $"free (x {x.x:0.00} y {x.y:0.00} z {x.z:0.00}; west {wmin:0.00} east {emax:0.00} south {smin:0.00} north {nmax:0.00} top {tmax:0.00})";
+            if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax))
+            {
+                if (x.y < tnear && tnear - x.y <= WormSimConst.SolidRowGap) return edge + "low";
+                return edge + $"free (x {x.x:0.00} y {x.y:0.00} z {x.z:0.00}; west {wmin:0.00} east {emax:0.00} south {smin:0.00} north {nmax:0.00} top {tmax:0.00})";
+            }
             float best = tmax - x.y;
             int dir = 4;
             float pw = x.x - wmin, pe = emax - x.x, ps = x.z - smin, pn = nmax - x.z;

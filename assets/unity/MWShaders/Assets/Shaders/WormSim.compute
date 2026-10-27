@@ -67,6 +67,7 @@ static const float FALL_TIME = 2.5;           // a worm that lets go falls for t
 static const float HOP_TIME = 0.2;            // a head that has not reached the anchor of its path in this time goes on to the next one
 float _DevDisp;      // WormSimConst.DispMax (set every step by the host; a dev A/B can change it)
 float _DevEdge;      // WormSimConst.SolidEdgePush
+static const float SOLID_ROW_GAP = 0.35;      // WormSimConst.SolidRowGap: a node outside the hull but under a solid column by no more than this is set on top of it (a stone lower than one row of the side maps)
 static const float SLIDE_GAIN = 1.0;           // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
 static const float BIRTH_TIME = 0.5;           // a newborn worm grows from nothing in this time, a dying one shrinks to nothing in it
 static const float PEND_SHARE = 0.08;         // share of the worms of the sleeve that hang by one end
@@ -513,7 +514,12 @@ float3 SolidPush(uint mi, MassParams m, float3 x, bool glide)
     // The column the node is in must itself be under an obstacle (the nearest sample of the top map, not the highest of the four around it): the passage between two parallel walls is
     // inside the hull of the side maps, and a node in it, within a cell of a wall, was thrown out through the wall (S08).
     float tnear = _Sides[b + 1024u + (uint)(min((int)(fz + 0.5), 15) * 16 + min((int)(fx + 0.5), 15))];
-    if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax)) return x;
+    if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax))
+    {
+        // Not inside the hull, but under the top map by a row at most: no side face concerns the node (a stone lower than the spacing of the rows of the side maps is seen by none of them)
+        if (x.y < tnear && tnear - x.y <= SOLID_ROW_GAP) x.y = tnear + RAD;
+        return x;
+    }
     float best = tmax - x.y;
     int dir = 4;
     float pw = x.x - wmin, pe = emax - x.x, ps = x.z - smin, pn = nmax - x.z;
