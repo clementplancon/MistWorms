@@ -369,7 +369,9 @@ namespace MistWorms.Tests
             var inGrid = new Vector3(0.8f, 0.3f, 0f);
             var beyond = new Vector3(edge + 0.5f, 0.3f, 0f);
             Assert.True(beyond.x > edge);
-            Assert.Equal(0.5f - WormSimConst.Radius, sim.SolidPush(0, m, inGrid, false).x, 4);
+            // in the grid the node deep in the rock leaves by the open column of the top map: the face is known to half a cell (the middle of two samples)
+            float inGridX = sim.SolidPush(0, m, inGrid, false).x;
+            Assert.True(Math.Abs(inGridX - (0.5f - WormSimConst.Radius)) <= 0.5f * m.GridRect.z + 1e-4f, $"in grid: {inGridX}");
             Assert.Equal(0.5f - WormSimConst.Radius, sim.SolidPush(0, m, beyond, false).x, 4);
             // above the rows of the maps there is nothing to read
             var above = new Vector3(beyond.x, 6f, 0f);
@@ -411,6 +413,76 @@ namespace MistWorms.Tests
             var under = new Vector3(0.1f, 0.3f, 0.1f);
             Assert.StartsWith("free", WormSimRef.SolidProbe(sim.Sides, m, under, out _));
             Assert.Equal(under, sim.SolidPush(0, m, under, false));
+        }
+
+        private static WormSimRef MapsWithTwoWalls(out GpuMassParams m)
+        {
+            // a corridor along z: two walls 0.4 m thick (x from -0.9 to -0.5 and from 0.5 to 0.9), 2.5 m high, longer than the grid; the maps of the two boxes are merged (first surface of each side)
+            WormSimRef sim = Build(50, 0.5f);
+            m = sim.Masses[0];
+            m.Side = new Vector4(-0.5f, 0.3f, 1f / 0.3f, 1f);
+            sim.Masses[0] = m;
+            var a = new float[5 * 256];
+            var b = new float[5 * 256];
+            GpuSolidMaps.FillBox(a, 0, m, new Vector3(-0.9f, 0f, -6f), new Vector3(-0.5f, 2.5f, 6f));
+            GpuSolidMaps.FillBox(b, 0, m, new Vector3(0.5f, 0f, -6f), new Vector3(0.9f, 2.5f, 6f));
+            for (int i = 0; i < 256; i++)
+            {
+                sim.Sides[i] = Math.Min(a[i], b[i]);
+                sim.Sides[256 + i] = Math.Max(a[256 + i], b[256 + i]);
+                sim.Sides[512 + i] = Math.Min(a[512 + i], b[512 + i]);
+                sim.Sides[768 + i] = Math.Max(a[768 + i], b[768 + i]);
+                sim.Sides[1024 + i] = Math.Max(a[1024 + i], b[1024 + i]);
+            }
+            return sim;
+        }
+
+        [Fact]
+        public void ANodeInAWallOfACorridorLeavesByTheNearestOpenColumnAndNeverCrossesTheWall()
+        {
+            WormSimRef sim = MapsWithTwoWalls(out GpuMassParams m);
+            // closer to the inner face (x = -0.5) than to the outer one (x = -0.9): leaves into the corridor, never through the wall
+            for (float x = -0.64f; x <= -0.51f; x += 0.01f)
+            {
+                var node = new Vector3(x, 1f, 0.1f);
+                Assert.NotEqual("rows", WormSimRef.SolidProbe(sim.Sides, m, node, out _));
+                Vector3 pushed = sim.SolidPush(0, m, node, true);
+                Assert.True(pushed.x > -0.5f, $"x {x}: left at {pushed.x}");
+                Assert.True(pushed.x < 0.5f, $"x {x}: crossed to {pushed.x}");
+                Assert.Equal(node.y, pushed.y, 5);
+                Assert.Equal(node.z, pushed.z, 5);
+                Vector3 mirror = sim.SolidPush(0, m, new Vector3(-x, 1f, 0.1f), true);
+                Assert.True(mirror.x < 0.5f && mirror.x > -0.5f, $"mirror of x {x}: {mirror.x}");
+            }
+            // a node in the corridor, a wall's width from either wall, is not touched
+            var inside = new Vector3(0.0f, 1f, 0.1f);
+            Assert.Equal(inside, sim.SolidPush(0, m, inside, true));
+        }
+
+        [Fact]
+        public void ANodeInTheMiddleOfAFullRockLeavesByTheNearestEdge()
+        {
+            WormSimRef sim = MapsWithABox(0f, 3f, out GpuMassParams m);
+            var east = new Vector3(0.25f, 1f, 0f);
+            Vector3 pe = sim.SolidPush(0, m, east, false);
+            Assert.True(pe.x > 0.4f && pe.x < 0.6f, $"east: {pe.x}");
+            Assert.Equal(east.z, pe.z, 5);
+            var south = new Vector3(0f, 1f, -0.3f);
+            Vector3 ps = sim.SolidPush(0, m, south, false);
+            Assert.True(ps.z < -0.4f && ps.z > -0.6f, $"south: {ps.z}");
+            Assert.Equal(south.x, ps.x, 5);
+        }
+
+        [Fact]
+        public void ANodeCloseUnderTheTopOfAnObstacleStillLeavesByTheTop()
+        {
+            // V12 and the rule of the open column live together: within a row of the top the node is set on it, not thrown sideways
+            WormSimRef sim = MapsWithABox(0f, 0.6f, out GpuMassParams m);
+            var node = new Vector3(0.25f, 0.4f, 0f);
+            Vector3 pushed = sim.SolidPush(0, m, node, false);
+            Assert.Equal(node.x, pushed.x, 5);
+            Assert.Equal(node.z, pushed.z, 5);
+            Assert.Equal(0.6f + WormSimConst.Radius, pushed.y, 4);
         }
 
         [Fact]

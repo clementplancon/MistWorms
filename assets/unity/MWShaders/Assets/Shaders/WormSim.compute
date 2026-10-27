@@ -67,6 +67,7 @@ static const float FALL_TIME = 2.5;           // a worm that lets go falls for t
 static const float HOP_TIME = 0.2;            // a head that has not reached the anchor of its path in this time goes on to the next one
 float _DevDisp;      // WormSimConst.DispMax (set every step by the host; a dev A/B can change it)
 float _DevEdge;      // WormSimConst.SolidEdgePush
+static const int SOLID_OPEN_CELLS = 3;         // WormSimConst.SolidOpenCells: search distance (cells) of the nearest open column of the top map for a node in the thickness of an obstacle
 static const float SOLID_ROW_GAP = 0.35;      // WormSimConst.SolidRowGap: a node outside the hull but under a solid column by no more than this is set on top of it (a stone lower than one row of the side maps)
 static const float SLIDE_GAIN = 1.0;           // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
 static const float BIRTH_TIME = 0.5;           // a newborn worm grows from nothing in this time, a dying one shrinks to nothing in it
@@ -519,6 +520,36 @@ float3 SolidPush(uint mi, MassParams m, float3 x, bool glide)
         // Not inside the hull, but under the top map by a row at most: no side face concerns the node (a stone lower than the spacing of the rows of the side maps is seen by none of them)
         if (x.y < tnear && tnear - x.y <= SOLID_ROW_GAP) x.y = tnear + RAD;
         return x;
+    }
+    // In the thickness of a wall (the column is closed, more than a row under its top): the hull has no inner face, so the node leaves by the nearest open column of the top map (S08)
+    if (x.y < tnear && tnear - x.y > SOLID_ROW_GAP)
+    {
+        float rx = (x.x - m.gridRect.x) * m.gridRect.w, rz = (x.z - m.gridRect.y) * m.gridRect.w;
+        if (rx >= 0.0 && rx <= 15.0 && rz >= 0.0 && rz <= 15.0)
+        {
+            int ci = min((int)(fx + 0.5), 15), cj = min((int)(fz + 0.5), 15);
+            float sp = m.gridRect.z, bestDist = 1e9, bestFace = 0.0;
+            int bestDir = -1;
+            [unroll] for (int d = 0; d < 4; d++)
+            {
+                int sx = d == 0 ? -1 : (d == 1 ? 1 : 0), sz = d == 2 ? -1 : (d == 3 ? 1 : 0);
+                bool found = false;
+                for (int k = 1; k <= SOLID_OPEN_CELLS && !found; k++)
+                {
+                    int i = ci + sx * k, j = cj + sz * k;
+                    if (i < 0 || i > 15 || j < 0 || j > 15) break;
+                    if (!(_Sides[b + 1024u + (uint)(j * 16 + i)] < x.y)) continue;
+                    found = true;
+                    float face = sx != 0 ? m.gridRect.x + ((float)(ci + sx * (k - 1)) + 0.5 * sx) * sp : m.gridRect.y + ((float)(cj + sz * (k - 1)) + 0.5 * sz) * sp;
+                    float dist = sx != 0 ? (face - x.x) * sx : (face - x.z) * sz;
+                    if (dist < bestDist) { bestDist = dist; bestFace = face; bestDir = d; }
+                }
+            }
+            if (bestDir == 0) { x.x = bestFace - RAD; return x; }
+            if (bestDir == 1) { x.x = bestFace + RAD; return x; }
+            if (bestDir == 2) { x.z = bestFace - RAD; return x; }
+            if (bestDir == 3) { x.z = bestFace + RAD; return x; }
+        }
     }
     float best = tmax - x.y;
     int dir = 4;

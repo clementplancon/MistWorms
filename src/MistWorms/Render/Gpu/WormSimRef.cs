@@ -425,6 +425,39 @@ namespace MistWorms.Render.Gpu
             }
         }
 
+        /// <summary>
+        /// Port of the open-column search of SolidPush: the nearest column of the top map that is open (its top under the node, or none) within SolidOpenCells cells, in the 4 directions
+        /// of the grid; the node is set on that side of the face (the middle between the two cells) plus the radius. False when none is found or the node is beyond the grid.
+        /// </summary>
+        private bool OpenColumnExit(int b, in GpuMassParams m, Vector3 x, float fx, float fz, ref Vector3 res)
+        {
+            float rx = (x.x - m.GridRect.x) * m.GridRect.w, rz = (x.z - m.GridRect.y) * m.GridRect.w;
+            if (rx < 0f || rx > 15f || rz < 0f || rz > 15f) return false;
+            int ci = Math.Min((int)(fx + 0.5f), 15), cj = Math.Min((int)(fz + 0.5f), 15);
+            float sp = m.GridRect.z, bestDist = 1e9f, bestFace = 0f;
+            int bestDir = -1;
+            for (int d = 0; d < 4; d++)
+            {
+                int sx = d == 0 ? -1 : d == 1 ? 1 : 0, sz = d == 2 ? -1 : d == 3 ? 1 : 0;
+                for (int k = 1; k <= WormSimConst.SolidOpenCells; k++)
+                {
+                    int i = ci + sx * k, j = cj + sz * k;
+                    if (i < 0 || i > 15 || j < 0 || j > 15) break;
+                    if (!(Sides[b + 1024 + j * 16 + i] < x.y)) continue;
+                    float face = sx != 0 ? m.GridRect.x + (ci + sx * (k - 1) + 0.5f * sx) * sp : m.GridRect.y + (cj + sz * (k - 1) + 0.5f * sz) * sp;
+                    float dist = sx != 0 ? (face - x.x) * sx : (face - x.z) * sz;
+                    if (dist < bestDist) { bestDist = dist; bestFace = face; bestDir = d; }
+                    break;
+                }
+            }
+            if (bestDir < 0) return false;
+            if (bestDir == 0) res.x = bestFace - WormSimConst.Radius;
+            else if (bestDir == 1) res.x = bestFace + WormSimConst.Radius;
+            else if (bestDir == 2) res.z = bestFace - WormSimConst.Radius;
+            else res.z = bestFace + WormSimConst.Radius;
+            return true;
+        }
+
         /// <summary>Port of SolidPush in WormSim.compute: a node inside the visual hull of the obstacles leaves by the axis of the smallest penetration.</summary>
         public Vector3 SolidPush(int mi, in GpuMassParams m, Vector3 x, bool glide = true)
         {
@@ -456,6 +489,8 @@ namespace MistWorms.Render.Gpu
                 if (x.y < tnear && tnear - x.y <= WormSimConst.SolidRowGap) x.y = tnear + WormSimConst.Radius;
                 return x;
             }
+            // In the thickness of a wall (the column is closed, more than a row under its top): the hull has no inner face, so the node leaves by the nearest open column of the top map
+            if (x.y < tnear && tnear - x.y > WormSimConst.SolidRowGap && OpenColumnExit(b, m, x, fx, fz, ref x)) return x;
             float best = tmax - x.y;
             int dir = 4;
             float pw = x.x - wmin, pe = emax - x.x, ps = x.z - smin, pn = nmax - x.z;
