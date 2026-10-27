@@ -234,6 +234,8 @@ namespace MistWorms.Mass
             if (HasTarget) WatchProgress(now, now < _fearUntil || _engulfing || seeking || DevGoal.HasValue || _state.Merging || MassStateCodes.IsTransferring(_state.StateCode));
             if (!_engulfing && !seeking && !DevGoal.HasValue && HasTarget) TryBeginEngulf(now);
             if (_engulfing && StepEngulf(dt, now)) return;
+            // A smaller mass of the colony is coming to join this one (at most MergeSeekMaxSeconds): it waits, otherwise a hunt at the same speed keeps the two apart (V09: 7 m after 6 s).
+            if (!seeking && !_engulfing && _state.IsSoughtBySmaller) { StopMoving(); return; }
             if (seeking) Hunt(dt, seekGoal);
             else if (HasTarget || DevGoal.HasValue) Hunt(dt);
             else Idle(dt);
@@ -602,11 +604,11 @@ namespace MistWorms.Mass
             // A little inside the engulf range: the walk helper may stop a few tenths short of its stop distance, and the engulfing needs flat <= r + EngulfRange.
             float stop = seek.HasValue || DevGoal.HasValue ? DevGoalStop : Mathf.Max(0.5f, EngulfRadius(MassMath.Radius(Mathf.Max(1, _state.N))) + MWConfig.Mass.EngulfRange.Value + TargetBodyExtra() - HuntStopMargin);
 
-            WalkTo(dt, goal, stop);
+            WalkTo(dt, goal, stop, pushStraight: seek.HasValue);
         }
 
         /// <summary>Walks toward <paramref name="goal"/> with the vanilla path, or straight at it without a path; stops at <paramref name="stop"/> (horizontal).</summary>
-        private void WalkTo(float dt, Vector3 goal, float stop)
+        private void WalkTo(float dt, Vector3 goal, float stop, bool pushStraight = false)
         {
             bool done = MoveTo(dt, goal, stop, false);
             if (!done)
@@ -620,11 +622,19 @@ namespace MistWorms.Mass
             // MoveTo also answers "done" when no path exists. If the target is not reached, push straight at it (corridors of a mine are open
             // enough for that) and count the tick, so the path rate shows in the logs.
             float flat = Utils.DistanceXZ(goal, transform.position);
-            if (flat > stop + 0.3f && !FoundPath())
+            // A mass going to join another one (pushStraight) ends its path 2 m short of it (the other mass stands on the navmesh): the last metres are walked straight, as without a path.
+            if (flat > stop + 0.3f && (pushStraight || !FoundPath()))
             {
                 MoveTicks++;
                 NoPathTicks++;
-                MoveAndAvoid(dt, goal, stop, false);
+                if (pushStraight)
+                {
+                    // MoveAndAvoid refuses a step when something solid is within radius + 1 m ahead, and the other mass is: the two stop 2 m apart, short of the 1.3 m contact. Straight at it.
+                    Vector3 toGoal = goal - transform.position;
+                    toGoal.y = 0f;
+                    MoveTowards(toGoal.normalized, false);
+                }
+                else MoveAndAvoid(dt, goal, stop, false);
                 StepAssist(true);
                 return;
             }

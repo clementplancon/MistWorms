@@ -39,14 +39,28 @@ namespace MistWorms.Mass
         private float _transferCooldownUntil;
         private WritheMassState _seekTarget;
         private float _seekUntil, _seekCooldownUntil;
-#if MW_DEV
-        private float _dbgNext;
-#endif
 
         /// <summary>A mass sees another one of its colony this close (metres) and goes to join it when it is the smaller (spec 4.1, coordinator 4B-4).</summary>
         public const float MergeSeekRadius = 8f;
         public const float MergeSeekMaxSeconds = 6f;
         public const float MergeSeekCooldown = 4f;
+        /// <summary>A seeker this close (metres, horizontal) to the mass it goes to has reached it: the bodies cannot come closer than about 2 m.</summary>
+        public const float SeekArrivalDistance = 2.2f;
+
+        /// <summary>True while a smaller mass of this peer is going to join this one (its seek is alive): this one waits for it.</summary>
+        public bool IsSoughtBySmaller
+        {
+            get
+            {
+                float now = Time.time;
+                for (int k = 0; k < s_all.Count; k++)
+                {
+                    WritheMassState b = s_all[k];
+                    if (b != null && b != this && b._seekTarget == this && now < b._seekUntil && !b._merging) return true;
+                }
+                return false;
+            }
+        }
 
         /// <summary>True while this mass slides onto a bigger one.</summary>
         public bool Merging => _merging;
@@ -92,10 +106,10 @@ namespace MistWorms.Mass
                 float d = (float)Math.Sqrt(dx * dx + dz * dz);
                 ZDOID theirs = b.ZdoId;
                 bool iAmSmaller = MassMergeMath.IsSmaller(n, mine.UserID, mine.ID, nb, theirs.UserID, theirs.ID);
-#if MW_DEV
-                if (now >= _dbgNext) { _dbgNext = now + 1f; Plugin.DevInfo($"[MergeDbg] {mine} n={n} sees {theirs} n={nb} d={d:0.00} smaller={iAmSmaller} key={colonyKey} theirKey={b.ColonyKey} mode={MassStateCodes.Describe(myCode)} seekT={(_seekTarget != null)} cooldown={Math.Max(0f, _seekCooldownUntil - now):0.0}"); }
-#endif
-                if (!MassMergeMath.Touching(d, q.y - p.y, r, MassMath.Radius(nb)))
+                // The mass that goes to join this one has arrived when its body meets the other: the two capsules stop at 1.97 m in game (measured, V09), farther than the contact distance of the
+                // spheres, so a seeker that reached its target within SeekArrivalDistance counts as touching.
+                bool arrived = iAmSmaller && _seekTarget == b && d < SeekArrivalDistance && Math.Abs(q.y - p.y) <= MassMergeMath.MaxContactDy;
+                if (!arrived && !MassMergeMath.Touching(d, q.y - p.y, r, MassMath.Radius(nb)))
                 {
                     // Not touching: a smaller mass that sees a bigger one of its colony close by goes to it (spec 4.1; the hunts alone would never
                     // bring two masses that stop at the same target face to face).
