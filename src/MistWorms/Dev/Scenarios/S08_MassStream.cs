@@ -450,6 +450,7 @@ namespace MistWorms.Dev.Scenarios
                         groundY = Mathf.Min(groundY, GroundY(new Vector3(cx + (q % 2 == 0 ? -thickness * 0.5f : thickness * 0.5f), start.y, cz + (q - 2) * length * 0.25f)));
                     var pivot = new Vector3(cx - off.x, groundY - bottom0 - WallSink, cz - off.z);
                     GameObject wallObject = UnityEngine.Object.Instantiate(prefab, pivot, rot);
+                    ScenarioReset.TrackPlaced(wallObject);
                     // WearNTear destroys a piece it finds unsupported (the terrain collider under it may not be there yet): the test walls are props.
                     foreach (WearNTear wear in wallObject.GetComponentsInChildren<WearNTear>()) wear.enabled = false;
                     _walls.Add(wallObject);

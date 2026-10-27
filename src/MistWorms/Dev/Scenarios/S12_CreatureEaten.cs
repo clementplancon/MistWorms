@@ -26,6 +26,7 @@ namespace MistWorms.Dev.Scenarios
         private const string Seeker = VanillaNames.Seeker;
         private const int MaxSeekers = 5;
         private const float KillTimeout = 90f;
+        private const float SiteClearRadius = 15f;   // vanilla creatures removed this far around the site before each Seeker is placed
         internal const float GroundRadius = 12f;
 
         public string Name => "S12_CreatureEaten";
@@ -115,9 +116,14 @@ namespace MistWorms.Dev.Scenarios
                     DropCapture.ResetCounters();
                     MassEngulf.ResetCounters();
 
+                    // The vanilla creatures near the site go before the Seeker is placed: a Seeker of the mine closer to the mass than ours was engulfed instead of it (series p9b, S12 seeker1 alive).
+                    S18_GroupCoherence.ClearCreatures(ctx, Player.m_localPlayer, center: site, radius: SiteClearRadius);
                     Vector3 at = SeekerSpot(site, fwd, 5f, k);
                     Character seeker = SpawnSeeker(seekerPrefab, at);
                     if (!ctx.Assert(tag + "spawned", seeker != null, "a Seeker next to the mass", seeker != null ? at.ToString() : "failed")) yield break;
+                    ZDOID seekerId = seeker.GetZDOID();
+                    ctx.Log($"{tag}Seeker placed: {seekerId} at {at}, {Vector3.Distance(at, site):0.0} m from the mass {mass.ZdoId}");
+                    bool sawTargeted = false;
                     float maxHealth = seeker.GetMaxHealth();
                     float lowest = maxHealth;
                     float partialBefore = mass.Partial;
@@ -127,6 +133,7 @@ namespace MistWorms.Dev.Scenarios
                     {
                         deathAt = seeker.transform.position;
                         lowest = Mathf.Min(lowest, seeker.GetHealth());
+                        if (ai.CurrentKind == TargetKind.Creature && ai.CurrentTargetId == seekerId) sawTargeted = true;
                         if (mass != null && mass.Valid) mass.DevPoolCopy(before);   // the last pool seen before the kill: shares that fell with worms killed by the riposte are already out of it
                         if (mass != null && mass.Valid && (mass.Partial > partialBefore + 0.01f || (mass.LastAttacker ?? string.Empty).Contains(Seeker))) sawRiposte = true;
                         yield return null;
@@ -134,14 +141,14 @@ namespace MistWorms.Dev.Scenarios
                     bool dead = seeker == null || seeker.IsDead();
                     ctx.Assert(tag + "killed", dead, $"dead within {KillTimeout:0} s", dead ? "dead" : "alive");
                     ctx.Assert(tag + "took_damage", lowest < maxHealth, $"health under {maxHealth:0}", lowest);
-                    ctx.Assert(tag + "targeted_by_the_mass", ai.CurrentKind == TargetKind.Creature || DropCapture.CreatureCaptures > 0 || MassEngulf.CreatureTicks > 0, "the mass hunted a creature", $"{ai.CurrentKind}, {MassEngulf.CreatureTicks} creature ticks");
+                    ctx.Assert(tag + "targeted_by_the_mass", sawTargeted || (DropCapture.CreatureCaptures > 0 && DropCapture.LastVictimId == seekerId), $"the mass hunted our Seeker {seekerId}", $"{(sawTargeted ? "targeted" : "never targeted")}, victim of the capture {DropCapture.LastVictimId}, {MassEngulf.CreatureTicks} creature ticks");
                     if (!dead) yield break;
 
                     yield return ctx.WaitFrames(5);
                     // The vanilla riposte of the Seeker may kill a few worms (spec 5.4, battlefield): the mass must survive, not keep all 40.
                     ctx.Assert(tag + "mass_survives_the_riposte", mass != null && mass.Valid && mass.N > 0, $"alive (started with {WormCount})", mass != null && mass.Valid ? mass.N : -1);
                     ctx.Assert(tag + "captured_once", DropCapture.CreatureCaptures == 1, 1, DropCapture.CreatureCaptures);
-                    ctx.Assert(tag + "captured_for_the_mass", (DropCapture.LastKiller ?? string.Empty).Contains(mass.ZdoId.ToString()), $"mass {mass.ZdoId}", DropCapture.LastKiller);
+                    ctx.Assert(tag + "captured_for_the_mass", (DropCapture.LastKiller ?? string.Empty).Contains(mass.ZdoId.ToString()) && DropCapture.LastVictimId == seekerId, $"mass {mass.ZdoId} for the Seeker {seekerId}", $"{DropCapture.LastKiller} for {DropCapture.LastVictimId}");
 
                     // The pool grew by exactly the list the patch captured (units by item).
                     var after = new MassPool();
@@ -189,6 +196,7 @@ namespace MistWorms.Dev.Scenarios
             DropCapture.ResetCounters();
             PoolRpc.ResetCounters();
 
+            S18_GroupCoherence.ClearCreatures(ctx, Player.m_localPlayer, center: site, radius: SiteClearRadius);
             Vector3 at = SeekerSpot(site, fwd, 3f, 0);
             Character seeker = SpawnSeeker(seekerPrefab, at);
             if (!ctx.Assert("worm_seeker_spawned", seeker != null, "a Seeker", seeker != null ? at.ToString() : "failed")) yield break;
@@ -225,7 +233,7 @@ namespace MistWorms.Dev.Scenarios
             yield return ctx.WaitFrames(10);
 
             ctx.Assert("worm_captured_once", DropCapture.CreatureCaptures == 1, 1, DropCapture.CreatureCaptures);
-            ctx.Assert("worm_captured_for_a_worm", (DropCapture.LastKiller ?? string.Empty).StartsWith("worm ", System.StringComparison.Ordinal), "a worm", DropCapture.LastKiller);
+            ctx.Assert("worm_captured_for_a_worm", (DropCapture.LastKiller ?? string.Empty).StartsWith("worm ", System.StringComparison.Ordinal) && DropCapture.LastVictimId == seekerId, $"a worm, for our Seeker {seekerId}", $"{DropCapture.LastKiller} for {DropCapture.LastVictimId}");
             var pool = new MassPool();
             int index = store.IsAlive(slot, generation) ? store.poolIndex[slot] : -1;
             if (index >= 0) pool.CopyFrom(store.Pools.Get(index));

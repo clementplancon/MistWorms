@@ -187,7 +187,11 @@ namespace MistWorms.Colony
             int capacity = MWConfig.Colony.MaxAlivePerMine.Value + DebugSpareSlots;
             Store = new WormStore(capacity);
             _grid = new SpatialGrid(capacity);
+#if MW_DEV
+            _rng = new System.Random(DevSeed.HasValue ? DevSeed.Value : Environment.TickCount ^ GetInstanceID());
+#else
             _rng = new System.Random(Environment.TickCount ^ GetInstanceID());
+#endif
             _dropRng = WormDrops.NewRng(GetInstanceID());
             _nview.Register<int, ZPackage>(MWNames.RpcWormHit, RPC_WormHit);
             InitNet(capacity);
@@ -386,6 +390,16 @@ namespace MistWorms.Colony
         // Frame detail of the simulation (plan 4A-3 fix 3): counters of the frame in progress and the three worst frames since the reset.
         private int _framePaths, _frameApproach, _frameQueries, _frameStrikes;
         private float _frameStrikeFxMs, _frameStrikeBiteMs;
+        private float _frameVanillaMs;
+
+        /// <summary>
+        /// Worst simulation frame once the time spent INSIDE the vanilla damage call of a strike (Character.Damage and what it runs, game code) is taken out, and the first strike of the
+        /// session as before. Decision 255: a strike on the player is 3 ms in one frame of 0.08 ms of simulation, a cost of the game that the mod does not control.
+        /// </summary>
+        public float PeakMsWithoutVanilla { get; private set; }
+
+        /// <summary>Largest time (ms) one frame spent in the vanilla damage call of its strikes since the last reset, reported apart from the budget.</summary>
+        public float WorstVanillaMs { get; private set; }
         private int _strikesSoFar;
         private bool _frameFirstSessionStrike;
 
@@ -419,6 +433,8 @@ namespace MistWorms.Colony
             float ms = LastSimMs;
             if (_frameFirstSessionStrike) FirstSessionStrikeMs = ms;
             else if (ms > PeakMsWithoutFirstStrike) PeakMsWithoutFirstStrike = ms;
+            if (!_frameFirstSessionStrike && ms - _frameVanillaMs > PeakMsWithoutVanilla) PeakMsWithoutVanilla = ms - _frameVanillaMs;
+            if (_frameVanillaMs > WorstVanillaMs) WorstVanillaMs = _frameVanillaMs;
             _frameFirstSessionStrike = false;
             int slot = -1;
             for (int k = 0; k < 3; k++)
@@ -433,7 +449,7 @@ namespace MistWorms.Colony
             }
             _strikesSoFar += _frameStrikes;
             _framePaths = _frameApproach = _frameQueries = _frameStrikes = 0;
-            _frameStrikeFxMs = _frameStrikeBiteMs = 0f;
+            _frameStrikeFxMs = _frameStrikeBiteMs = _frameVanillaMs = 0f;
         }
 
         /// <summary>Forgets the peak and the worst frames (the scenario calls it after its own spawn frame and the second after it).</summary>
@@ -441,11 +457,24 @@ namespace MistWorms.Colony
         {
             MaxSimMs = 0f;
             PeakMsWithoutFirstStrike = 0f;
+            PeakMsWithoutVanilla = 0f;
+            WorstVanillaMs = 0f;
             for (int k = 0; k < 3; k++) { _worstMs[k] = 0f; WorstFrames[k] = null; }
         }
 
         /// <summary>Restarts the drop generator from <paramref name="seed"/> (WormDrops.SeedForTests).</summary>
         public void ReseedDrops(int seed) => _dropRng = new System.Random(seed);
+
+        /// <summary>Seed of the simulation generator of the colonies created from now on (ScenarioReset: a scenario starts from the same sequence alone or in a series); null = time based.</summary>
+        public static int? DevSeed;
+
+        /// <summary>Restarts the simulation generator of this colony from <paramref name="seed"/>.</summary>
+        public void ReseedRng(int seed)
+        {
+            _rng = new System.Random(seed);
+            _seedStart = 0;   // where the cluster search of the formation starts: part of the same sequence
+        }
+
 #endif
 
         /// <summary>Kills every worm without drops (mw_kill).</summary>
@@ -460,6 +489,9 @@ namespace MistWorms.Colony
                 n++;
             }
             ResetWake();
+#if MW_DEV
+            _reserve?.Clear();   // mw_kill is a complete reset: the loot reserve (what strikes ate for worms that are gone) goes too
+#endif
             return n;
         }
 

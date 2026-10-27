@@ -179,7 +179,9 @@ namespace MistWorms.Dev.Scenarios
             {
                 yield return ctx.WaitFrames(30);
                 yield return ctx.Shot("formation_1_after");
-                MassDev.Destroy(mass);
+                // Every mass of the part goes, not only the first found: a second one left standing was measured by the absorption as if it were its own (series p9b).
+                int left = MassDev.KillAll();
+                if (left > 1) ctx.Log($"formation: {left} masses removed at the end of the part");
             }
             yield return ctx.Wait(0.5f);
         }

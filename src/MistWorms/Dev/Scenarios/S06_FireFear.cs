@@ -94,7 +94,7 @@ namespace MistWorms.Dev.Scenarios
                         nextLog = Time.time + 1f;
                         Rigidbody mb = mass.GetComponent<Rigidbody>();
                         ctx.Log($"torch: edge {Edge(mass, player, r):0.00} m, {MassStateCodes.Describe(mass.StateCode)}, fleeing {ai.Fleeing}, flights {ai.FireFlights}; mass speed {(mb != null ? Utils.LengthXZ(mb.linearVelocity) : -1f):0.00} m/s, pos {mass.transform.position.ToString("0.00")}, player {player.transform.position.ToString("0.00")}, " +
-                                $"flees from {ai.FleeFrom.ToString("0.00")} ({(ai.FleeFrom - player.transform.position).magnitude:0.00} m from the player): {ai.FleeSource}, stalled checks {ai.StalledChecks}, assists {ai.StepAssists}");
+                                $"flees from {ai.FleeFrom.ToString("0.00")} ({(ai.FleeFrom - player.transform.position).magnitude:0.00} m from the player): {ai.FleeSource}, stalled checks {ai.StalledChecks}, assists {ai.StepAssists}, vanilla corner timer {CornerTimer(ai):0.0} s, flee note: {ai.FleeNote}");
                     }
                     yield return null;
                 }
@@ -130,6 +130,7 @@ namespace MistWorms.Dev.Scenarios
                 GameObject prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab(VanillaNames.FirePit) : null;
                 if (!ctx.Assert("fire_prefab", prefab != null, VanillaNames.FirePit, prefab != null ? "found" : "missing")) yield break;
                 fire = Object.Instantiate(prefab, spot, Quaternion.identity);
+                ScenarioReset.TrackPlaced(fire);
                 yield return ctx.WaitUntil(() => HasFireAreaNear(spot), 4f);
                 ctx.Assert("fire_area_lit", HasFireAreaNear(spot), "a fire EffectArea at the camp fire", HasFireAreaNear(spot));
 
@@ -162,6 +163,11 @@ namespace MistWorms.Dev.Scenarios
                 }
             }
         }
+
+        private static readonly System.Reflection.FieldInfo CornerField = HarmonyLib.AccessTools.Field(typeof(BaseAI), "m_getOutOfCornerTimer");
+
+        /// <summary>The "get out of the corner" timer of the vanilla MoveAndAvoid: while it runs the character walks backwards from its goal.</summary>
+        private static float CornerTimer(BaseAI ai) => CornerField != null ? (float)CornerField.GetValue(ai) : -1f;
 
         private static IEnumerator WormFlees(ScenarioContext ctx, Player player, Vector3 fwd)
         {

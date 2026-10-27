@@ -84,6 +84,7 @@ namespace MistWorms.Dev.Scenarios
             WormDrops.ResetCounters();
 
             GameObject door = Object.Instantiate(doorPrefab, spot, Quaternion.LookRotation(fwd, Vector3.up));
+            ScenarioReset.TrackPlaced(door);
             yield return ctx.WaitFrames(2);
             Piece piece = door != null ? door.GetComponent<Piece>() : null;
             WearNTear wear = door != null ? door.GetComponent<WearNTear>() : null;

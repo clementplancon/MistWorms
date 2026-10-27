@@ -420,8 +420,11 @@ namespace MistWorms.Dev.Scenarios
             ctx.Log(colony.FirstSessionStrikeMs >= 0f
                 ? $"{tag}: frame of the first strike of the session ({colony.FirstSessionStrikeMs:0.00} ms) excluded from the maximum: first use of vanilla Damage() and JIT, not a recurring cost"
                 : $"{tag}: the first strike of the session did not happen in this colony (nothing to exclude for it)");
-            ctx.Assert(tag + "_sim_max", colony.PeakMsWithoutFirstStrike <= SimMaxMs,
-                $"<= {SimMaxMs} ms (spawn frame, the second after it and the session's first strike excluded)", $"{colony.PeakMsWithoutFirstStrike:0.00} ms (raw max {colony.MaxSimMs:0.00} ms)");
+            // Decision 255: the time spent inside the vanilla damage call of a strike (game code, 3.13 ms of a 3.21 ms frame in the series p9b) is not the simulation of the mod: it is taken out of the
+            // budget and reported apart.
+            ctx.Log($"{tag}: worst frame with the vanilla damage call {colony.PeakMsWithoutFirstStrike:0.00} ms (first strike of the session excluded), time inside the vanilla damage call in one frame up to {colony.WorstVanillaMs:0.00} ms, raw max {colony.MaxSimMs:0.00} ms");
+            ctx.Assert(tag + "_sim_max", colony.PeakMsWithoutVanilla <= SimMaxMs,
+                $"<= {SimMaxMs} ms (spawn frame, the second after it, the session's first strike and the time inside the vanilla damage call excluded)", $"{colony.PeakMsWithoutVanilla:0.00} ms (with the vanilla call {colony.PeakMsWithoutFirstStrike:0.00} ms, raw max {colony.MaxSimMs:0.00} ms)");
             foreach (string cause in colony.DeathCauses) ctx.Log($"{tag}: death cause: {cause}");
             ctx.Assert(tag + "_pairs_apart", pairsTotal > 0 && fraction >= MinPairFraction, $">= {MinPairFraction * 100f:0} % of {pairsTotal} neighbouring pairs > {MinMiddleGap} m apart", $"{fraction * 100f:0.0} %");
             ctx.Assert(tag + "_player_alive", !player.IsDead(), true, !player.IsDead());
@@ -481,7 +484,7 @@ namespace MistWorms.Dev.Scenarios
         }
 
         /// <param name="center">centre of the clearing; the player's position when null (a scenario whose action is away from the player passes its anchor)</param>
-        internal static void ClearCreatures(ScenarioContext ctx, Player player, bool quiet = false, Vector3? center = null)
+        internal static void ClearCreatures(ScenarioContext ctx, Player player, bool quiet = false, Vector3? center = null, float radius = CreatureClearRadius)
         {
             Vector3 middle = center ?? player.transform.position;
             var found = new List<Character>();
@@ -489,7 +492,7 @@ namespace MistWorms.Dev.Scenarios
             {
                 if (c == null || c.IsPlayer() || c.IsTamed()) continue;
                 if (Mass.WritheMassState.TryGet(c, out _)) continue;     // ours (MW_ prefabs) are not vanilla creatures
-                if ((c.transform.position - middle).sqrMagnitude > CreatureClearRadius * CreatureClearRadius) continue;
+                if ((c.transform.position - middle).sqrMagnitude > radius * radius) continue;
                 found.Add(c);
             }
             int removed = 0;
@@ -502,7 +505,7 @@ namespace MistWorms.Dev.Scenarios
                 if (ZNetScene.instance != null) ZNetScene.instance.Destroy(c.gameObject);
                 removed++;
             }
-            if (!quiet || removed > 0) ctx.Log($"vanilla creatures within {CreatureClearRadius:0} m of {(center.HasValue ? "the anchor " : "the player ")}{middle} removed: {removed} of {found.Count} found");
+            if (!quiet || removed > 0) ctx.Log($"vanilla creatures within {radius:0} m of {(center.HasValue ? "the anchor " : "the player ")}{middle} removed: {removed} of {found.Count} found");
         }
 
         /// <summary>

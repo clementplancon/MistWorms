@@ -235,6 +235,7 @@ namespace MistWorms.Colony
                         // after the "last worm hit" registry was written on the peer that owns it (spec §7.4).
 #if MW_DEV
                         long vanilla0 = DevMeasureAlloc ? UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong() : 0L;
+                        long vanillaT0 = System.Diagnostics.Stopwatch.GetTimestamp();
 #endif
                         switch (target.Kind)
                         {
@@ -249,6 +250,7 @@ namespace MistWorms.Colony
                                 break;
                         }
 #if MW_DEV
+                        _frameVanillaMs += (System.Diagnostics.Stopwatch.GetTimestamp() - vanillaT0) * 1000f / System.Diagnostics.Stopwatch.Frequency;
                         if (DevMeasureAlloc)
                         {
                             long rise = UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong() - vanilla0;

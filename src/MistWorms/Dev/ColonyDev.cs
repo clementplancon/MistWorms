@@ -16,7 +16,10 @@ namespace MistWorms.Dev
         private const float SightSpawnRange = 11.5f;     // under WormSense.HuntRange (12 m)
         private const float MaxSpawnSlopeDeg = 60f;
 
-        private static readonly System.Random s_rng = new System.Random();
+        private static System.Random s_rng = new System.Random();
+
+        /// <summary>Restarts the generator of the worm placements from <paramref name="seed"/> (ScenarioReset).</summary>
+        public static void Seed(int seed) => s_rng = new System.Random(seed);
 
         /// <summary>Dev switch (plan 4B-4): while false a worm that senses a player hunts alone, and nothing gathers, forms or absorbs. S18 tests the free worms with it off.</summary>
         public static bool GatheringEnabled

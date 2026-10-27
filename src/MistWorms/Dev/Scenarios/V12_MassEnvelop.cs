@@ -28,6 +28,42 @@ namespace MistWorms.Dev.Scenarios
 
         public string Name => "V12_MassEnvelop";
 
+        // The rock the mass goes round (decision 257): chosen by a criterion, not by whichever rock was closest. Tall enough that the mass cannot go over it (a low rock gave 12 to 16 % of nodes
+        // against it because the centre passed over, a rock the mass skirts gave 0 %), wide enough to be in its way, not a cliff. Same rule at the site test and at the use.
+        private const float RockMinHeight = 1.8f, RockMaxHeight = 3.5f, RockMinAcross = 2f, RockMaxAcross = 4f, RockMinDistance = 6f, RockMaxDistance = 16f;
+
+        /// <summary>
+        /// The closest vanilla rock 6 to 16 m from <paramref name="from"/> that is between 1.8 and 3.5 m high and 2 to 4 m across (at least as high as the dome of a mass of
+        /// <paramref name="massRadius"/> times 2); ties on the distance go to the lowest x then z, so that the choice depends on the site and nothing else. Null when none.
+        /// </summary>
+        internal static Collider EnvelopRock(Vector3 from, float massRadius)
+        {
+            int mask = LayerMask.GetMask(VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, VanillaNames.LayerDefaultSmall);
+            Collider best = null;
+            float bestDist = float.MaxValue;
+            float minHeight = Mathf.Max(RockMinHeight, 2f * massRadius);
+            foreach (Collider col in Physics.OverlapSphere(from, RockMaxDistance + 4f, mask, QueryTriggerInteraction.Ignore))
+            {
+                if (col == null || col.GetType().Name == "TerrainCollider") continue;
+                string root = col.transform.root.name;
+                bool rock = root.IndexOf("rock", StringComparison.OrdinalIgnoreCase) >= 0 || col.GetComponentInParent<MineRock5>() != null || col.GetComponentInParent<MineRock>() != null;
+                if (!rock) continue;
+                Bounds b = col.bounds;
+                float across = Mathf.Max(b.extents.x, b.extents.z) * 2f;
+                if (across < RockMinAcross || across > RockMaxAcross || b.size.y < minHeight || b.size.y > RockMaxHeight) continue;
+                Vector3 d = b.center - from; d.y = 0f;
+                float dist = d.magnitude;
+                if (dist < RockMinDistance || dist > RockMaxDistance) continue;
+                bool tie = best != null && Mathf.Abs(dist - bestDist) < 0.01f && (b.center.x < best.bounds.center.x || (Mathf.Approximately(b.center.x, best.bounds.center.x) && b.center.z < best.bounds.center.z));
+                if (dist < bestDist - 0.01f || tie)
+                {
+                    best = col;
+                    bestDist = dist;
+                }
+            }
+            return best;
+        }
+
         public IEnumerator Run(ScenarioContext ctx)
         {
             if (!ctx.Params.ContainsKey("timeout")) ctx.TimeoutSeconds = 600f;
@@ -60,7 +96,7 @@ namespace MistWorms.Dev.Scenarios
                 // open ground with a vanilla rock 6 to 16 m away, no built piece, no water
                 var site = new OpenGroundResult();
                 yield return DevWorld.MoveToOpenGround(3f, p => !V14_GpuMassSandbox.NearBuilt(p, V14_GpuMassSandbox.BuiltClearance) && !V14_GpuMassSandbox.NearWater(p, V14_GpuMassSandbox.WaterClearance)
-                                                               && V14_GpuMassSandbox.FindRock(p, 6f, 16f) != null, site, ctx.Log, new FlatSpec(6f, 0.5f, 1f));
+                                                               && EnvelopRock(p, MassMath.Radius(n)) != null, site, ctx.Log, new FlatSpec(6f, 0.5f, 1f));
                 ctx.Assert("rock_site_found", site.Found, "flat ground with a vanilla rock 6 to 16 m away", site.Found ? site.Spot.ToString() : site.Error);
                 if (!site.Found) yield break;
                 ctx.Console($"{VanillaNames.CmdTimeOfDay} 0.5");
@@ -69,7 +105,7 @@ namespace MistWorms.Dev.Scenarios
                 player.SetGodMode(true);
                 S18_GroupCoherence.ClearCreatures(ctx, player);
 
-                Collider rock = V14_GpuMassSandbox.FindRock(player.transform.position, 4f, 20f);
+                Collider rock = EnvelopRock(site.Spot, MassMath.Radius(n));      // the same call as the site test: the rock judged there is the rock used here
                 ctx.Assert("rock_found", rock != null, "a vanilla rock", rock != null ? rock.transform.root.name : "none");
                 if (rock == null) yield break;
                 Bounds rb = rock.bounds;

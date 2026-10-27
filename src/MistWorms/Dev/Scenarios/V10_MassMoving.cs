@@ -100,11 +100,11 @@ namespace MistWorms.Dev.Scenarios
                 {
                     player.SetGhostMode(false);
                     movedPlayer = false;
-                    // A spot with a straight flat run of 25 m or more (a cheap probe per candidate), else the plain open ground search.
-                    yield return ctx.MoveToOpenGround(8f, spot => QuickRun(spot) >= 25f);
+                    // A spot with a straight flat run of OpenMinRun or more, measured as the assertion measures it; else the plain open ground search.
+                    yield return ctx.MoveToOpenGround(8f, spot => OpenRun(spot) >= OpenMinRun);
                     if (!ctx.LastOpenGround.Found)
                     {
-                        ctx.Log("no spot with a 25 m straight flat run: plain open ground");
+                        ctx.Log($"no spot with a {OpenMinRun:0} m straight flat run: plain open ground");
                         yield return ctx.MoveToOpenGround(14f);
                         if (!ctx.LastOpenGround.Found) yield break;
                     }
@@ -512,31 +512,14 @@ namespace MistWorms.Dev.Scenarios
             }
         }
 
-        /// <summary>Longest straight run of continuous floor with no wall from <paramref name="from"/> over 16 directions, 1 m steps, up to 30 m (a cheap probe).</summary>
-        private static float QuickRun(Vector3 from)
+        /// <summary>
+        /// The prefilter of the ground search: the very measure of the assertion (<see cref="BestRun"/>, 48 directions, 0.5 m steps, free margin of 2.8 m at every step) from the candidate. The earlier
+        /// probe (16 directions, 1 m steps, margin every third step, 25 m) accepted a site at 13.5 m under the assertion (series p9b). Decision 254.
+        /// </summary>
+        private static float OpenRun(Vector3 from)
         {
-            int mask = WormPhysics.SolidMask;
-            float best = 0f;
-            for (int k = 0; k < 16; k++)
-            {
-                float a = k * Mathf.PI * 2f / 16f;
-                Vector3 d = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
-                Vector3 prev = from;
-                float len = 0f;
-                while (len < 30f)
-                {
-                    Vector3 q = from + d * (len + 1f);
-                    if (!Physics.Raycast(q + Vector3.up * 0.8f, Vector3.down, out RaycastHit floor, 1.6f, mask, QueryTriggerInteraction.Ignore)) break;
-                    if (floor.normal.y < 0.9f || Mathf.Abs(floor.point.y - prev.y) > 0.25f) break;
-                    if (Physics.Linecast(prev + Vector3.up * 0.6f, floor.point + Vector3.up * 0.6f, mask, QueryTriggerInteraction.Ignore)) break;
-                    if ((int)len % 3 == 0 && MineSite.FreeRadius(floor.point, 2.8f) < 2.8f) break;      // room for the biggest swarm (r 2.4 m) to walk
-                    prev = floor.point;
-                    len += 1f;
-                }
-                if (len > best) best = len;
-                if (best >= 30f) break;
-            }
-            return best;
+            BestRun(from, OpenMaxRun, out _, out _, out float length, 2.8f);
+            return length;
         }
 
         private static GameObject SpawnTorch(ScenarioContext ctx, Vector3 at)

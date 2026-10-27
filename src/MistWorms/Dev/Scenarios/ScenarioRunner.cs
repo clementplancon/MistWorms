@@ -179,6 +179,10 @@ namespace MistWorms.Dev.Scenarios
             catch (Exception e) { Plugin.Log.LogWarning("[Scenario] WaitPlayerSane: " + e.Message); }
             if (ready != null) yield return ready;
 
+            // Decision 253: the same starting state alone or in a series (site memory, position, kill, environment, flags, seeds, config snapshot).
+            yield return ScenarioReset.Begin(scenario, ctx);
+            start = Time.realtimeSinceStartup;   // the reset (a teleport) is not charged to the scenario
+
             // D9: the GPU colony is the reference of every visual scenario, the masses are drawn by it. force_cpu=1 keeps the CPU layout (previews, lobes, flipbook instances) for a
             // comparison with the fallback path; nothing forces it by default any more.
             MistWorms.Dev.DevSpawnBlock.Active = false;
@@ -209,6 +213,7 @@ namespace MistWorms.Dev.Scenarios
             MistWorms.Colony.WormColony.DevPassiveWake = true;
             MistWorms.Colony.WormColony.DevSpawnInterval = 0f;
             MistWorms.Colony.WormColony.DevMeasureAlloc = false;
+            ScenarioReset.End(ctx);
             List<string> logErrors = s_errors.End();
             result.DurationSeconds = Time.realtimeSinceStartup - start;
 

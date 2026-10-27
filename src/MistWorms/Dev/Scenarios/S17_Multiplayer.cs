@@ -20,7 +20,7 @@ namespace MistWorms.Dev.Scenarios
     /// of the server (10 s average) &lt;= 6 KB/s, bytes received by the client reported; (f) CPU of the mirror &lt;= 0.3 ms; (c) a hit of this client on a mirrored worm lowers its hp on the server,
     /// the blood is played locally once and the returned event is not replayed; (d) a mass formed on the server is seen here (Character, <c>mw_n</c>) and a hit lowers its hp; (g) everything undone.
     /// </summary>
-    internal sealed class S17_Multiplayer : IDevScenario
+    internal sealed class S17_Multiplayer : IDevScenario, IKeepsPlayerPosition
     {
         private const int WormCount = 200;
         private const float ClusterDistance = 26f, ClusterRadius = 9f;

@@ -272,6 +272,19 @@ namespace MistWorms.Dev.Scenarios
         {
             var result = new OpenGroundResult();
             LastOpenGround = result;
+            // Param site=x,z: a site imposed from the command line (reproducing a failure of a series): no search, the player is put on the terrain there.
+            if (TryParseSite(Param("site"), out float sx, out float sz))
+            {
+                yield return GoToSite(sx, sz, result);
+                if (result.Found && Player.m_localPlayer != null)
+                {
+                    Player.m_localPlayer.SetGodMode(true);
+                    MistWorms.Dev.DevSpawnBlock.Active = true;
+                    S18_GroupCoherence.ClearCreatures(this, Player.m_localPlayer);
+                }
+                Assert("open_ground_found", result.Found, true, result.Found ? (object)$"imposed site {result.Spot}" : result.Error);
+                yield break;
+            }
             // Hardening of the open ground scenarios: never a site in or beside water (the rings of water on the captures, the sea level under the masses), and once there the vanilla
             // creatures within 40 m are removed and the player is protected (a P3_Cobra was spoiled once by the death of the player in the Plains).
             // The site is level within flatTolerance over flatRadius: a condition of acceptance, not a remark (a door 1.3 m above the mass, a mass that climbs, a speed that is not the flat one).
@@ -297,6 +310,30 @@ namespace MistWorms.Dev.Scenarios
                 MistWorms.Dev.DevSpawnBlock.Active = true;        // the vanilla spawners are silent until the end of the scenario
                 S18_GroupCoherence.ClearCreatures(this, Player.m_localPlayer);
             }
+        }
+
+        private static bool TryParseSite(string text, out float x, out float z)
+        {
+            x = z = 0f;
+            if (string.IsNullOrEmpty(text)) return false;
+            string[] parts = text.Split(',');
+            return parts.Length == 2
+                && float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out x)
+                && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out z);
+        }
+
+        private IEnumerator GoToSite(float x, float z, OpenGroundResult result)
+        {
+            float h = WorldGenerator.instance.GetHeight(x, z);
+            var outcome = new TeleportOutcome();
+            yield return DevWorld.TeleportPlayer(new Vector3(x, Mathf.Max(h, ZoneSystem.instance.m_waterLevel) + 2f, z), Player.m_localPlayer.transform.rotation, true, 60f, outcome);
+            if (!outcome.Ok) { result.Error = "teleport to the imposed site failed: " + outcome.Error; yield break; }
+            Vector3 spot = new Vector3(x, h, z);
+            if (Physics.Raycast(new Vector3(x, h + 50f, z), Vector3.down, out RaycastHit hit, 100f, LayerMask.GetMask(VanillaNames.LayerTerrain), QueryTriggerInteraction.Ignore)) spot = hit.point;
+            yield return DevWorld.TeleportPlayer(spot + Vector3.up * 0.1f, Player.m_localPlayer.transform.rotation, false, 30f, outcome = new TeleportOutcome());
+            yield return new WaitForSecondsRealtime(1f);
+            result.Found = true;
+            result.Spot = spot;
         }
 
         // ---------------------------------------------------------------- player setup

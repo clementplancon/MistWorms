@@ -39,6 +39,9 @@ namespace MistWorms.Mass
         private float _transferCooldownUntil;
         private WritheMassState _seekTarget;
         private float _seekUntil, _seekCooldownUntil;
+#if MW_DEV
+        private float _dbgNext;
+#endif
 
         /// <summary>A mass sees another one of its colony this close (metres) and goes to join it when it is the smaller (spec 4.1, coordinator 4B-4).</summary>
         public const float MergeSeekRadius = 8f;
@@ -89,6 +92,9 @@ namespace MistWorms.Mass
                 float d = (float)Math.Sqrt(dx * dx + dz * dz);
                 ZDOID theirs = b.ZdoId;
                 bool iAmSmaller = MassMergeMath.IsSmaller(n, mine.UserID, mine.ID, nb, theirs.UserID, theirs.ID);
+#if MW_DEV
+                if (now >= _dbgNext) { _dbgNext = now + 1f; Plugin.DevInfo($"[MergeDbg] {mine} n={n} sees {theirs} n={nb} d={d:0.00} smaller={iAmSmaller} key={colonyKey} theirKey={b.ColonyKey} mode={MassStateCodes.Describe(myCode)} seekT={(_seekTarget != null)} cooldown={Math.Max(0f, _seekCooldownUntil - now):0.0}"); }
+#endif
                 if (!MassMergeMath.Touching(d, q.y - p.y, r, MassMath.Radius(nb)))
                 {
                     // Not touching: a smaller mass that sees a bigger one of its colony close by goes to it (spec 4.1; the hunts alone would never

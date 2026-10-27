@@ -48,12 +48,15 @@ namespace MistWorms.Drops
         /// <summary>What the patches captured since the last <see cref="ResetCounters"/> (read by S12 and S13): the units by item prefab hash of the last capture, its victim and its killer.</summary>
         public static readonly Dictionary<int, int> LastUnits = new Dictionary<int, int>();
         public static string LastVictim, LastKiller;
+        /// <summary>ZDOID of the creature of the last creature capture: a scenario that places its own victim checks it was that one and not a creature that was already there.</summary>
+        public static ZDOID LastVictimId = ZDOID.None;
         public static int CreatureCaptures, StructureCaptures, DoubleRolls, Refused;
 
         public static void ResetCounters()
         {
             LastUnits.Clear();
             LastVictim = LastKiller = null;
+            LastVictimId = ZDOID.None;
             CreatureCaptures = StructureCaptures = DoubleRolls = Refused = 0;
         }
 
@@ -169,6 +172,7 @@ namespace MistWorms.Drops
             Plugin.DevInfo($"[Capture] {victim} {id} killed by {who}: {Describe(s_list)} go to the pool instead of the ground");
 #if MW_DEV
             Note(victim, who, s_list, false);
+            LastVictimId = id;
 #endif
             CaptureMath.RemoveWhere(list, s_isItem);
             return true;

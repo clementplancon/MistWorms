@@ -791,6 +791,9 @@ namespace MistWorms.Mass
         /// <summary>Dev: what frightened the mass the last time (kind, path, distance).</summary>
         public string FleeSource { get; private set; }
 
+        /// <summary>Dev: how the last flight step was steered (direction, obstacles).</summary>
+        public string FleeNote { get; private set; }
+
         /// <summary>Times a fire made this mass flee (dev checks).</summary>
         public int FireFlights { get; private set; }
 
@@ -831,7 +834,36 @@ namespace MistWorms.Mass
             SetSpeedFactor(1f);
             Vector3 pos = transform.position;
             Vector3 away = FireMath.AwayFrom(_fleeFrom, pos, -transform.forward);
-            MoveAndAvoid(dt, pos + away * FleeReach, 0.5f, false);
+            // Not MoveAndAvoid: when the body is stuck for 1.5 s its "get out of the corner" walks BACKWARDS from the goal for 4 s, which for a flight is toward the fire (S06, a mass
+            // that fled to 6.8 m came back to 1.9 m of the torch). Here a heading is taken among those that never lead toward the fire; none free means standing still.
+            FleeStep(away);
+        }
+
+        private static readonly float[] FleeAngles = { 0f, 30f, -30f, 60f, -60f, 80f, -80f };
+
+        /// <summary>One step of the flight: the first heading, from straight away from the fire then fanning out to 80 degrees, whose path is free of obstacles; stands still when none is.</summary>
+        private void FleeStep(Vector3 away)
+        {
+            float radius = m_character.GetRadius();
+            float clear = radius + 1f;
+            Vector3 center = m_character.GetCenterPoint();
+            Vector3 side = Vector3.Cross(Vector3.up, away) * (radius - 0.1f);
+            for (int k = 0; k < FleeAngles.Length; k++)
+            {
+                Vector3 dir = Quaternion.AngleAxis(FleeAngles[k], Vector3.up) * away;
+                if (Raycast(center, dir, clear, 0.1f) < clear) continue;
+                if (Raycast(center - side, dir, clear, 0.1f) < clear) continue;
+                if (Raycast(center + side, dir, clear, 0.1f) < clear) continue;
+#if MW_DEV
+                FleeNote = $"heading {FleeAngles[k]:0} deg from straight away {away.ToString("0.00")}";
+#endif
+                MoveTowards(dir, false);
+                return;
+            }
+#if MW_DEV
+            FleeNote = "no free heading away from the fire: standing still";
+#endif
+            StopMoving();
         }
 
         /// <summary>Called by the state when the mass is destroyed (BaseAI.OnDestroy is private, so it cannot be overridden): the Infested effect is released at once.</summary>
