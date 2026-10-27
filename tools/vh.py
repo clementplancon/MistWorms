@@ -38,7 +38,8 @@ CHECKLIST_MARKER = "<!-- manual-checklist -->"   # write_report keeps everything
 REPORT_PATH = REPO_ROOT / "docs" / "test-report.md"
 SHOTS_DIR = REPO_ROOT / "docs" / "shots"
 DEFAULT_PORT = 27781
-SCENARIO_POLL_TIMEOUT = 180.0  # the bridge fails a scenario after 120 s; leave headroom
+SCENARIO_POLL_DEFAULT = 600.0  # per-scenario polling limit; scenarios set their own timeout inside the game (up to 600 s) and the bridge does not expose it
+IDLE_WAIT = 300.0               # after giving up on a run, how long to wait for the bridge to be idle again
 
 
 class VhError(Exception):
@@ -404,6 +405,25 @@ def parse_params(pairs: list[str] | None) -> dict[str, str]:
     return params
 
 
+def wait_bridge_idle(bridge: Bridge, max_wait: float = IDLE_WAIT) -> bool:
+    """Waits until no scenario runs (GET /scenarios -> running is null). The bridge has no cancel route, but its watchdog ends any run at timeout + 20 s."""
+    end = time.monotonic() + max_wait
+    while time.monotonic() < end:
+        if not bridge.get("/scenarios").get("running"):
+            return True
+        time.sleep(1.0)
+    return False
+
+
+def scenario_poll_limit(params: dict[str, str], cap: float | None) -> float:
+    """Polling limit for one scenario: its own `timeout` param when given (plus headroom for the watchdog), else a wide default; bounded by cap (explicit or remaining global budget)."""
+    try:
+        limit = float(params["timeout"]) + 30.0 if "timeout" in params else SCENARIO_POLL_DEFAULT
+    except ValueError:
+        limit = SCENARIO_POLL_DEFAULT
+    return limit if cap is None else min(limit, cap)
+
+
 def run_scenario(bridge: Bridge, name: str, params: dict[str, str], poll_timeout: float) -> dict[str, Any]:
     started = bridge.post("/scenario", {"name": name, "params": params})
     run_id = started["id"]
@@ -414,13 +434,15 @@ def run_scenario(bridge: Bridge, name: str, params: dict[str, str], poll_timeout
             return result
         if time.monotonic() > deadline:
             result["status"] = "error"
-            result["error"] = f"vh gave up polling after {poll_timeout:.0f} s"
+            idle = wait_bridge_idle(bridge)   # never start the next run while this one is alive (HTTP 409)
+            result["error"] = f"vh gave up polling after {poll_timeout:.0f} s" + ("" if idle else "; the bridge is still busy")
             return result
         time.sleep(0.5)
 
 
 def cmd_scenario(a: argparse.Namespace) -> int:
-    result = run_scenario(Bridge(a.port), a.name, parse_params(a.param), a.timeout)
+    params = parse_params(a.param)
+    result = run_scenario(Bridge(a.port), a.name, params, scenario_poll_limit(params, a.timeout))
     emit(result)
     return 0 if result.get("status") in ("passed", "skipped") else 1   # skipped: a precondition the session cannot meet (see skipReason), not a failure
 
@@ -515,9 +537,15 @@ def cmd_scenario_all(a: argparse.Namespace) -> int:
         wanted = {n.lower() for n in a.only}
         names = [n for n in names if n.lower() in wanted or n.split("_", 1)[0].lower() in wanted]
     results = []
+    params = parse_params(a.param)
+    global_end = time.monotonic() + a.timeout if a.timeout else None   # --timeout is the budget of the whole run
     for name in names:
+        remaining = None if global_end is None else global_end - time.monotonic()
+        if remaining is not None and remaining <= 0:
+            results.append({"name": name, "status": "error", "error": "global --timeout exhausted before this scenario", "assertions": [], "shots": [], "log": []})
+            continue
         try:
-            results.append(run_scenario(bridge, name, parse_params(a.param), a.timeout))
+            results.append(run_scenario(bridge, name, params, scenario_poll_limit(params, remaining)))
         except VhError as e:
             results.append({"name": name, "status": "error", "error": str(e), "assertions": [], "shots": [], "log": []})
             if "unreachable" in str(e):
@@ -902,12 +930,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp = add("scenario", cmd_scenario, "run one scenario and print its result")
     sp.add_argument("name")
     sp.add_argument("--param", "-p", action="append", metavar="KEY=VALUE")
-    sp.add_argument("--timeout", type=float, default=SCENARIO_POLL_TIMEOUT)
+    sp.add_argument("--timeout", type=float, default=None, help="polling limit in seconds (default: the scenario's timeout param + 30, else 600)")
 
     sp = add("scenario-all", cmd_scenario_all, "run every scenario and write docs/test-report.md")
     sp.add_argument("--only", nargs="*", help="restrict to these names or Sxx ids")
     sp.add_argument("--param", "-p", action="append", metavar="KEY=VALUE")
-    sp.add_argument("--timeout", type=float, default=SCENARIO_POLL_TIMEOUT)
+    sp.add_argument("--timeout", type=float, default=None, help="global budget in seconds for the whole run (default: none); each scenario is polled up to 600 s, bounded by what remains")
 
     sp = add("s17", cmd_s17, "phase 8-2 orchestration: dedicated server with a test .cfg, client joined, client without the mod refused first, client joined, S17, JSON summary")
     sp.add_argument("--alert", type=float, default=37.5, help="Colony.AlertRadius written in the .cfg of the server and expected by the client (default 37.5)")
