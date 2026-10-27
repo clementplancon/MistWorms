@@ -264,7 +264,24 @@ namespace MistWorms.Colony
             if (landed && !DevMeasureAlloc && Store.targetKind[i] != (byte)TargetKind.Player) Plugin.DevInfo($"[Worm] {i} struck its {(TargetKind)Store.targetKind[i]} target");
             if (landed) StrikesLanded++;
             else StrikesMissed++;
+            if (landed && !DevMeasureAlloc) DevLogCreatureState(i, "struck");
 #endif
         }
+
+#if MW_DEV
+        /// <summary>Dev journal (S12): health and position of a creature target at each landed strike and when the worm drops it.</summary>
+        private void DevLogCreatureState(int i, string what)
+        {
+            if (Store.targetKind[i] != (byte)TargetKind.Creature) return;
+            if (!ResolveTarget(i, out TargetView t) || t.Character == null)
+            {
+                Plugin.DevInfo($"[WormTarget] worm {i} {what}: creature target unresolved (gone or dead)");
+                return;
+            }
+            Plugin.DevInfo($"[WormTarget] worm {i} {what} {t.Character.name}: hp {t.Character.GetHealth():0.00}/{t.Character.GetMaxHealth():0.0} at {t.Character.transform.position} (worm at {Store.pos[i]}, dist {(t.Character.transform.position - Store.pos[i]).magnitude:0.0} m)");
+        }
+
+        private void DevLogTargetDrop(int i) => DevLogCreatureState(i, "drops the target:");
+#endif
     }
 }

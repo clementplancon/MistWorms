@@ -66,10 +66,11 @@ namespace MistWorms.Dev
         /// <summary>When true each frame also sums the rises of the managed heap seen around our own Update (adds its own cost: measure the timing apart).</summary>
         public static bool MeasureAlloc;
         public static long OwnAllocBytes;
+        public static int OwnAllocFrames;       // frames of the window in which the heap rose around our own Frame (a real allocation does it in every frame, noise in a few)
 
         public static void ResetStats()
         {
-            LastMs = 0; MaxMs = 0; Frames = 0; s_sumMs = 0; OwnAllocBytes = 0;
+            LastMs = 0; MaxMs = 0; Frames = 0; s_sumMs = 0; OwnAllocBytes = 0; OwnAllocFrames = 0;
         }
 
         // ---------------------------------------------------------------- load
@@ -258,7 +259,7 @@ namespace MistWorms.Dev
             if (MeasureAlloc)
             {
                 long rise = Profiler.GetMonoUsedSizeLong() - heap0;
-                if (rise > 0) OwnAllocBytes += rise;
+                if (rise > 0) { OwnAllocBytes += rise; OwnAllocFrames++; }
             }
         }
 

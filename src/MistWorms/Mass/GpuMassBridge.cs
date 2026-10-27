@@ -14,6 +14,10 @@ namespace MistWorms.Mass
     /// </summary>
     internal static class GpuMassBridge
     {
+#if MW_DEV
+        /// <summary>Dev A/B (S08 param nopseudo=1): the ramp of the pseudopod net given to the GPU stays at 0.</summary>
+        internal static bool DevNoPseudo;
+#endif
         public const int WormsPerUnit = 10;                  // visual worms per game unit
         public const int MaxWormsPerMass = 2400;
         public const float CreateDistance = 85f;             // a mass farther than this from the camera has no GPU twin (it is not drawn there anyway)
@@ -166,6 +170,9 @@ namespace MistWorms.Mass
                     armWant = v.PseudoRamp;
                 }
             }
+#if MW_DEV
+            if (DevNoPseudo) armWant = 0f;
+#endif
             m.PseudoRamp = wrap ? 0f : WormSimRef.SmoothRamp(m.PseudoRamp, armWant, Time.deltaTime);
             m.Pseudo = m.PseudoRamp > 0f && m.PseudoFull > 0f ? new Vector4(m.PseudoDirX, m.PseudoDirZ, m.PseudoFull * m.PseudoRamp, m.PseudoRamp) : Vector4.zero;
 

@@ -480,14 +480,16 @@ namespace MistWorms.Dev.Scenarios
             return Mathf.Min(ring, 6);
         }
 
-        internal static void ClearCreatures(ScenarioContext ctx, Player player, bool quiet = false)
+        /// <param name="center">centre of the clearing; the player's position when null (a scenario whose action is away from the player passes its anchor)</param>
+        internal static void ClearCreatures(ScenarioContext ctx, Player player, bool quiet = false, Vector3? center = null)
         {
+            Vector3 middle = center ?? player.transform.position;
             var found = new List<Character>();
             foreach (Character c in Character.GetAllCharacters())
             {
                 if (c == null || c.IsPlayer() || c.IsTamed()) continue;
                 if (Mass.WritheMassState.TryGet(c, out _)) continue;     // ours (MW_ prefabs) are not vanilla creatures
-                if ((c.transform.position - player.transform.position).sqrMagnitude > CreatureClearRadius * CreatureClearRadius) continue;
+                if ((c.transform.position - middle).sqrMagnitude > CreatureClearRadius * CreatureClearRadius) continue;
                 found.Add(c);
             }
             int removed = 0;
@@ -500,7 +502,7 @@ namespace MistWorms.Dev.Scenarios
                 if (ZNetScene.instance != null) ZNetScene.instance.Destroy(c.gameObject);
                 removed++;
             }
-            if (!quiet || removed > 0) ctx.Log($"vanilla creatures within {CreatureClearRadius:0} m removed: {removed} of {found.Count} found");
+            if (!quiet || removed > 0) ctx.Log($"vanilla creatures within {CreatureClearRadius:0} m of {(center.HasValue ? "the anchor " : "the player ")}{middle} removed: {removed} of {found.Count} found");
         }
 
         /// <summary>

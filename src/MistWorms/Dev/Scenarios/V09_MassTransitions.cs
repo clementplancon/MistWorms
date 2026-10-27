@@ -31,6 +31,7 @@ namespace MistWorms.Dev.Scenarios
         private const int FormationWorms = 12;
         private const int BigCount = 15, SmallCount = 10;
         private const float FormationRing = 2.2f;
+        private const float MaxSiteDistance = 20f;       // the site farther than this from the player: the player is teleported next to it
 
         public string Name => "V09_MassTransitions";
 
@@ -76,7 +77,21 @@ namespace MistWorms.Dev.Scenarios
                         var site = new MineSiteResult();
                         yield return MineSite.Find(Player.m_localPlayer.transform.position, MassMath.Radius(15) + 6f, MineSite.AbsoluteMinClearance, site, (floor, clearance) => FlatAround(floor));
                         ctx.Assert("mine_site_found", site.Found, "a flat free floor", site.Found ? $"{site.Floor} clearance {site.Clearance:0.0} m" : site.Error);
-                        if (site.Found) { anchor = site.Floor; placed = true; }
+                        if (site.Found)
+                        {
+                            anchor = site.Floor; placed = true;
+                            // The clearing and the guard are centred on the anchor; the player is brought near it when the site is far (the first run: site 49.7 m away, a SeekerBrute killed the heap).
+                            ctx.GuardCenter = anchor;
+                            float away = Vector3.Distance(Player.m_localPlayer.transform.position, anchor);
+                            if (away > MaxSiteDistance)
+                            {
+                                ctx.Log($"site {away:0.0} m from the player (> {MaxSiteDistance:0} m): teleporting the player next to the anchor");
+                                var tp = new TeleportOutcome();
+                                yield return DevWorld.TeleportPlayer(anchor + Vector3.up * 0.3f, Player.m_localPlayer.transform.rotation, false, 30f, tp);
+                                ctx.Assert("player_near_site", tp.Ok && Vector3.Distance(Player.m_localPlayer.transform.position, anchor) <= MaxSiteDistance, $"player within {MaxSiteDistance:0} m of the anchor", tp.Ok ? Vector3.Distance(Player.m_localPlayer.transform.position, anchor).ToString("0.0") : tp.Error);
+                                yield return ctx.Wait(1f);
+                            }
+                        }
                     }
                     if (!placed) ctx.Log("no site in the mine: falling back to open ground");
                 }
@@ -130,7 +145,7 @@ namespace MistWorms.Dev.Scenarios
 
         private IEnumerator Formation(ScenarioContext ctx, WormColony colony, Vector3 anchor)
         {
-            ClearMineCreatures(ctx);
+            ClearMineCreatures(ctx, anchor);
             Frame(ctx, anchor, 0.75f * FormationRing, Vector3.forward);       // the worms start on a ring of 2.2 m and slide in: the inner three quarters of it are framed
             yield return ctx.WaitFrames(10);
             yield return ctx.Shot("formation_0_before");
@@ -173,7 +188,7 @@ namespace MistWorms.Dev.Scenarios
 
         private IEnumerator Absorption(ScenarioContext ctx, WormColony colony, Vector3 anchor)
         {
-            ClearMineCreatures(ctx);
+            ClearMineCreatures(ctx, anchor);
             WritheMassState mass = MassDev.SpawnAt(anchor, 20, colony.ZdoId, freezeAI: true);
             ctx.Assert("absorption_mass_created", mass != null && mass.Valid, "a mass of 20", mass != null ? mass.ZdoId.ToString() : "none");
             if (mass == null) yield break;
@@ -220,7 +235,7 @@ namespace MistWorms.Dev.Scenarios
 
         private IEnumerator Fusion(ScenarioContext ctx, WormColony colony, Vector3 anchor)
         {
-            ClearMineCreatures(ctx);
+            ClearMineCreatures(ctx, anchor);
             // Nothing else of the colony may stand near: a stray mass bigger than the 15 would swallow it. What is there is logged and removed.
             foreach (WritheMassState stray in new List<WritheMassState>(WritheMassState.All))
             {
@@ -271,7 +286,7 @@ namespace MistWorms.Dev.Scenarios
 
         private IEnumerator Dissolution(ScenarioContext ctx, WormColony colony, Vector3 anchor)
         {
-            ClearMineCreatures(ctx);
+            ClearMineCreatures(ctx, anchor);
             WritheMassState mass = MassDev.SpawnAt(anchor, 8, colony.ZdoId, freezeAI: true);
             ctx.Assert("dissolution_mass_created", mass != null && mass.Valid, "a mass of 8", mass != null ? mass.ZdoId.ToString() : "none");
             if (mass == null) yield break;
@@ -354,10 +369,10 @@ namespace MistWorms.Dev.Scenarios
             return true;
         }
 
-        /// <summary>The mine has creatures that kill a mass (it is hostile to every faction): the 40 m around the player are emptied before every part.</summary>
-        private static void ClearMineCreatures(ScenarioContext ctx)
+        /// <summary>The mine has creatures that kill a mass (it is hostile to every faction): the 40 m around the anchor of the site (not the player: the site can be far from him) are emptied before every part and guarded all along.</summary>
+        private static void ClearMineCreatures(ScenarioContext ctx, Vector3 anchor)
         {
-            if (Player.m_localPlayer != null) S18_GroupCoherence.ClearCreatures(ctx, Player.m_localPlayer);
+            if (Player.m_localPlayer != null) S18_GroupCoherence.ClearCreatures(ctx, Player.m_localPlayer, center: anchor);
         }
 
         private static int CountMasses(WormColony colony)

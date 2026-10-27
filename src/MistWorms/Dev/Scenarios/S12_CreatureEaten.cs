@@ -192,7 +192,14 @@ namespace MistWorms.Dev.Scenarios
             Vector3 at = SeekerSpot(site, fwd, 3f, 0);
             Character seeker = SpawnSeeker(seekerPrefab, at);
             if (!ctx.Assert("worm_seeker_spawned", seeker != null, "a Seeker", seeker != null ? at.ToString() : "failed")) yield break;
-            seeker.SetHealth(1.5f);   // two cobra strikes (the pierce damage is halved by the Seeker's resistance)
+            // One strike must be enough (the Seeker backs away after the first one and the worm loses it, S12 run 34/41): the health is half of the real damage of a cobra strike
+            // on this Seeker (its resistances applied to the real hit), logged.
+            var probe = Bites.WormBite.NewHit(MWConfig.Worm.CobraCreatureDamage.Value, seeker.GetCenterPoint(), Vector3.forward);
+            probe.ApplyResistance(seeker.GetDamageModifiers(), out _);
+            float perStrike = probe.GetTotalDamage();
+            float health = perStrike > 0.01f ? Mathf.Min(perStrike * 0.5f, 1.5f) : 1f;
+            seeker.SetHealth(health);
+            ctx.Log($"worm part: cobra strike = {MWConfig.Worm.CobraCreatureDamage.Value:0.00} pierce, {perStrike:0.00} after the Seeker's resistance; Seeker health set to {health:0.00} (one strike kills)");
             ZDOID seekerId = seeker.GetZDOID();
 
             int slot = ColonyDev.SpawnAt(at + Flat(Vector3.Cross(Vector3.up, fwd)) * 1.5f, WormState.Hunting, true, out WormColony colony);

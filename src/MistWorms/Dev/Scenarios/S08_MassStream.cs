@@ -64,6 +64,9 @@ namespace MistWorms.Dev.Scenarios
         {
             int n = ctx.ParamInt("n", 200);
             _wallInner = 2f * MassMath.Radius(n) + 0.45f;
+            s_wallInner = _wallInner;
+            bool debug = ctx.ParamBool("debug", false);       // debug=1: dev A/B parameters (nopseudo=1: no pseudopod net on the GPU; fast=1: a readback per frame)
+            Mass.GpuMassBridge.DevNoPseudo = debug && ctx.ParamBool("nopseudo", false);
             float seconds = ctx.ParamFloat("seconds", 20f);
             if (!ctx.Params.ContainsKey("timeout")) ctx.TimeoutSeconds = 600f;       // the environment step of the stairs (search, up to three agents of 20 s) comes before the corridor
 
@@ -139,6 +142,7 @@ namespace MistWorms.Dev.Scenarios
                 }
                 _walls.Clear();
                 MassDev.KillAll();
+                Mass.GpuMassBridge.DevNoPseudo = false;
                 ctx.Console("mw_kill");
                 Player p = Player.m_localPlayer;
                 if (p != null) { p.SetGodMode(false); p.SetGhostMode(false); }
@@ -267,6 +271,7 @@ namespace MistWorms.Dev.Scenarios
 
         // ------------------------------------------------------------------ the built corridor
 
+        private static float s_wallInner = 2f;           // the same, for the static site test
         private float _wallInner = 2f;                 // inner width of the corridor: 2 r(n) + 0.45 m of the mass under test (set in Run): under the 2 r + 0.5 m a mass of that size needs, and wide enough (about 2 m) for the navmesh of the Humanoid agent, which finds no path through 1.63 m between two stone walls
         private const float WallSink = 0.1f;
         private const float CorridorLength = 18f;      // at least; a whole number of wall pieces
@@ -292,7 +297,7 @@ namespace MistWorms.Dev.Scenarios
 
         /// <summary>Flat, free ground for a corridor starting 3 m ahead (+Z) of the player's ground point: 6 m wide, 26 m long, nothing solid but terrain.</summary>
         private static float s_flatTolerance = FlatTolerance;
-        private static readonly float[] FlatTolerances = { 0.5f, 0.8f, 1.2f };   // the flattest strip within reach first
+        private static readonly float[] FlatTolerances = { 0.5f, 0.8f };   // the flattest strip within reach first (1.2 m was tried: the ropes slide against a wall on that slope, 1.12 to 1.21 m from the axis for a limit of 1.09 m)
 
         private static bool AcceptCorridorSpot(Vector3 ground) => AcceptCorridorSpot(ground, false);
 
@@ -303,6 +308,14 @@ namespace MistWorms.Dev.Scenarios
             for (float z = 0f; z <= CorridorLength + 6f; z += 1f)
             {
                 for (float x = -3f; x <= 3f; x += 1.5f)
+                {
+                    float y = TerrainY(start + new Vector3(x, 0f, z));
+                    if (float.IsNaN(y)) { if (strict) return false; continue; }
+                    if (Mathf.Abs(y - ground.y) > s_flatTolerance) return false;
+                }
+                // The inside of the corridor itself (both walls and the axis, every metre): the ground that the mass walks on and that the walls must stand on, within the tolerance
+                // that is announced (the 6 m grid above has a point on the axis only, and the terrain rose into the corridor between its points).
+                for (float x = -s_wallInner * 0.5f - 0.3f; x <= s_wallInner * 0.5f + 0.3f; x += (s_wallInner + 0.6f) * 0.5f)
                 {
                     float y = TerrainY(start + new Vector3(x, 0f, z));
                     if (float.IsNaN(y)) { if (strict) return false; continue; }
@@ -342,6 +355,7 @@ namespace MistWorms.Dev.Scenarios
             if (!playerSpotFlat)
             {
                 bool found = false;
+                float appliedTolerance = FlatTolerance;
                 int tested = 0;
                 Vector3 searchCenter = player.transform.position;
                 var hopDirections = new[] { Vector3.right, Vector3.forward, Vector3.left, Vector3.back };
@@ -364,6 +378,7 @@ namespace MistWorms.Dev.Scenarios
                                 if (!AcceptCorridorSpot(c, true)) continue;
                                 basePoint = c;
                                 found = true;
+                                appliedTolerance = tolerance;
                             }
                         }
                         if (found) { ctx.Log($"flat strip found with a tolerance of {tolerance} m after {tested} candidates, {hop} hop(s)"); break; }
@@ -381,7 +396,8 @@ namespace MistWorms.Dev.Scenarios
                 }
                 s_flatTolerance = FlatTolerance;
                 ctx.Log(found ? $"the player's spot was not flat enough: the corridor is built at {basePoint}" : "no flat strip found around the player: the corridor goes where the player stands");
-                ctx.Assert("corridor_site_flat", found, $"a strip 6 x {CorridorLength + 6:0} m flat within {FlatTolerance} m near the player", found ? basePoint.ToString() : "none within about 300 m");
+                ctx.Assert("corridor_site_flat", found, $"a strip 6 x {CorridorLength + 6:0} m (the inside of the corridor sampled too) flat within {FlatTolerances[FlatTolerances.Length - 1]} m (0.5 then 0.8 m tried in turn) near the player",
+                    found ? $"{basePoint}, flat within {appliedTolerance} m" : "none within about 300 m");
                 if (found)
                 {
                     var move = new TeleportOutcome();
@@ -611,6 +627,7 @@ namespace MistWorms.Dev.Scenarios
             GpuMassDev.NodeSnapshot gpuPending = null;
             float gpuLastRequest = -1f, gpuMaxLateral = 0f, gpuRibbon = 0f;
             int gpuSnapshots = 0;
+            bool gpuExcessLogged = false;
             // Samples are taken at full speed only (steady state). Once the required progress is reached the mass is sent back and forth along the corridor
             // (DevGoal, no engulfing) so that the ribbon is sampled for the rest of the run: about twice the samples of a single pass. The per-second share of
             // centred flux worms is logged (min, median, max).
@@ -663,14 +680,21 @@ namespace MistWorms.Dev.Scenarios
                                 for (int q = 0; q < count; q++)
                                 {
                                     Vector3 wp = new Vector3(gpuPending.Nodes[q].x + gpuPending.Origin.x, 0f, gpuPending.Nodes[q].z + gpuPending.Origin.z);
-                                    gpuMaxLateral = Mathf.Max(gpuMaxLateral, Mathf.Abs(Vector3.Dot(wp - new Vector3(corridor.A.x, 0f, corridor.A.z), side)));
+                                    float lateral = Mathf.Abs(Vector3.Dot(wp - new Vector3(corridor.A.x, 0f, corridor.A.z), side));
+                                    // the detail of the first excess only (index of the worm, mode, arm, origins of the readback and the live one, positions)
+                                    if (!gpuExcessLogged && lateral > corridor.Width * 0.5f + 0.1f)
+                                    {
+                                        gpuExcessLogged = true;
+                                        LogExcess(ctx, gpuPending, look.Gpu, q, wp, lateral, corridor, mass);
+                                    }
+                                    gpuMaxLateral = Mathf.Max(gpuMaxLateral, lateral);
                                 }
                                 gpuSnapshots++;
                                 gpuRibbon = mass.StreamWidth;
                             }
                             gpuPending = null;
                         }
-                        if (gpuPending == null && Time.time - gpuLastRequest > 0.4f)
+                        if (gpuPending == null && Time.time - gpuLastRequest > (ctx.ParamBool("debug", false) && ctx.ParamBool("fast", false) ? 0f : 0.4f))
                         {
                             gpuLastRequest = Time.time;
                             gpuPending = GpuMassDev.RequestNodes(look.Gpu);
@@ -761,6 +785,30 @@ namespace MistWorms.Dev.Scenarios
             ctx.Assert("fall_rescues_corridor", mass.FallRescues == 0, 0, mass.FallRescues);
             MassDev.Destroy(mass);
             yield return ctx.Wait(0.3f);
+        }
+
+        /// <summary>Dev journal: the first rope node found beyond the walls (index of the worm, its mode, arm and leaving, the origins of the readback and the live one, the positions).</summary>
+        private static void LogExcess(ScenarioContext ctx, GpuMassDev.NodeSnapshot snap, GpuMass gm, int node, Vector3 world, float lateral, Corridor corridor, WritheMassState mass)
+        {
+            int w = node / WormSimConst.Nodes;
+            uint seed = WormSimRef.Hash(unchecked(snap.MassSeed * 0x9E3779B1u + (uint)w));
+            bool arm = WormSimRef.ArmIs(snap.Params, seed);
+            float mode = w < snap.State.Length ? snap.State[w].x : -1f;
+            var sb = new System.Text.StringBuilder();
+            for (int k = 0; k < WormSimConst.Nodes; k++)
+            {
+                Vector4 nv = snap.Nodes[w * WormSimConst.Nodes + k];
+                sb.Append($" [{nv.x:0.00},{nv.y:0.00},{nv.z:0.00} s{nv.w:0.00}]");
+            }
+            ctx.Log($"EXCESS node {node % WormSimConst.Nodes} of worm {w} at world {world}, lateral {lateral:0.00} m (limit {corridor.Width * 0.5f + 0.1f:0.00}); skin mode {mode}, arm {arm}, pseudo {snap.Params.Pseudo}, plan2 {snap.Params.Plan2}, worms {snap.Worms}; " +
+                    $"origin: snapshot {snap.Origin}, params {snap.Params.Origin}, live {gm.Origin}, centre live {gm.Center}, params centre {snap.Params.Center}, mass {mass.transform.position}; local nodes{sb}");
+            int far = 0, total = snap.Worms * WormSimConst.Nodes;
+            for (int q = 0; q < total; q++)
+            {
+                Vector3 wp = new Vector3(snap.Nodes[q].x + snap.Origin.x, 0f, snap.Nodes[q].z + snap.Origin.z);
+                if (Mathf.Abs(Vector3.Dot(wp - new Vector3(corridor.A.x, 0f, corridor.A.z), Vector3.Cross(Vector3.up, corridor.Dir))) > corridor.Width * 0.5f + 0.1f) far++;
+            }
+            ctx.Log($"EXCESS: {far} of {total} nodes beyond the walls in this readback");
         }
 
         /// <summary>

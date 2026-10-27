@@ -65,6 +65,8 @@ static const float TRANSIT_K = 0.7;           // pull of the head toward the nex
 static const float ADV_R = 0.12;              // the head is at the anchor of the path when it is this close
 static const float FALL_TIME = 2.5;           // a worm that lets go falls for this long at most
 static const float HOP_TIME = 0.2;            // a head that has not reached the anchor of its path in this time goes on to the next one
+static const float SOLID_MAX_PUSH = 0.3;        // a node is not pushed sideways out of the hull when the nearest vertical face is farther than this (WormSimConst.SolidMaxPush)
+static const float DISP_MAX = 0.25;             // largest displacement of a node of the dome in one step (WormSimConst.DispMax)
 static const float SLIDE_GAIN = 1.0;           // sideways slide of a node pushed out of a face of an obstacle, over its depth of penetration
 static const float BIRTH_TIME = 0.5;           // a newborn worm grows from nothing in this time, a dying one shrinks to nothing in it
 static const float PEND_SHARE = 0.08;         // share of the worms of the sleeve that hang by one end
@@ -84,6 +86,10 @@ static const float ARM_FADE = 0.08;
 static const float ARM_K = 0.15;
 static const float ARM_PULL_MAX = 0.03;
 static const float ARM_SNAP = 0.02;
+static const float ARM_MAX = 2.0;             // longest net past its start
+static const float ARM_NET_BACK = 0.5;        // the net corridor: from this far behind the centre of the dome ...
+static const float ARM_NET_SLACK = 1.0;       // ... to ARM_START r + ARM_MAX + this ahead of it, along the direction of the net,
+static const float ARM_NET_LAT = 0.6;         // and across it, within this
 static const float ARM_OUT = 1.15;            // a worm whose centre is further than this (in footprint radii) from the centre of the dome has left the net
 static const float ARM_LEAVE_TIME = 0.15;     // a worm that left the net shrinks to nothing in this time before the containment takes it back
 static const float ARM_GONE = 0.02;           // size under which a worm that left the net is gone
@@ -510,6 +516,7 @@ float3 SolidPush(uint mi, MassParams m, float3 x, bool glide)
     if (pe < best) { best = pe; dir = 1; }
     if (ps < best) { best = ps; dir = 2; }
     if (pn < best) { best = pn; dir = 3; }
+    if (dir < 4 && best > SOLID_MAX_PUSH) return x;      // the hull of two parallel walls spans the passage between them: no push through a wall
     // Pushed out of a vertical face, the node also slides along it, toward the direction of the walk (on a face that is hit square, toward the nearer end of the face): the mass
     // flows round the obstacle instead of piling up against the face it arrived at.
     float slide = glide ? (best + RAD) * SLIDE_GAIN : 0.0;
@@ -1031,17 +1038,25 @@ void KSolve(uint3 id : SV_DispatchThreadID)
     bool arm = sMode == 0u && ArmIs(m, wd.seed);     // a worm of the net is not contained in the dome
     // A worm that has just left the net (the ramp falls) is far outside the dome: the containment would throw it back in one step. While a net is on it shrinks to nothing in ARM_LEAVE_TIME
     // instead, where it is, and once it is gone the containment brings it back (it grows again in the dome).
-    bool leaving = false;
-    if (sMode == 0u && !arm && m.pseudo.w > 0.0 && rs[3] > ARM_GONE)
+    // Only inside the net corridor (the segment mass -> target, a little wider than the dome): a worm thrown sideways (a push through a wall) is of no net and is contained at once,
+    // else it would fly on outside the walls (S08, 31 to 50 m from the axis of the corridor).
+    bool leaving = false, inNet = false;
+    if (sMode == 0u && m.pseudo.w > 0.0)
     {
         float3 lc = float3(0, 0, 0);
         [unroll] for (int lk = 0; lk < K; lk++) lc += x[lk];
         float3 ld = lc * 0.125 - m.center.xyz;
-        float3 lf = m.heading.xyz;
-        float lqx = (dot(ld, lf) - m.shape.w) / m.shape.x, lqz = dot(ld, Side(lf)) / m.shape.z;
-        leaving = lqx * lqx + lqz * lqz > ARM_OUT * ARM_OUT;
+        float nAlong = ld.x * m.pseudo.x + ld.z * m.pseudo.y, nLat = -ld.x * m.pseudo.y + ld.z * m.pseudo.x;
+        inNet = nAlong > -ARM_NET_BACK && nAlong < ARM_START * m.center.w + ARM_MAX + ARM_NET_SLACK
+                && abs(nLat) < ARM_NET_LAT;
+        if (!arm && rs[3] > ARM_GONE)
+        {
+            float3 lf = m.heading.xyz;
+            float lqx = (dot(ld, lf) - m.shape.w) / m.shape.x, lqz = dot(ld, Side(lf)) / m.shape.z;
+            leaving = inNet && lqx * lqx + lqz * lqz > ARM_OUT * ARM_OUT;
+        }
     }
-    bool skipContain = sMode != 0u || arm || leaving;
+    bool skipContain = sMode != 0u || ((arm || leaving) && inNet);
     uint nodeA[K];
     [unroll] for (int na = 0; na < K; na++) nodeA[na] = onBody ? _NodeAnchor[w * K + na] : 0u;
     float attached[K];
@@ -1109,6 +1124,12 @@ void KSolve(uint3 id : SV_DispatchThreadID)
         x[e] = SolidPush(mi, m, x[e], false);       // the nodes end the step outside the obstacles (the slide of the iterations can leave one a few millimetres in)
         float g = Ground(mi, m, x[e].x, x[e].z) + RAD;
         if (x[e].y < g) x[e].y = g;
+        if (sMode == 0u)
+        {
+            float3 dd = x[e] - o[e];
+            float dl2 = dot(dd, dd);
+            if (dl2 > DISP_MAX * DISP_MAX) x[e] = o[e] + dd * (DISP_MAX / sqrt(dl2));
+        }
         float3 vel = x[e] - o[e];
         float tg = saturate(1.0 - (x[e].y - g) / 0.004);
         vel.x *= 1.0 - m.sleeve.w * tg;

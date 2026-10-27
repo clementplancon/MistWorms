@@ -521,6 +521,9 @@ namespace MistWorms.Colony
 
         private void ClearTarget(int i)
         {
+#if MW_DEV
+            DevLogTargetDrop(i);
+#endif
             Store.ClearTarget(i);
             Store.hasLos[i] = false;
             Store.approachRank[i] = -1;

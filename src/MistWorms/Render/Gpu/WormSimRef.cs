@@ -453,6 +453,7 @@ namespace MistWorms.Render.Gpu
             if (pe < best) { best = pe; dir = 1; }
             if (ps < best) { best = ps; dir = 2; }
             if (pn < best) { best = pn; dir = 3; }
+            if (dir < 4 && best > WormSimConst.SolidMaxPush) return x;
             float slide = glide ? (best + WormSimConst.Radius) * WormSimConst.SlideGain : 0f;
             if (dir == 0 || dir == 1)
             {
@@ -1023,17 +1024,25 @@ namespace MistWorms.Render.Gpu
             bool arm = sMode == 0u && ArmIs(m, wd.Seed);       // a worm of the net is not contained in the dome
             // A worm that has just left the net (the ramp falls) is far outside the dome: the containment would throw it back in one step. While a net is on it shrinks to nothing in
             // ArmLeaveTime instead, where it is, and once it is gone the containment brings it back (it grows again in the dome).
-            bool leaving = false;
-            if (sMode == 0u && !arm && m.Pseudo.w > 0f && rs[3] > WormSimConst.ArmGone)
+            // Only inside the net corridor (the segment mass -> target, a little wider than the dome): a worm thrown sideways (a push through a wall) is of no net and is contained at once,
+            // else it would fly on outside the walls (S08, 31 to 50 m from the axis of the corridor).
+            bool leaving = false, inNet = false;
+            if (sMode == 0u && m.Pseudo.w > 0f)
             {
                 Vector3 lc = Vector3.zero;
                 for (int lk = 0; lk < K; lk++) lc += x[lk];
                 Vector3 ld = Scale(lc, 0.125f) - V3(m.Center);
-                Vector3 lf = V3(m.Heading);
-                float lqx = (Dot(ld, lf) - m.Shape.w) / m.Shape.x, lqz = Dot(ld, Side(lf)) / m.Shape.z;
-                leaving = lqx * lqx + lqz * lqz > WormSimConst.ArmOut * WormSimConst.ArmOut;
+                float nAlong = ld.x * m.Pseudo.x + ld.z * m.Pseudo.y, nLat = -ld.x * m.Pseudo.y + ld.z * m.Pseudo.x;
+                inNet = nAlong > -WormSimConst.ArmNetBack && nAlong < WormSimConst.ArmStart * m.Center.w + WormSimConst.ArmMax + WormSimConst.ArmNetSlack
+                        && Math.Abs(nLat) < WormSimConst.ArmNetLat;
+                if (!arm && rs[3] > WormSimConst.ArmGone)
+                {
+                    Vector3 lf = V3(m.Heading);
+                    float lqx = (Dot(ld, lf) - m.Shape.w) / m.Shape.x, lqz = Dot(ld, Side(lf)) / m.Shape.z;
+                    leaving = inNet && lqx * lqx + lqz * lqz > WormSimConst.ArmOut * WormSimConst.ArmOut;
+                }
             }
-            bool skipContain = sMode != 0u || arm || leaving;
+            bool skipContain = sMode != 0u || ((arm || leaving) && inNet);
             var nodeA = new uint[K];
             for (int na = 0; na < K; na++) nodeA[na] = onBody ? NodeAnchor[w * K + na] : 0u;
             for (int i = 0; i < K; i++) _attached[i] = 0f;
@@ -1075,6 +1084,12 @@ namespace MistWorms.Render.Gpu
                 x[e] = SolidPush(mi, m, x[e], false);
                 float g = Ground(mi, m, x[e].x, x[e].z) + WormSimConst.Radius;
                 if (x[e].y < g) x[e].y = g;
+                if (sMode == 0u)
+                {
+                    Vector3 dd = x[e] - o[e];
+                    float dl2 = Dot(dd, dd);
+                    if (dl2 > WormSimConst.DispMax * WormSimConst.DispMax) x[e] = o[e] + Scale(dd, WormSimConst.DispMax / (float)Math.Sqrt(dl2));
+                }
                 Vector3 vel = x[e] - o[e];
                 float tg = Sat(1f - (x[e].y - g) / 0.004f);
                 vel.x *= 1f - m.Sleeve.w * tg;

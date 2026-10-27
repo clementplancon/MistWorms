@@ -321,6 +321,42 @@ namespace MistWorms.Tests
         }
 
         [Fact]
+        public void AWormThrownSidewaysWhileTheNetIsOnIsContainedAtOnce()
+        {
+            // S08: a node thrown out of the corridor (a push through a wall) was exempt from the containment (leaving / arm) and flew on 30 m away. Only the net corridor is exempt.
+            const int n = 400;
+            float r = RadiusOf(n);
+            Vector4 ps = WormSimRef.PseudoParams(DirX, DirZ, 6f, 1f, r);
+            WormSimRef sim = Build(n, r, ps);
+            sim.Init(0, n);
+            sim.Step(120);
+            Vector3 side = new Vector3(-DirZ, 0f, DirX);
+            int thrown = 0;
+            for (int w = 0; w < n && thrown < 40; w++)
+            {
+                if (WormSimRef.ArmIs(sim.Masses[0], sim.Worms[w].Seed)) continue;       // a worm of the net: the pull toward its place is the other test
+                Vector3 c = Centre(sim, w);
+                for (int i = 0; i < K; i++)
+                {
+                    Vector3 p = P(sim, w, i) + side * (4f + 0.01f * i) - new Vector3(0f, 0f, 0f);
+                    sim.Pos[w * K + i] = new Vector4(p.x, p.y, p.z, 1f);
+                    sim.Prev[w * K + i] = new Vector4(p.x, p.y, p.z, 1f);
+                }
+                thrown++;
+            }
+            Assert.True(thrown > 20);
+            sim.Step(6);
+            float far = 0f;
+            for (int w = 0; w < n; w++) far = Math.Max(far, Math.Abs(Across(Centre(sim, w))));
+            _out.WriteLine($"largest lateral distance of a worm 6 steps after {thrown} were thrown 4 m sideways: {far:0.00} m (radius {r:0.00})");
+            Assert.True(far < 4.2f, $"a worm thrown sideways flies on: {far} m");
+            sim.Step(60);
+            far = 0f;
+            for (int w = 0; w < n; w++) far = Math.Max(far, Math.Abs(Across(Centre(sim, w))));
+            Assert.True(far < r + 0.6f, $"a worm thrown sideways was not taken back: {far} m");
+        }
+
+        [Fact]
         public void TheRampGivenToTheGpuGrowsAtOnceAndFallsAtMostAtTheRetractRate()
         {
             Assert.Equal(0.8f, WormSimRef.SmoothRamp(0.3f, 0.8f, WormSimConst.Dt), 6);

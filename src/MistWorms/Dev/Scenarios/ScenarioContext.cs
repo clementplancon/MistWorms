@@ -207,7 +207,7 @@ namespace MistWorms.Dev.Scenarios
             Player player = Player.m_localPlayer;
             if (player == null) return;
             MistWorms.Dev.DevSpawnBlock.Active = true;        // until the end of the scenario (the runner switches it off)
-            S18_GroupCoherence.ClearCreatures(this, player);
+            S18_GroupCoherence.ClearCreatures(this, player, center: GuardCenter);
             int wiped = ColonyDev.ClearMine(player);
             if (wiped > 0) Log($"mine colony wiped: {wiped} worms and nests removed (an earlier seeding)");
             GuardCreatures = true;
@@ -237,10 +237,12 @@ namespace MistWorms.Dev.Scenarios
         }
 
         /// <summary>
-        /// While true the vanilla creatures within 40 m of the player are removed every half second (the runner calls <see cref="GuardTick"/> each frame). For the scenarios that count worms:
+        /// While true the vanilla creatures within 40 m of the player (or of <see cref="GuardCenter"/>) are removed every half second (the runner calls <see cref="GuardTick"/> each frame). For the scenarios that count worms:
         /// a poisonous blob that wanders in from beyond the one-off clearing killed 6 worms of S02b. Off by default: S12 and S19 spawn creatures of their own.
         /// </summary>
         public bool GuardCreatures;
+        /// <summary>Centre of the guard and of the mine clearing when the action is away from the player (V09: the site anchor); null = the player.</summary>
+        public Vector3? GuardCenter;
         private float _nextGuard;
 
         public void GuardTick()
@@ -248,7 +250,7 @@ namespace MistWorms.Dev.Scenarios
             if (!GuardCreatures || Time.time < _nextGuard) return;
             _nextGuard = Time.time + 0.5f;
             Player p = Player.m_localPlayer;
-            if (p != null) S18_GroupCoherence.ClearCreatures(this, p, quiet: true);
+            if (p != null) S18_GroupCoherence.ClearCreatures(this, p, quiet: true, center: GuardCenter);
         }
 
         private static bool CalmBiome(Vector3 p)
