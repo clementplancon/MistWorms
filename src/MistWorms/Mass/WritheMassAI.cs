@@ -927,6 +927,16 @@ namespace MistWorms.Mass
             if (now - _windowStart < AssistWindow) return;
 
             Vector3 pos = transform.position;
+            // Turning is not stalling (decision 269): while the body faces more than m_moveMinAngle away from where it wants to go, BaseAI.MoveTowards moves it
+            // only a little, and a window without progress says nothing about a step.
+            Vector3 wantDir = DevGoal.HasValue ? DevGoal.Value - pos : HasTarget ? TargetPos() - pos : transform.forward;
+            if (!MassTurn.CountsAsStall(wantDir, transform.forward, m_moveMinAngle))
+            {
+                _stalledWindows = 0;
+                _windowStart = now;
+                _windowPos = pos;
+                return;
+            }
             float wanted = m_character.m_walkSpeed * (now - _windowStart);
             bool stalled = Utils.DistanceXZ(pos, _windowPos) < AssistStalledFraction * wanted;
             _windowStart = now;

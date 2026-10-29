@@ -20,6 +20,9 @@ namespace MistWorms.Mass
     /// </summary>
     internal static class MassPrefab
     {
+        /// <summary>Degrees per second of the turn of a mass (decision 269): a half turn to within the 10 degrees of BaseAI.m_moveMinAngle in 0.5 s (MassTurn.SecondsToTurn).</summary>
+        public const float MassTurnSpeed = 420f;
+
         public static void Register()
         {
             GameObject clone = null;
@@ -112,6 +115,8 @@ namespace MistWorms.Mass
             character.m_speed = speed;
             character.m_walkSpeed = speed;
             character.m_runSpeed = speed;
+            character.m_turnSpeed = MassTurnSpeed;      // decision 269: SeekerBrood turns at 150 deg/s (1.4 s for a half turn, with the sqrt slowdown of UpdateRotation)
+            character.m_runTurnSpeed = MassTurnSpeed;
             character.m_damageModifiers = MWConfig.BuildDamageModifiers();
             character.m_deathEffects = new EffectList();   // no ragdoll, no vanilla death effect (the worms' green blood plays on the clients)
             character.m_hitEffects = new EffectList();     // m_critHitEffects and m_backstabHitEffects are kept
