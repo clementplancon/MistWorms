@@ -517,8 +517,10 @@ float3 SolidPush(uint mi, MassParams m, float3 x, bool glide)
     float tnear = _Sides[b + 1024u + (uint)(min((int)(fz + 0.5), 15) * 16 + min((int)(fx + 0.5), 15))];
     if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax))
     {
-        // Not inside the hull, but under the top map by a row at most: no side face concerns the node (a stone lower than the spacing of the rows of the side maps is seen by none of them)
-        if (x.y < tnear && tnear - x.y <= SOLID_ROW_GAP) x.y = tnear + RAD;
+        // Not inside the hull, but under the top map by a row at most: no side face concerns the node (a stone lower than the spacing of the rows of the side maps is seen by none of them).
+        // The top of the four samples around the node, not the nearest one: a stone narrower than a cell leaves the nearest column open for a node in its edge cell (V12, decision 268);
+        // outside the hull the passage between two walls is not concerned.
+        if (x.y < tmax && tmax - x.y <= SOLID_ROW_GAP) x.y = tmax + RAD;
         return x;
     }
     // In the thickness of a wall (the column is closed, more than a row under its top): the hull has no inner face, so the node leaves by the nearest open column of the top map (S08)

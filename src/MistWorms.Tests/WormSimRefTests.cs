@@ -406,6 +406,26 @@ namespace MistWorms.Tests
         }
 
         [Fact]
+        public void ANodeUnderTheEdgeOfALowStoneWhoseNearestColumnIsOpenIsStillLeftByTheTop()
+        {
+            // V12 in game (decision 268): a node 0.1 m under the top of the 0.13 m stone, in the cell between the last closed column and the first open one, nearer to the open one:
+            // the nearest sample says "open" but the stone is there (the top of the four samples around the node)
+            WormSimRef sim = MapsWithABox(0f, 0.13f, out GpuMassParams m);
+            float sp = m.GridRect.z;
+            int last = -1;
+            for (int i = 0; i < 16; i++) if (sim.Sides[1024 + 8 * 16 + i] > 0f) last = i;
+            Assert.InRange(last, 0, 14);
+            Assert.True(sim.Sides[1024 + 8 * 16 + last + 1] < 0f);
+            float x = m.GridRect.x + (last + 0.7f) * sp, z = m.GridRect.y + 8f * sp;
+            var node = new Vector3(x, 0.03f, z);
+            Assert.StartsWith("low", WormSimRef.SolidProbe(sim.Sides, m, node, out _));
+            Vector3 pushed = sim.SolidPush(0, m, node, false);
+            Assert.Equal(0.13f + WormSimConst.Radius, pushed.y, 4);
+            Assert.Equal(node.x, pushed.x, 5);
+            Assert.Equal(node.z, pushed.z, 5);
+        }
+
+        [Fact]
         public void ANodeUnderAnOverhangAMetreAboveIsNotLiftedOntoIt()
         {
             // a slab 1.5 to 1.6 m high (an arch, the underside of a bridge) that no row of the side maps meets: its top is 1.3 m over the node, more than a row

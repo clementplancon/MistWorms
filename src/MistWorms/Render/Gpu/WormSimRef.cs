@@ -485,8 +485,10 @@ namespace MistWorms.Render.Gpu
             float tnear = Sides[b + 1024 + Math.Min((int)(fz + 0.5f), 15) * 16 + Math.Min((int)(fx + 0.5f), 15)];
             if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax))
             {
-                // Not inside the hull, but under the top map by a row at most: no side face concerns the node (a stone lower than the spacing of the rows of the side maps is seen by none of them)
-                if (x.y < tnear && tnear - x.y <= WormSimConst.SolidRowGap) x.y = tnear + WormSimConst.Radius;
+                // Not inside the hull, but under the top map by a row at most: no side face concerns the node (a stone lower than the spacing of the rows of the side maps is seen by none of them).
+                // The top of the four samples around the node, not the nearest one: a stone narrower than a cell leaves the nearest column open for a node in its edge cell (V12, decision 268);
+                // outside the hull the passage between two walls is not concerned.
+                if (x.y < tmax && tmax - x.y <= WormSimConst.SolidRowGap) x.y = tmax + WormSimConst.Radius;
                 return x;
             }
             // In the thickness of a wall (the column is closed, more than a row under its top): the hull has no inner face, so the node leaves by the nearest open column of the top map
@@ -547,7 +549,7 @@ namespace MistWorms.Render.Gpu
             float tnear = sides[1024 + Math.Min((int)(fz + 0.5f), 15) * 16 + Math.Min((int)(fx + 0.5f), 15)];
             if (!(x.x > wmin && x.x < emax && x.z > smin && x.z < nmax && x.y < tmax))
             {
-                if (x.y < tnear && tnear - x.y <= WormSimConst.SolidRowGap) return edge + "low";
+                if (x.y < tmax && tmax - x.y <= WormSimConst.SolidRowGap) return edge + "low";
                 return edge + $"free (x {x.x:0.00} y {x.y:0.00} z {x.z:0.00}; west {wmin:0.00} east {emax:0.00} south {smin:0.00} north {nmax:0.00} top {tmax:0.00})";
             }
             float best = tmax - x.y;
