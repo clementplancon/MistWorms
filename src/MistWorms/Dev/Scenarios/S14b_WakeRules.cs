@@ -22,6 +22,8 @@ namespace MistWorms.Dev.Scenarios
         private const float LayoutDy = 8f;            // height difference to the player the nests and the lone worm tolerate
         private const float LayoutAngle = 40f;        // steepest ground for them
         private const float FarMargin = 5f;           // the far nest lies at least AlertRadius + this from the chain nests
+        private const float ViewerCentreHeight = 0.9f;      // Character.GetCenterPoint of a standing player = m_collider.bounds.center (capsule; the prefab is not in the decompiled code, hence the 0.5 m margin)
+        private static readonly float[] ViewerRings = { 9f, 8f, 7f };      // horizontal radii tried in each direction
         private const float ViewerEyeHeight = 1.6f;      // the eyes of a standing player over his feet
         private const float WalkNoise = 15f;          // Character.AddNoise(15) of a walking player (Character.cs:1857)
 
@@ -157,7 +159,7 @@ namespace MistWorms.Dev.Scenarios
 
                 // ---- (c) the sight of a nest: 9 m from nest 4 in line of sight wakes it, behind a wall it does not
                 // The nest looks from NestEyeHeight over its floor point with the view blockers of the worms: on open ground a bump of the terrain between the nest and the viewer hides him
-                // (r8: nest 4 on a ridge, no wake in 3 s). The viewer's place is the first of the 12 directions around the nest, 9 m out, where the ray from the nest to his eyes is clear.
+                // (r8: nest 4 on a ridge, no wake in 3 s). The viewer's place is the first of the 12 directions around the nest, 9, 8 then 7 m out, where the 3D distance to his centre is within WakeRadius - 0.5 m and the ray from the nest to his eyes is clear.
                 Vector3 towardBase = nestPoints[3] - nestPoints[2];
                 towardBase.y = 0f;
                 towardBase = towardBase.sqrMagnitude > 1e-4f ? towardBase.normalized : u;
@@ -165,19 +167,29 @@ namespace MistWorms.Dev.Scenarios
                 Vector3 toward = towardBase, viewerFloor = default;
                 bool viewerFound = false;
                 string blocked = null;
+                float maxCentre = MWConfig.Nest.WakeRadius.Value - 0.5f;
+                float viewerCentre = 0f;
                 for (int k = 0; k < 12 && !viewerFound; k++)
                 {
                     float angle = k % 2 == 0 ? k / 2 * 30f : -(k / 2 + 1) * 30f;
                     Vector3 away = Quaternion.AngleAxis(angle, Vector3.up) * -towardBase;      // from the nest to the viewer
-                    if (!FloorAt(nestPoints[3] + away * 9f, nestPoints[3].y, out Vector3 floor, LayoutDy, LayoutAngle)) { blocked = $"no floor at {angle:0} degrees"; continue; }
-                    if (Physics.Linecast(nestEye, floor + Vector3.up * ViewerEyeHeight, out RaycastHit block, WormPhysics.ViewBlockMask, QueryTriggerInteraction.Ignore))
+                    foreach (float ring in ViewerRings)
                     {
-                        blocked = $"{angle:0} degrees: {block.collider.name} (layer {LayerMask.LayerToName(block.collider.gameObject.layer)}) at {block.point}";
-                        continue;
+                        if (!FloorAt(nestPoints[3] + away * ring, nestPoints[3].y, out Vector3 floor, LayoutDy, LayoutAngle)) { blocked = $"no floor at {angle:0} degrees, {ring:0} m"; continue; }
+                        // the mod measures in 3D, from the nest eye to Character.GetCenterPoint (the collider bounds centre: the capsule of a standing player, about 0.9 m over his feet)
+                        float centre = Vector3.Distance(nestEye, floor + Vector3.up * ViewerCentreHeight);
+                        if (centre > maxCentre) { blocked = $"{angle:0} degrees, {ring:0} m: {centre:0.0} m in 3D from the nest eye to the player's centre (limit {maxCentre:0.0})"; continue; }
+                        if (Physics.Linecast(nestEye, floor + Vector3.up * ViewerEyeHeight, out RaycastHit block, WormPhysics.ViewBlockMask, QueryTriggerInteraction.Ignore))
+                        {
+                            blocked = $"{angle:0} degrees, {ring:0} m: {block.collider.name} (layer {LayerMask.LayerToName(block.collider.gameObject.layer)}) at {block.point}";
+                            continue;
+                        }
+                        toward = -away;
+                        viewerFloor = floor;
+                        viewerCentre = centre;
+                        viewerFound = true;
+                        break;
                     }
-                    toward = -away;
-                    viewerFloor = floor;
-                    viewerFound = true;
                 }
                 if (viewerFound)
                 {
@@ -188,6 +200,8 @@ namespace MistWorms.Dev.Scenarios
                     wall.AddComponent<BoxCollider>().size = new Vector3(10f, 4f, 0.4f);
                     var behind = new TeleportOutcome();
                     yield return DevWorld.TeleportPlayer(viewerFloor + Vector3.up * 0.1f, Quaternion.LookRotation(toward), false, 30f, behind);
+                    if (Player.m_localPlayer != null)
+                        ctx.Log($"viewer: {Vector3.Distance(nestEye, Player.m_localPlayer.GetCenterPoint()):0.00} m in 3D from the nest eye to the player's centre after the teleport (planned {viewerCentre:0.00} m, WakeRadius {MWConfig.Nest.WakeRadius.Value:0.#}), horizontal {Vector3.Distance(new Vector3(nestEye.x, 0f, nestEye.z), new Vector3(Player.m_localPlayer.transform.position.x, 0f, Player.m_localPlayer.transform.position.z)):0.0} m");
                     ctx.Assert("teleport_behind_the_wall", behind.Ok, true, behind.Ok ? "arrived" : behind.Error);
                     yield return ctx.WaitGame(2.5f);
                     ctx.Assert("a_wall_hides_the_player_from_the_nest", !colony.IsGroupAwake(3), "group 4 asleep", colony.IsGroupAwake(3));
@@ -202,7 +216,7 @@ namespace MistWorms.Dev.Scenarios
                         yield return null;
                         if (colony.IsGroupAwake(3)) seenAt = Time.time - seen0;
                     }
-                    ctx.Assert("a_player_in_sight_9_m_from_the_nest_wakes_it", seenAt >= 0f && seenAt <= 1.2f, "within 1.2 s", seenAt < 0f ? "never" : $"{seenAt:0.00} s");
+                    ctx.Assert("a_player_in_sight_within_wake_radius_3d_wakes_it", seenAt >= 0f && seenAt <= 1.2f, "within 1.2 s (3D distance nest eye to player centre under WakeRadius)", seenAt < 0f ? "never" : $"{seenAt:0.00} s");
                     if (seenAt < 0f)
                     {
                         Player seer = Player.m_localPlayer;
@@ -212,7 +226,7 @@ namespace MistWorms.Dev.Scenarios
                 }
                 else
                 {
-                    ctx.Log($"no place 9 m from nest 4 with a clear line to the nest: the sight of the nest is not tested (last: {blocked})");
+                    ctx.Log($"NOTE: no place at 9, 8 or 7 m (horizontal) from nest 4 with a clear line and a 3D distance to the player's centre of at most WakeRadius - 0.5 m: the sight of the nest is NOT tested on this site, a skipped step and not a failure (last: {blocked})");
                 }
 
                 // ---- (d) the senses of a sleeping worm: standing still (a crouching player makes no noise) 5 m away, then the noise of a walk

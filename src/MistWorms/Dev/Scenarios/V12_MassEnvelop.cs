@@ -23,6 +23,7 @@ namespace MistWorms.Dev.Scenarios
     internal sealed class V12_MassEnvelop : IDevScenario
     {
         private const float PollSeconds = 0.25f;
+        private const float PlayerSideOffset = 1.25f;      // the player's lateral shift from the axis start-rock, 1 to 1.5 m, to impose the side of the detour
         private const float SleeveSample = 0.5f;
         private const float FormedBudget = 5f;          // logged against 2.5 s in the sandbox (the engulf of the game rises over 1 s, the polling is 0.5 s); asserted at twice that
 
@@ -119,7 +120,8 @@ namespace MistWorms.Dev.Scenarios
 
                 // ================================================================ 1. round the rock
                 {
-                    Vector3 playerAt = rb.center + dir * (reach + 3f);
+                    // the player stands 1.25 m off the axis start-rock: the straight line then runs through the +side half of the rock and the mass has to go round that flank (decision 265)
+                    Vector3 playerAt = rb.center + dir * (reach + 3f) + side * PlayerSideOffset;
                     playerAt.y = V14_GpuMassSandbox.GroundOf(playerAt, player.transform.position.y);
                     var tp = new TeleportOutcome();
                     yield return DevWorld.TeleportPlayer(playerAt + Vector3.up * 0.1f, Quaternion.LookRotation(-dir, Vector3.up), false, 30f, tp);
@@ -150,7 +152,7 @@ namespace MistWorms.Dev.Scenarios
                     float t0 = Time.time;
                     bool devGoal = false;
                     float maxNear = 0f, maxInside = 0f, maxTouching = 0f, minRockDistance = float.MaxValue;
-                    int snapshots = 0;
+                    int snapshots = 0, contactFrames = 0;
                     bool reached = false, passShot = false, contactShot = false;
                     float flatStop = r + Mathf.Max(0.3f, 0.6f);
                     while (Time.time - t0 < 60f && mass != null)
@@ -178,6 +180,7 @@ namespace MistWorms.Dev.Scenarios
                                     contactShot = true;
                                     yield return ctx.Shot("round_the_rock_contact");      // the first moment nodes touch the rock
                                 }
+                                if (near > 0f) contactFrames++;
                                 maxNear = Mathf.Max(maxNear, near);
                                 maxInside = Mathf.Max(maxInside, inside);
                                 maxTouching = Mathf.Max(maxTouching, touching);
@@ -187,10 +190,10 @@ namespace MistWorms.Dev.Scenarios
                         float next = Time.time + PollSeconds;
                         while (Time.time < next) yield return null;
                     }
-                    ctx.Log($"round the rock: {snapshots} snapshots, nodes within 5 cm of the rock up to {maxNear:0.0} %, inside it (in its box and within 4 mm of its collider) up to {maxInside:0.00} %, within 4 mm of any collider (the rock included) up to {maxTouching:0.00} %, closest approach of the centre {minRockDistance:0.0} m, reached the player {reached}");
+                    ctx.Log($"round the rock: {snapshots} snapshots, nodes within 5 cm of the rock up to {maxNear:0.0} %, inside it (in its box and within 4 mm of its collider) up to {maxInside:0.00} %, within 4 mm of any collider (the rock included) up to {maxTouching:0.00} %, closest approach of the centre {minRockDistance:0.0} m to the rock centre, {contactFrames} of {snapshots} snapshots with nodes within 5 cm (report only), player offset {PlayerSideOffset:0.00} m to the +side of the axis, reached the player {reached}");
                     ctx.Assert("round_snapshots", snapshots >= 3, ">= 3 snapshots of the nodes while it passes the rock", snapshots);
                     ctx.Assert("round_no_node_in_the_rock", maxInside < 2f, "< 2 % of the sampled nodes inside the rock (in the box of its bounds, shrunk by 4 mm, and within 4 mm of its collider; touching another collider does not count)", maxInside.ToString("0.00"));
-                    ctx.Assert("round_nodes_against_the_rock", maxNear >= 0.1f, ">= 0.1 % of the sampled nodes within 5 cm of the rock while it goes round (measured 0.3 to 1.3 % in game: the mass flows past the flank and only its leading nodes touch it; 0.1 % fails a mass that keeps away or goes through; judge the captures round_the_rock_*)", maxNear.ToString("0.0"));
+                    ctx.Assert("round_nodes_against_the_rock", maxNear >= 0.1f, ">= 0.1 % of the sampled nodes within 5 cm of the rock while it goes round (the maximum over the snapshots, not the median: a graze lasts a few frames; the player is offset by 1.25 m so that the mass goes round one flank; 0.1 % is two nodes of about 1100; the log gives the closest approach and the snapshots in contact; judge the captures round_the_rock_*)", maxNear.ToString("0.0"));
                     ctx.Assert("round_reaches_the_player", reached, "the mass reaches the player (within its engulf range)", reached);
                     yield return V14_GpuMassSandbox.Shots(ctx, "round_end", () => mass != null ? mass.transform.position : rb.center, side, dir, 0.3f, rock);
 
