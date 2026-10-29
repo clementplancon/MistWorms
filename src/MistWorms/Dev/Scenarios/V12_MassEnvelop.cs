@@ -14,7 +14,7 @@ namespace MistWorms.Dev.Scenarios
     /// <summary>
     /// V12 (visual v2, pass B2): the GPU rope colony on real masses, driven by the AI of the game (not the phantom of V14). Open ground, no creature within 40 m, the player in god
     /// mode, no water within 5 m of the site. Three acts:
-    ///  1. a mass of 100 hunts the player standing behind a vanilla rock: it goes round the rock (nodes against the rock while it passes, fewer than 2 % inside it) and reaches the player;
+    ///  1. a mass of 100 hunts the player standing behind a vanilla rock: it goes round the rock (fewer than 2 % of nodes inside it) and reaches the player; then, for the graze alone, a mass follows a dev goal on a straight line tangent to the flank (edge 0.1 m inside the width of the rock), nodes against the rock by construction (decision 266);
     ///  2. a mass of 100 crosses a low stone (about half of its dome height): nothing inside the stone, nodes over it when it goes over;
     ///  3. a mass of 100 engulfs the player: the sleeve forms on the real body of the player, and the time it takes to reach 80 % of its steady state is logged (the readback of
     ///     the nodes every 0.5 s gives the number of worms settled on the body).
@@ -190,12 +190,82 @@ namespace MistWorms.Dev.Scenarios
                         float next = Time.time + PollSeconds;
                         while (Time.time < next) yield return null;
                     }
-                    ctx.Log($"round the rock: {snapshots} snapshots, nodes within 5 cm of the rock up to {maxNear:0.0} %, inside it (in its box and within 4 mm of its collider) up to {maxInside:0.00} %, within 4 mm of any collider (the rock included) up to {maxTouching:0.00} %, closest approach of the centre {minRockDistance:0.0} m to the rock centre, {contactFrames} of {snapshots} snapshots with nodes within 5 cm (report only), player offset {PlayerSideOffset:0.00} m to the +side of the axis, reached the player {reached}");
-                    ctx.Assert("round_snapshots", snapshots >= 3, ">= 3 snapshots of the nodes while it passes the rock", snapshots);
-                    ctx.Assert("round_no_node_in_the_rock", maxInside < 2f, "< 2 % of the sampled nodes inside the rock (in the box of its bounds, shrunk by 4 mm, and within 4 mm of its collider; touching another collider does not count)", maxInside.ToString("0.00"));
-                    ctx.Assert("round_nodes_against_the_rock", maxNear >= 0.1f, ">= 0.1 % of the sampled nodes within 5 cm of the rock while it goes round (the maximum over the snapshots, not the median: a graze lasts a few frames; the player is offset by 1.25 m so that the mass goes round one flank; 0.1 % is two nodes of about 1100; the log gives the closest approach and the snapshots in contact; judge the captures round_the_rock_*)", maxNear.ToString("0.0"));
-                    ctx.Assert("round_reaches_the_player", reached, "the mass reaches the player (within its engulf range)", reached);
+                    ctx.Log($"[AI act] round the rock: {snapshots} snapshots, nodes within 5 cm of the rock up to {maxNear:0.0} %, inside it (in its box and within 4 mm of its collider) up to {maxInside:0.00} %, within 4 mm of any collider (the rock included) up to {maxTouching:0.00} %, closest approach of the centre {minRockDistance:0.0} m to the rock centre, {contactFrames} of {snapshots} snapshots with nodes within 5 cm (report only), player offset {PlayerSideOffset:0.00} m to the +side of the axis, reached the player {reached}");
+                    ctx.Assert("ai_round_snapshots", snapshots >= 3, ">= 3 snapshots of the nodes while it passes the rock", snapshots);
+                    ctx.Assert("ai_round_no_node_in_the_rock", maxInside < 2f, "< 2 % of the sampled nodes inside the rock (in the box of its bounds, shrunk by 4 mm, and within 4 mm of its collider; touching another collider does not count)", maxInside.ToString("0.00"));
+                    ctx.Assert("ai_round_reaches_the_player", reached, "the mass reaches the player (within its engulf range)", reached);
                     yield return V14_GpuMassSandbox.Shots(ctx, "round_end", () => mass != null ? mass.transform.position : rb.center, side, dir, 0.3f, rock);
+
+                    // ---------------------------------------------------------------- graze act (decision 266): contact by construction. The mass follows a dev goal on a straight line TANGENT to the +side flank of the rock,
+                    // its edge (radius r) 0.1 m inside the width of the rock at the height of the mass, so that the rock really pushes it aside (SolidPush) and nodes graze it whatever side the AI would pick.
+                    if (mass != null) MassDev.Destroy(mass);
+                    mass = null;
+                    {
+                        float rayY = V14_GpuMassSandbox.GroundOf(rb.center, player.transform.position.y) + 0.45f * r * 0.5f;       // half the dome height of the mass
+                        float halfWidth = 0f;
+                        for (float along = -reach; along <= reach + 0.001f; along += 0.25f)
+                        {
+                            Vector3 o = rb.center + dir * along + side * (reach + 2f);
+                            o.y = rayY;
+                            if (rock.Raycast(new Ray(o, -side), out RaycastHit hit, reach * 2f + 4f))
+                                halfWidth = Mathf.Max(halfWidth, Vector3.Dot(hit.point - rb.center, side));
+                        }
+                        if (halfWidth < 0.3f) halfWidth = reach;      // no hit at that height (should not happen): fall back to the box
+                        const float GrazeInset = 0.1f;
+                        float lateral = halfWidth + r - GrazeInset;
+                        ctx.Log($"[graze act] tangent line at {lateral:0.00} m to the +side of the rock axis: width of the rock at the height of the mass (y {rayY:0.00}) {halfWidth:0.00} m (half), radius of the mass {r:0.00} m, edge of the mass {GrazeInset:0.00} m inside the width");
+                        Vector3 gStart = rb.center + side * lateral - dir * (reach + r + 3.5f);
+                        gStart.y = V14_GpuMassSandbox.GroundOf(gStart, player.transform.position.y);
+                        Vector3 gGoal = rb.center + side * lateral + dir * (reach + r + 1.5f);
+                        gGoal.y = V14_GpuMassSandbox.GroundOf(gGoal, gStart.y);
+                        mass = MassDev.SpawnAt(gStart, n, ZDOID.None, freezeAI: false);
+                        ctx.Assert("graze_mass_spawned", mass != null, "a mass on the tangent line", mass != null);
+                        if (mass != null)
+                        {
+                            visual = mass.GetComponent<WritheMassVisual>();
+                            ai = mass.GetComponent<WritheMassAI>();
+                            ai.DevGoal = gGoal;
+                            yield return ctx.WaitUntil(() => visual.GpuDriven, 10f);
+                            DevCamera.Free(rb.center + side * camDist + Vector3.up * 1.6f, rb.center + Vector3.up * 0.5f);
+                            DevCamera.Provider = new V14_GpuMassSandbox.FollowCam(() => mass != null ? Vector3.Lerp(mass.transform.position, rb.center, 0.5f) : rb.center, side, camDist, 1.6f, 0.4f).Pose;
+                            float g0 = Time.time;
+                            float gNear = 0f, gInside = 0f, gClosest = float.MaxValue, gMaxLateral = 0f;
+                            int gSnaps = 0, gContact = 0;
+                            bool gDone = false, gShot = false;
+                            while (Time.time - g0 < 40f && mass != null)
+                            {
+                                Vector3 mp = mass.transform.position;
+                                if (V14_GpuMassSandbox.HorizontalDistance(mp, gGoal) < 0.7f) { gDone = true; break; }
+                                float dR = V14_GpuMassSandbox.HorizontalDistance(mp, rb.center);
+                                gClosest = Mathf.Min(gClosest, dR);
+                                if (Mathf.Abs(Vector3.Dot(mp - rb.center, dir)) < reach) gMaxLateral = Mathf.Max(gMaxLateral, Vector3.Dot(mp - rb.center, side));
+                                if (visual.Gpu != null && dR < reach + r + 1.2f)
+                                {
+                                    GpuMassDev.NodeSnapshot snap = GpuMassDev.RequestNodes(visual.Gpu);
+                                    float until = Time.time + 2f;
+                                    while (!snap.Done && Time.time < until) yield return null;
+                                    if (snap.Done && !snap.Error)
+                                    {
+                                        Measure(snap, rock, out float near, out float inside, out _);
+                                        if (near >= 0.1f && !gShot) { gShot = true; yield return ctx.Shot("graze_the_rock_contact"); }
+                                        if (near > 0f) gContact++;
+                                        gNear = Mathf.Max(gNear, near);
+                                        gInside = Mathf.Max(gInside, inside);
+                                        gSnaps++;
+                                    }
+                                }
+                                float next = Time.time + PollSeconds;
+                                while (Time.time < next) yield return null;
+                            }
+                            DevCamera.Provider = null;
+                            ctx.Log($"[graze act] {gSnaps} snapshots, nodes within 5 cm of the rock up to {gNear:0.0} %, inside it up to {gInside:0.00} % (report only), closest approach of the centre {gClosest:0.00} m to the rock centre (line at {lateral:0.00} m), furthest lateral position of the centre alongside the rock {gMaxLateral:0.00} m, {gContact} of {gSnaps} snapshots with nodes within 5 cm, reached the goal {gDone}");
+                            ctx.Assert("graze_snapshots", gSnaps >= 3, ">= 3 snapshots of the nodes while it grazes the rock", gSnaps);
+                            ctx.Assert("graze_nodes_against_the_rock", gNear >= 0.1f, ">= 0.1 % of the sampled nodes within 5 cm of the rock while the mass follows a straight line tangent to its flank (edge of the mass 0.1 m inside the width of the rock at its height, so the contact is by construction; the maximum over the snapshots, not the median: a graze lasts a few frames; 0.1 % is two nodes of about 1100; the log gives the line, the width and the radius)", gNear.ToString("0.0"));
+                            ctx.Assert("graze_reaches_the_goal", gDone, "the mass reaches the end of the tangent line", gDone);
+                            if (mass != null) MassDev.Destroy(mass);
+                            mass = null;
+                        }
+                    }
 
                     // the film of the crossing: the same walk again, the camera follows the mass (the measures above could not run while the clip recorded)
                     if (mass != null) MassDev.Destroy(mass);
