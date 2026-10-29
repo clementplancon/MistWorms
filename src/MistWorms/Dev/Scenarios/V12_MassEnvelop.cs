@@ -318,6 +318,7 @@ namespace MistWorms.Dev.Scenarios
                         WritheMassVisual visual = mass.GetComponent<WritheMassVisual>();
                         WritheMassAI ai = mass.GetComponent<WritheMassAI>();
                         ai.DevGoal = to;
+                        ai.DevStraight = true;      // straight at the goal: the crossing tests the GPU simulation, not the vanilla walk (decision 267)
                         yield return ctx.WaitUntil(() => visual.GpuDriven, 10f);
                         Vector3 camSide = V14_GpuMassSandbox.ClearSide(new[] { from, sb.center, to }, Vector3.Cross(Vector3.up, along), 3.5f, 1.2f, stone, ctx);
                         DevCamera.Free(sb.center + camSide * 3.5f + Vector3.up * 1.2f, sb.center);
@@ -368,6 +369,7 @@ namespace MistWorms.Dev.Scenarios
                                     maxOn = Mathf.Max(maxOn, 100f * on / Mathf.Max(1, total));
                                     maxInside = Mathf.Max(maxInside, inside);
                                     snapshots++;
+                                    ctx.Log($"low stone snapshot {snapshots}: {Mathf.RoundToInt(inside * ((total + 6) / 7) / 100f)} of {(total + 6) / 7} sampled nodes inside the stone ({inside:0.00} %), centre {d:0.00} m from the stone centre");
                                 }
                             }
                             float next = Time.time + PollSeconds;
@@ -384,7 +386,9 @@ namespace MistWorms.Dev.Scenarios
                         mass = MassDev.SpawnAt(from, n, ZDOID.None, freezeAI: false);
                         if (mass != null)
                         {
-                            mass.GetComponent<WritheMassAI>().DevGoal = to;
+                            WritheMassAI ai2 = mass.GetComponent<WritheMassAI>();
+                            ai2.DevGoal = to;
+                            ai2.DevStraight = true;
                             DevCamera.Free(sb.center + camSide * 3.5f + Vector3.up * 1.2f, sb.center);
                             DevCamera.Provider = new V14_GpuMassSandbox.FollowCam(() => mass != null ? mass.transform.position : sb.center, camSide, 3.5f, 1.2f, 0.3f).Pose;
                             yield return ctx.WaitFrames(30);
@@ -477,6 +481,7 @@ namespace MistWorms.Dev.Scenarios
         private static Vector3 LowStoneSite(ScenarioContext ctx, Vector3 from, float r)
         {
             int mask = LayerMask.GetMask(VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, VanillaNames.LayerDefaultSmall, VanillaNames.LayerPiece);
+            float stoneH = 0.5f * 0.45f * r;       // the height of the stone: a slope under 3 m smaller than that does not bury a side of it
             Vector3 best = from + Vector3.forward * 7f;
             float bestDev = float.MaxValue;
             bool bestFree = false;
@@ -488,14 +493,25 @@ namespace MistWorms.Dev.Scenarios
                 Vector3 mid = c + dir * -0.5f + Vector3.up * 0.9f;
                 bool free = !Physics.CheckBox(mid, new Vector3(Mathf.Max(1.5f, r + 0.6f), 0.8f, 5f), Quaternion.LookRotation(dir, Vector3.up), mask, QueryTriggerInteraction.Ignore);
                 float dev = DevWorld.FlatDeviation(c, 3f);
-                if (free && !bestFree || free == bestFree && dev < bestDev)
+                // order: free of colliders first, then a ground flatter than the stone is high, then the flattest
+                bool flatEnough = dev < stoneH;
+                bool bestFlat = bestDev < stoneH;
+                bool better = free != bestFree ? free
+                    : flatEnough != bestFlat ? flatEnough
+                    : dev < bestDev;
+                if (better)
                 {
                     best = c;
                     bestDev = dev;
                     bestFree = free;
                 }
             }
-            ctx.Log($"low stone site at ({best.x:0.0},{best.z:0.0}): path free of colliders {bestFree}, ground level within {(bestDev < float.MaxValue ? bestDev.ToString("0.00") : "?")} m over 3 m");
+            string dv = bestDev < float.MaxValue ? bestDev.ToString("0.00") : "?";
+            ctx.Log($"low stone site at ({best.x:0.0},{best.z:0.0}): path free of colliders {bestFree}, ground level within {dv} m over 3 m (stone height {stoneH:0.00} m)");
+            if (!(bestDev < stoneH))
+                ctx.Log($"NOTE: no site found with a ground level within the stone height over 3 m: the best one is used, {dv} m over 3 m for a {stoneH:0.00} m stone (a side of the stone is buried or overhangs, the nodes-in-the-stone measure is less reliable)");
+            if (!bestFree)
+                ctx.Log("NOTE: no site found with a path free of colliders: the best one is used");
             return best;
         }
 

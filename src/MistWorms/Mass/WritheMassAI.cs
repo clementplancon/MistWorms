@@ -144,6 +144,10 @@ namespace MistWorms.Mass
 
         /// <summary>Dev: walk to this point (stopping 0.4 m from it) instead of toward a target. Used by the stairs test.</summary>
         public Vector3? DevGoal { get; set; }
+#if MW_DEV
+        /// <summary>Dev: with a <see cref="DevGoal"/>, walk straight at it, with neither the vanilla path nor MoveAndAvoid (the low stone of V12 tests the GPU simulation, not the vanilla walk). The step assist stays.</summary>
+        public bool DevStraight { get; set; }
+#endif
 
         /// <summary>Why the last target choice found nobody (dev log): players seen in the list, the closest one and what the senses said.</summary>
         public string SenseNote { get; private set; }
@@ -610,6 +614,22 @@ namespace MistWorms.Mass
         /// <summary>Walks toward <paramref name="goal"/> with the vanilla path, or straight at it without a path; stops at <paramref name="stop"/> (horizontal).</summary>
         private void WalkTo(float dt, Vector3 goal, float stop, bool pushStraight = false)
         {
+#if MW_DEV
+            if (DevStraight)
+            {
+                float flatS = Utils.DistanceXZ(goal, transform.position);
+                if (flatS > stop)
+                {
+                    MoveTicks++;
+                    NoPathTicks++;
+                    Vector3 toS = goal - transform.position;
+                    toS.y = 0f;
+                    MoveTowards(toS.normalized, false);
+                }
+                StepAssist(true);
+                return;
+            }
+#endif
             bool done = MoveTo(dt, goal, stop, false);
             if (!done)
             {
