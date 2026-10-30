@@ -795,14 +795,20 @@ namespace MistWorms.Colony
             Vector3 p = s.pos[i];
             if (WormPhysics.ProbeGround(p, out RaycastHit hit))
             {
+                s.groundFailSince[i] = WormGround.NoFailure;
                 s.pos[i] = hit.point;
                 s.groundNormal[i] = Vector3.Lerp(s.groundNormal[i], hit.normal, 0.35f).normalized;
                 return;
             }
 
+            // A zone that is not loaded freezes the worm; a sleeper keeps its place; an awake worm is removed only after WormGround.FailGrace of continuous failure (decision 273).
+            bool zoneLoaded = ZoneSystem.instance != null && ZoneSystem.instance.IsZoneLoaded(p);
+            if (WormGround.OnProbeFailed(zoneLoaded, s.state[i] == (byte)WormState.Sleeping, now, ref s.groundFailSince[i]) == GroundVerdict.Keep) return;
+
             // The floor is gone: simple fall to the next floor below, or out of the world (spec §11.1).
             if (WormPhysics.ProbeFall(p, out hit))
             {
+                s.groundFailSince[i] = WormGround.NoFailure;
                 s.pos[i] = hit.point;
                 s.prevPos[i] = hit.point;
                 s.groundNormal[i] = hit.normal;
