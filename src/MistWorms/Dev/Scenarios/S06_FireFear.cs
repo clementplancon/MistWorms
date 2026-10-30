@@ -39,7 +39,7 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Console("mw_kill");
                 ctx.Console("mw_freeze off");
                 yield return ctx.WaitFrames(3);
-                yield return ctx.MoveToOpenGround(10f);
+                yield return ctx.MoveToOpenGround(10f, SiteAccepts);
                 if (!ctx.LastOpenGround.Found) yield break;
 
                 Player player = Player.m_localPlayer;
@@ -330,6 +330,28 @@ namespace MistWorms.Dev.Scenarios
 
         private static readonly Collider[] SiteHits = new Collider[64];
 
+        /// <summary>The non-terrain, non-creature solids taller than 0.2 m within 2 m of <paramref name="pp"/> (ground at <paramref name="groundY"/>), by the mask of the worms (decision 276).</summary>
+        private static System.Collections.Generic.List<string> SiteBlockers(Vector3 pp, float groundY)
+        {
+            var blockers = new System.Collections.Generic.List<string>();
+            Vector3 centre = new Vector3(pp.x, groundY + 1.1f, pp.z);   // 0.2 m to 2.0 m above the ground
+            int c = Physics.OverlapBoxNonAlloc(centre, new Vector3(2f, 0.9f, 2f), SiteHits, Quaternion.identity, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore);
+            for (int k = 0; k < c; k++)
+            {
+                Collider col = SiteHits[k];
+                if (col == null || col.GetComponentInParent<Heightmap>() != null || col.GetComponentInParent<Character>() != null) continue;
+                Vector3 near = col.ClosestPoint(pp);
+                near.y = pp.y;
+                if ((near - pp).magnitude > 2f) continue;
+                string nm = $"{col.name} (top {col.bounds.max.y - groundY:0.00} m)";
+                if (!blockers.Contains(nm)) blockers.Add(nm);
+            }
+            return blockers;
+        }
+
+        /// <summary>Acceptance of a candidate site: the same clearance rule as the check (decision 276), so that a site with a log within 2 m is refused by the search, not by the assertion.</summary>
+        private static bool SiteAccepts(Vector3 ground) => SiteBlockers(ground, ground.y).Count == 0;
+
         /// <summary>The ground under the player is the ground of the verified site (0.1 m) and no non-terrain solid taller than 0.2 m is within 2 m.</summary>
         private static string CheckSwordSite(Player player, Vector3 site, out bool clear)
         {
@@ -340,19 +362,7 @@ namespace MistWorms.Dev.Scenarios
                 return $"no ground under the player at {pp.ToString("0.00")}";
             }
             float dy = Mathf.Abs(g.point.y - site.y);
-            var blockers = new System.Collections.Generic.List<string>();
-            Vector3 centre = new Vector3(pp.x, g.point.y + 1.1f, pp.z);   // 0.2 m to 2.0 m above the ground
-            int c = Physics.OverlapBoxNonAlloc(centre, new Vector3(2f, 0.9f, 2f), SiteHits, Quaternion.identity, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore);
-            for (int k = 0; k < c; k++)
-            {
-                Collider col = SiteHits[k];
-                if (col == null || col.GetComponentInParent<Heightmap>() != null || col.GetComponentInParent<Character>() != null) continue;
-                Vector3 near = col.ClosestPoint(pp);
-                near.y = pp.y;
-                if ((near - pp).magnitude > 2f) continue;
-                string nm = $"{col.name} (top {col.bounds.max.y - g.point.y:0.00} m)";
-                if (!blockers.Contains(nm)) blockers.Add(nm);
-            }
+            var blockers = SiteBlockers(pp, g.point.y);
             clear = dy <= 0.1f && blockers.Count == 0;
             return $"ground {g.point.y:0.00} under the player (collider {g.collider.name}), site {site.y:0.00}, difference {dy:0.00} m, solids over 0.2 m within 2 m: {(blockers.Count == 0 ? "none" : string.Join("/", blockers))}";
         }

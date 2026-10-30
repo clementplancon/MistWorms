@@ -225,11 +225,12 @@ namespace MistWorms.Dev.Scenarios
                             visual = mass.GetComponent<WritheMassVisual>();
                             ai = mass.GetComponent<WritheMassAI>();
                             ai.DevGoal = gGoal;
+                            ai.DevStraight = true;      // straight at the goal, which is the end of the tangent line (same lateral offset as the start): not the vanilla path that goes round the rock (decision 276)
                             yield return ctx.WaitUntil(() => visual.GpuDriven, 10f);
                             DevCamera.Free(rb.center + side * camDist + Vector3.up * 1.6f, rb.center + Vector3.up * 0.5f);
                             DevCamera.Provider = new V14_GpuMassSandbox.FollowCam(() => mass != null ? Vector3.Lerp(mass.transform.position, rb.center, 0.5f) : rb.center, side, camDist, 1.6f, 0.4f).Pose;
                             float g0 = Time.time;
-                            float gNear = 0f, gInside = 0f, gClosest = float.MaxValue, gMaxLateral = 0f;
+                            float gNear = 0f, gInside = 0f, gClosest = float.MaxValue, gMaxLateral = 0f, gMaxDeviation = 0f;
                             int gSnaps = 0, gContact = 0;
                             bool gDone = false, gShot = false;
                             while (Time.time - g0 < 40f && mass != null)
@@ -238,6 +239,7 @@ namespace MistWorms.Dev.Scenarios
                                 if (V14_GpuMassSandbox.HorizontalDistance(mp, gGoal) < 0.7f) { gDone = true; break; }
                                 float dR = V14_GpuMassSandbox.HorizontalDistance(mp, rb.center);
                                 gClosest = Mathf.Min(gClosest, dR);
+                                gMaxDeviation = Mathf.Max(gMaxDeviation, Mathf.Abs(Vector3.Dot(mp - rb.center, side) - lateral));      // lateral gap of the centre to the tangent line, the whole walk
                                 if (Mathf.Abs(Vector3.Dot(mp - rb.center, dir)) < reach) gMaxLateral = Mathf.Max(gMaxLateral, Vector3.Dot(mp - rb.center, side));
                                 if (visual.Gpu != null && dR < reach + r + 1.2f)
                                 {
@@ -258,7 +260,7 @@ namespace MistWorms.Dev.Scenarios
                                 while (Time.time < next) yield return null;
                             }
                             DevCamera.Provider = null;
-                            ctx.Log($"[graze act] {gSnaps} snapshots, nodes within 5 cm of the rock up to {gNear:0.0} %, inside it up to {gInside:0.00} % (report only), closest approach of the centre {gClosest:0.00} m to the rock centre (line at {lateral:0.00} m), furthest lateral position of the centre alongside the rock {gMaxLateral:0.00} m, {gContact} of {gSnaps} snapshots with nodes within 5 cm, reached the goal {gDone}");
+                            ctx.Log($"[graze act] {gSnaps} snapshots, nodes within 5 cm of the rock up to {gNear:0.0} %, inside it up to {gInside:0.00} % (report only), closest approach of the centre {gClosest:0.00} m to the rock centre (line at {lateral:0.00} m), furthest lateral position of the centre alongside the rock {gMaxLateral:0.00} m, largest lateral gap of the centre to the tangent line {gMaxDeviation:0.00} m (straight walk, goal on the line at {lateral:0.00} m), {gContact} of {gSnaps} snapshots with nodes within 5 cm, reached the goal {gDone}");
                             ctx.Assert("graze_snapshots", gSnaps >= 3, ">= 3 snapshots of the nodes while it grazes the rock", gSnaps);
                             ctx.Assert("graze_nodes_against_the_rock", gNear >= 0.1f, ">= 0.1 % of the sampled nodes within 5 cm of the rock while the mass follows a straight line tangent to its flank (edge of the mass 0.1 m inside the width of the rock at its height, so the contact is by construction; the maximum over the snapshots, not the median: a graze lasts a few frames; 0.1 % is two nodes of about 1100; the log gives the line, the width and the radius)", gNear.ToString("0.0"));
                             ctx.Assert("graze_reaches_the_goal", gDone, "the mass reaches the end of the tangent line", gDone);

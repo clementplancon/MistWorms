@@ -222,16 +222,27 @@ namespace MistWorms.Dev.Scenarios
 
                 if (_gpu)
                 {
-                    // the host's own Tick (probes, upload, submission) allocates nothing: two windows, the first absorbs what the runtime does once, the second is asserted
-                    for (int pass = 0; pass < 2; pass++)
+                    // the host's own Tick (probes, upload, submission) allocates nothing. The probe reads the heap of the whole process, which rises by a block of 4 KB about once a second
+                    // whatever we do (V13/V14, decision 252), so the judge is a control of the same length: the same read around a busy wait of the same duration, taken by the host in every
+                    // frame. Six windows, the first absorbs what the runtime does once (logged), the median of the five others is asserted (decision 276).
+                    var ownBytes = new List<long>();
+                    var ownFrames = new List<long>();
+                    var ctlBytes = new List<long>();
+                    var ctlFrames = new List<long>();
+                    for (int pass = 0; pass < 6; pass++)
                     {
                         GpuWormHost.ResetStats();
                         GpuWormHost.MeasureAlloc = true;
                         yield return Frames(gWindow, scale, (f) => Walk());
                         GpuWormHost.MeasureAlloc = false;
-                        if (pass == 0) ctx.Log($"G (gpu host): first window {GpuWormHost.OwnAllocBytes} bytes over {GpuWormHost.Frames} frames");
-                        else ctx.Assert("G_gpu_host_no_allocation", GpuWormHost.OwnAllocBytes == 0, "0 bytes in the Tick of the host over the window", $"{GpuWormHost.OwnAllocBytes} bytes over {GpuWormHost.Frames} frames");
+                        if (pass == 0) { ctx.Log($"G (gpu host): first window {GpuWormHost.OwnAllocBytes} bytes over {GpuWormHost.Frames} frames"); continue; }
+                        ownBytes.Add(GpuWormHost.OwnAllocBytes); ownFrames.Add(GpuWormHost.OwnAllocFrames); ctlBytes.Add(GpuWormHost.ControlAllocBytes); ctlFrames.Add(GpuWormHost.ControlAllocFrames);
                     }
+                    long medOwn = Median(ownBytes), medOwnFrames = Median(ownFrames), medCtl = Median(ctlBytes), medCtlFrames = Median(ctlFrames);
+                    ctx.Log($"G (gpu host): heap rise around the Tick per window of {gWindow} frames: bytes [{string.Join(", ", ownBytes)}], frames with a rise [{string.Join(", ", ownFrames)}]; control (busy wait of the same length) bytes [{string.Join(", ", ctlBytes)}], frames [{string.Join(", ", ctlFrames)}]");
+                    // a real allocation of the host rises in nearly every frame of every window (hundreds of frames, far over the control's 4 to 6 and +2), so the median fails; the noise of the process does not
+                    ctx.Assert("G_gpu_host_no_allocation", medOwnFrames <= medCtlFrames + 2 && medOwn <= medCtl + 16384, "no more heap rises around the Tick than around a busy wait of the same length (+2 frames, +16 KB; median of 5 windows)",
+                        $"own {medOwn} bytes in {medOwnFrames} frames, control {medCtl} bytes in {medCtlFrames} frames, window {gWindow} frames");
                 }
 
                 if (_gpu && operative)
