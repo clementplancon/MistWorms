@@ -39,7 +39,7 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Console("mw_kill");
                 ctx.Console("mw_freeze off");
                 yield return ctx.WaitFrames(3);
-                yield return ctx.MoveToOpenGround(10f, SiteAccepts);
+                yield return ctx.MoveToOpenGround(10f, SiteAccepts, reverify: true);
                 if (!ctx.LastOpenGround.Found) yield break;
 
                 Player player = Player.m_localPlayer;
@@ -352,7 +352,10 @@ namespace MistWorms.Dev.Scenarios
         /// <summary>Acceptance of a candidate site: the same clearance rule as the check (decision 276), so that a site with a log within 2 m is refused by the search, not by the assertion.</summary>
         private static bool SiteAccepts(Vector3 ground) => SiteBlockers(ground, ground.y).Count == 0;
 
-        /// <summary>The ground under the player is the ground of the verified site (0.1 m) and no non-terrain solid taller than 0.2 m is within 2 m.</summary>
+        /// <summary>
+        /// The ground under the player equals the ground probed now at the site's xz (same ray, same mask, same start height: the stored site height came from another probe, p9l: 0.19 m
+        /// apart on flat terrain with nothing around) within 0.1 m, which only covers the player resting a few cm off the site; and no non-terrain solid taller than 0.2 m is within 2 m.
+        /// </summary>
         private static string CheckSwordSite(Player player, Vector3 site, out bool clear)
         {
             Vector3 pp = player.transform.position;
@@ -361,10 +364,15 @@ namespace MistWorms.Dev.Scenarios
                 clear = false;
                 return $"no ground under the player at {pp.ToString("0.00")}";
             }
-            float dy = Mathf.Abs(g.point.y - site.y);
+            if (!Physics.Raycast(new Vector3(site.x, pp.y + 2f, site.z), Vector3.down, out RaycastHit s, 6f, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore))
+            {
+                clear = false;
+                return $"no ground probed at the site {site.ToString("0.00")}";
+            }
+            float dy = Mathf.Abs(g.point.y - s.point.y);
             var blockers = SiteBlockers(pp, g.point.y);
             clear = dy <= 0.1f && blockers.Count == 0;
-            return $"ground {g.point.y:0.00} under the player (collider {g.collider.name}), site {site.y:0.00}, difference {dy:0.00} m, solids over 0.2 m within 2 m: {(blockers.Count == 0 ? "none" : string.Join("/", blockers))}";
+            return $"ground {g.point.y:0.00} under the player (collider {g.collider.name}), ground probed now at the site {s.point.y:0.00} (collider {s.collider.name}; stored site {site.y:0.00}), difference {dy:0.00} m, solids over 0.2 m within 2 m: {(blockers.Count == 0 ? "none" : string.Join("/", blockers))}";
         }
 
         private const float LineMaxRise = 0.3f, LineMaxObstacle = 0.2f, LineStep = 0.5f, LineMaxGrade = 0.4f;

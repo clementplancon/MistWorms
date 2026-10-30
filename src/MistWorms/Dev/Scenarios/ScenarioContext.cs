@@ -268,8 +268,10 @@ namespace MistWorms.Dev.Scenarios
         /// </summary>
         public const float DefaultFlatRadius = 6f, DefaultFlatTolerance = 0.5f, DefaultLenientTolerance = 1f;
 
-        public IEnumerator MoveToOpenGround(float clearRadius = 5f, Func<Vector3, bool> accept = null, float flatRadius = DefaultFlatRadius, float flatTolerance = DefaultFlatTolerance, float lenientTolerance = DefaultLenientTolerance)
+        public IEnumerator MoveToOpenGround(float clearRadius = 5f, Func<Vector3, bool> accept = null, float flatRadius = DefaultFlatRadius, float flatTolerance = DefaultFlatTolerance, float lenientTolerance = DefaultLenientTolerance, bool reverify = false)
         {
+            // reverify (decision 278, opt-in): once the player stands on the site and the area is loaded, accept is judged again; only S06 asks for it.
+            Func<Vector3, bool> scenarioAccept = reverify ? accept : null;
             var result = new OpenGroundResult();
             LastOpenGround = result;
             // Param site=x,z: a site imposed from the command line (reproducing a failure of a series): no search, the player is put on the terrain there.
@@ -277,7 +279,7 @@ namespace MistWorms.Dev.Scenarios
             {
                 yield return GoToSite(sx, sz, result);
                 // The imposed site is judged like a found one (decision 278): a log beside it sends the search around the player.
-                if (result.Found && accept != null) yield return DevWorld.Reverify(clearRadius, p => accept(p) && !V14_GpuMassSandbox.NearWater(p, V14_GpuMassSandbox.WaterClearance), accept, result, Log, new FlatSpec(flatRadius, flatTolerance, lenientTolerance));
+                if (result.Found && scenarioAccept != null) yield return DevWorld.Reverify(clearRadius, p => accept(p) && !V14_GpuMassSandbox.NearWater(p, V14_GpuMassSandbox.WaterClearance), accept, result, Log, new FlatSpec(flatRadius, flatTolerance, lenientTolerance));
                 if (result.Found && Player.m_localPlayer != null)
                 {
                     Player.m_localPlayer.SetGodMode(true);
@@ -296,13 +298,13 @@ namespace MistWorms.Dev.Scenarios
             // Meadows first: the Plains have tar blobs and fulings that kill the worms of a test (S18 a: 24 of 30 dead), the Black Forest has trees that block a fleeing mass (S06) and greydwarves
             // that eat the pool (S13). Any biome only when the Meadows have no flat clear spot within reach (logged).
             Func<Vector3, bool> calm = p => dry(p) && CalmBiome(p);
-            yield return DevWorld.MoveToOpenGround(clearRadius, calm, result, Log, flat, accept);
+            yield return DevWorld.MoveToOpenGround(clearRadius, calm, result, Log, flat, scenarioAccept);
             if (!result.Found)
             {
                 Log("no calm biome (Meadows, Black Forest) found: any biome");
                 result = new OpenGroundResult();
                 LastOpenGround = result;
-                yield return DevWorld.MoveToOpenGround(clearRadius, dry, result, Log, flat, accept);
+                yield return DevWorld.MoveToOpenGround(clearRadius, dry, result, Log, flat, scenarioAccept);
             }
             Assert("open_ground_found", result.Found, true,
                 result.Found ? (object)$"{result.Spot} after {result.Tested} candidates, {result.Hops} hops" : result.Error);
