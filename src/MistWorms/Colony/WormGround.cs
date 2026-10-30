@@ -19,12 +19,21 @@ namespace MistWorms.Colony
         public const float FailGrace = 3f;
 
         /// <summary>
-        /// <paramref name="failSince"/> is the per worm first-failure time (updated: <see cref="NoFailure"/> when frozen or asleep, set to
+        /// A worm that never had a floor (restored or created above rooms that are still loading) is frozen for this long from its creation or restoration
+        /// (decision 274). Longer than <c>RestoreGroundWait</c> (the wait for the first worm) and than the 10.6 s a dungeon takes to stand.
+        /// </summary>
+        public const float FirstFloorWait = 30f;
+
+        /// <summary>The worm has never had a floor and its wait window (<paramref name="waitEnd"/>) is still open: it must not move, fall or die.</summary>
+        public static bool AwaitingFirstFloor(bool hadGround, float now, float waitEnd) => !hadGround && now < waitEnd;
+
+        /// <summary>
+        /// <paramref name="failSince"/> is the per worm first-failure time (updated: <see cref="NoFailure"/> when frozen, still awaiting its first floor, or asleep, set to
         /// <paramref name="now"/> on the first failure of an awake worm).
         /// </summary>
-        public static GroundVerdict OnProbeFailed(bool zoneLoaded, bool sleeping, float now, ref float failSince, float grace = FailGrace)
+        public static GroundVerdict OnProbeFailed(bool zoneLoaded, bool sleeping, float now, ref float failSince, float grace = FailGrace, bool hadGround = true, float waitEnd = 0f)
         {
-            if (!zoneLoaded || sleeping)
+            if (!zoneLoaded || sleeping || AwaitingFirstFloor(hadGround, now, waitEnd))
             {
                 failSince = NoFailure;   // frozen (zone not loaded) or asleep: no death, and a later failure starts its own delay
                 return GroundVerdict.Keep;

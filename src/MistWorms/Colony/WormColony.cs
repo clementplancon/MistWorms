@@ -342,6 +342,7 @@ namespace MistWorms.Colony
             WormStore s = Store;
             if (WormPhysics.ProbeGround(position, out RaycastHit hit))
             {
+                s.hadGround[i] = true;
                 s.pos[i] = hit.point;
                 s.prevPos[i] = hit.point;
                 s.groundNormal[i] = hit.normal;

@@ -52,5 +52,53 @@ namespace MistWorms.Tests
             Assert.Equal(GroundVerdict.Keep, WormGround.OnProbeFailed(true, true, 10f, ref since));
             Assert.Equal(WormGround.NoFailure, since);
         }
+
+        // ---- worms that never had a floor (decision 274)
+
+        [Fact]
+        public void RestoredWormWithoutFloorSurvivesBeyondTheGraceInsideTheWindow()
+        {
+            float since = WormGround.NoFailure, waitEnd = 100f + WormGround.FirstFloorWait;
+            for (float t = 100f; t < waitEnd; t += 0.25f)
+            {
+                Assert.True(WormGround.AwaitingFirstFloor(false, t, waitEnd));
+                Assert.Equal(GroundVerdict.Keep, WormGround.OnProbeFailed(true, false, t, ref since, WormGround.FailGrace, false, waitEnd));
+            }
+            Assert.Equal(WormGround.NoFailure, since);
+        }
+
+        [Fact]
+        public void WormThatGetsItsFloorInsideTheWindowPlaysNormallyAgain()
+        {
+            float waitEnd = 100f + WormGround.FirstFloorWait;
+            Assert.True(WormGround.AwaitingFirstFloor(false, 110f, waitEnd));
+            // First successful probe: the flag is set, the window no longer matters.
+            Assert.False(WormGround.AwaitingFirstFloor(true, 110.25f, waitEnd));
+            // A later loss of the floor follows decision 273.
+            float since = WormGround.NoFailure;
+            Assert.Equal(GroundVerdict.Keep, WormGround.OnProbeFailed(true, false, 111f, ref since, WormGround.FailGrace, true, waitEnd));
+            Assert.Equal(GroundVerdict.Kill, WormGround.OnProbeFailed(true, false, 111f + WormGround.FailGrace, ref since, WormGround.FailGrace, true, waitEnd));
+        }
+
+        [Fact]
+        public void WormStillWithoutFloorAfterTheWindowFollowsTheGraceRule()
+        {
+            float waitEnd = 100f + WormGround.FirstFloorWait;
+            float since = WormGround.NoFailure;
+            Assert.False(WormGround.AwaitingFirstFloor(false, waitEnd, waitEnd));
+            Assert.Equal(GroundVerdict.Keep, WormGround.OnProbeFailed(true, false, waitEnd, ref since, WormGround.FailGrace, false, waitEnd));
+            Assert.Equal(waitEnd, since);
+            Assert.Equal(GroundVerdict.Kill, WormGround.OnProbeFailed(true, false, waitEnd + WormGround.FailGrace, ref since, WormGround.FailGrace, false, waitEnd));
+            // A sleeper keeps its place for good.
+            since = WormGround.NoFailure;
+            for (float t = waitEnd; t < waitEnd + 60f; t += 0.25f)
+                Assert.Equal(GroundVerdict.Keep, WormGround.OnProbeFailed(true, true, t, ref since, WormGround.FailGrace, false, waitEnd));
+        }
+
+        [Fact]
+        public void TheWindowOutlastsTheRestoreWaitAndTheDungeonLoad()
+        {
+            Assert.True(WormGround.FirstFloorWait > 20f);   // RestoreGroundWait
+        }
     }
 }

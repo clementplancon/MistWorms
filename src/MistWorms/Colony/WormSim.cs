@@ -188,6 +188,11 @@ namespace MistWorms.Colony
         {
             WormStore s = Store;
             s.prevPos[i] = s.pos[i];
+            if (WormGround.AwaitingFirstFloor(s.hadGround[i], now, s.groundWaitEnd[i]) && !TryFirstFloor(i, now))
+            {
+                s.lastSpeed[i] = 0f;   // frozen: no move, no fall, no death until the rooms under it stand (decision 274)
+                return;
+            }
             s.stateTime[i] += dt;
             s.lastSpeed[i] = 0f; // MoveWorm sets the real value when the worm moves
 
@@ -221,6 +226,27 @@ namespace MistWorms.Colony
 
             // Spec §8.4: a worm that ends up outside the box (fell, was pushed) is destroyed without drop.
             if (s.alive[i] && !InBox(s.pos[i])) { DevLogSilentKill("out of the box", i); KillWorm(i, false); }
+        }
+
+        /// <summary>A worm that has never had a floor looks for it at the ground interval. True when it has one now (it stands on it and plays normally).</summary>
+        private bool TryFirstFloor(int i, float now)
+        {
+            WormStore s = Store;
+            if (now < s.nextGroundTime[i]) return false;
+            s.nextGroundTime[i] = now + GroundInterval;
+            if (!WormPhysics.ProbeGround(s.pos[i], out RaycastHit hit)) return false;
+
+            s.hadGround[i] = true;
+            s.groundFailSince[i] = WormGround.NoFailure;
+            s.pos[i] = hit.point;
+            s.prevPos[i] = hit.point;
+            s.groundNormal[i] = hit.normal;
+            s.home[i] = hit.point;
+            s.den[i] = hit.point;
+            s.progressPos[i] = hit.point;
+            s.progressTime[i] = now;
+            DevFirstFloor(now - (s.groundWaitEnd[i] - WormGround.FirstFloorWait));
+            return true;
         }
 
         private void SetState(int i, WormState state, float now)
@@ -795,6 +821,7 @@ namespace MistWorms.Colony
             Vector3 p = s.pos[i];
             if (WormPhysics.ProbeGround(p, out RaycastHit hit))
             {
+                s.hadGround[i] = true;
                 s.groundFailSince[i] = WormGround.NoFailure;
                 s.pos[i] = hit.point;
                 s.groundNormal[i] = Vector3.Lerp(s.groundNormal[i], hit.normal, 0.35f).normalized;
@@ -803,7 +830,7 @@ namespace MistWorms.Colony
 
             // A zone that is not loaded freezes the worm; a sleeper keeps its place; an awake worm is removed only after WormGround.FailGrace of continuous failure (decision 273).
             bool zoneLoaded = ZoneSystem.instance != null && ZoneSystem.instance.IsZoneLoaded(p);
-            if (WormGround.OnProbeFailed(zoneLoaded, s.state[i] == (byte)WormState.Sleeping, now, ref s.groundFailSince[i]) == GroundVerdict.Keep) return;
+            if (WormGround.OnProbeFailed(zoneLoaded, s.state[i] == (byte)WormState.Sleeping, now, ref s.groundFailSince[i], WormGround.FailGrace, s.hadGround[i], s.groundWaitEnd[i]) == GroundVerdict.Keep) return;
 
             // The floor is gone: simple fall to the next floor below, or out of the world (spec §11.1).
             if (WormPhysics.ProbeFall(p, out hit))

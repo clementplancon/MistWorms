@@ -15,7 +15,7 @@ namespace MistWorms.Colony
     /// </summary>
     internal sealed partial class WormColony
     {
-        private const float RestoreGroundWait = 20f;   // the rooms of a reloaded mine may not stand yet: wait for a floor under the first worm, this long at most
+        private const float RestoreGroundWait = 20f;   // (the worms that still have no floor then are frozen for WormGround.FirstFloorWait, decision 274)  // the rooms of a reloaded mine may not stand yet: wait for a floor under the first worm, this long at most
 
         private static readonly int HashSnapshot = MWNames.ZdoSnapshot.GetStableHashCode();
 
@@ -26,6 +26,13 @@ namespace MistWorms.Colony
         private int[] _snapSlots = Array.Empty<int>();
         private bool _snapSettled;
         private bool _snapClosed;
+#if MW_DEV
+        // Dev trace (decision 274): worms of the last restore that found no floor at once, and how long they waited for it.
+        private float _gwRestoredAt;
+        private int _gwNone, _gwGot;
+        private float _gwMaxWait;
+        private bool _gwLogged = true;
+#endif
         private float _snapNext;
         private float _snapFirstTick = -1f;
         private readonly List<KeyValuePair<byte[], Vector3>> _absorbQueue = new List<KeyValuePair<byte[], Vector3>>();   // snapshots of duplicate colonies waiting for this one to settle
@@ -94,7 +101,7 @@ namespace MistWorms.Colony
         {
             WormStore s = Store;
             if (_snapSlots.Length < n) _snapSlots = new int[n];
-            int restored = 0, skipped = 0, asleep = 0;
+            int restored = 0, skipped = 0, asleep = 0, noGround = 0;
 
             for (int w = 0; w < n; w++)
             {
@@ -115,6 +122,7 @@ namespace MistWorms.Colony
                 _snapSlots[w] = slot;
                 restored++;
                 if (state == WormState.Sleeping) asleep++;
+                if (!s.hadGround[slot]) noGround++;
             }
 
             int at = SnapshotFormat.PoolSectionStart(n);
@@ -138,7 +146,39 @@ namespace MistWorms.Colony
             if (!merge) _snapLast = data;
             SnapshotRestored += restored;
             SnapshotSkipped += skipped;
-            Plugin.DevInfo($"[Snapshot] colony {ZdoId}: {restored}/{n} worms {(merge ? "taken over from a duplicate colony" : "restored")} ({asleep} asleep, {restored - asleep} idle), {skipped} left out, {pools} pools, reserve {(_reserve != null ? _reserve.TotalAll() : 0f):0.###}");
+#if MW_DEV
+            if (noGround > 0)
+            {
+                // A new restore (a duplicate colony merged in) adds to a run that is still open.
+                if (_gwLogged) { _gwNone = 0; _gwGot = 0; _gwMaxWait = 0f; }
+                _gwRestoredAt = now;
+                _gwNone += noGround;
+                _gwLogged = false;
+            }
+#endif
+            Plugin.DevInfo($"[Snapshot] colony {ZdoId}: {restored}/{n} worms {(merge ? "taken over from a duplicate colony" : "restored")} ({asleep} asleep, {restored - asleep} idle), {skipped} left out, {noGround} without a floor yet, {pools} pools, reserve {(_reserve != null ? _reserve.TotalAll() : 0f):0.###}");
+        }
+
+        /// <summary>Dev trace: a restored worm found its first floor after <paramref name="waited"/> seconds.</summary>
+        private void DevFirstFloor(float waited)
+        {
+#if MW_DEV
+            if (_gwLogged) return;
+            _gwGot++;
+            if (waited > _gwMaxWait) _gwMaxWait = waited;
+#endif
+        }
+
+        /// <summary>Dev trace: one line per restore that had worms without a floor, when the last of them got one or when the wait window closed.</summary>
+        private void DevTraceRestoreGround(float now)
+        {
+#if MW_DEV
+            if (_gwLogged) return;
+            bool window = now - _gwRestoredAt >= WormGround.FirstFloorWait;
+            if (_gwGot < _gwNone && !window) return;
+            _gwLogged = true;
+            Plugin.DevInfo($"[Snapshot] colony {ZdoId}: {_gwNone} worms restored without a floor, {_gwGot} found one (longest wait {_gwMaxWait:0.0} s), {_gwNone - _gwGot} still without after {now - _gwRestoredAt:0.0} s");
+#endif
         }
 
         private void ReserveMerge(MassPool pool)
@@ -154,6 +194,7 @@ namespace MistWorms.Colony
         private void TickSnapshot(float now)
         {
             if (_absorbQueue.Count > 0) DrainAbsorb(now);
+            DevTraceRestoreGround(now);
             if (!_snapSettled || now < _snapNext) return;
             _snapNext = now + MWConfig.Network.SnapshotInterval.Value;
             WriteSnapshot();

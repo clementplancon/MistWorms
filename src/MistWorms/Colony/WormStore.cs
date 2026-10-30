@@ -52,6 +52,8 @@ namespace MistWorms.Colony
         public readonly float[] nextAvoidTime;
         public readonly float[] nextGroundTime;
         public readonly float[] groundFailSince;  // first time of the current run of failed floor probes, WormGround.NoFailure = none (decision 273)
+        public readonly bool[] hadGround;         // a floor probe has succeeded since the creation or restoration of the worm (decision 274); not in the snapshot
+        public readonly float[] groundWaitEnd;    // end of the window in which a worm without a floor yet is frozen (creation / restoration time + WormGround.FirstFloorWait)
         public readonly Vector3[] progressPos;    // stuck detection: where the worm was progressTime ago
         public readonly float[] progressTime;
         public readonly Vector3[] fleeFrom;
@@ -144,6 +146,8 @@ namespace MistWorms.Colony
             nextAvoidTime = new float[capacity];
             nextGroundTime = new float[capacity];
             groundFailSince = new float[capacity];
+            hadGround = new bool[capacity];
+            groundWaitEnd = new float[capacity];
             progressPos = new Vector3[capacity];
             progressTime = new float[capacity];
             fleeFrom = new Vector3[capacity];
@@ -224,6 +228,8 @@ namespace MistWorms.Colony
             nextAvoidTime[i] = 0f;
             nextGroundTime[i] = now;
             groundFailSince[i] = WormGround.NoFailure;
+            hadGround[i] = false;
+            groundWaitEnd[i] = now + WormGround.FirstFloorWait;
             progressPos[i] = position;
             progressTime[i] = now;
             fleeFrom[i] = position;
