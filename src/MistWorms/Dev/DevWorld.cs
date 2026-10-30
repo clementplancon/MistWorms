@@ -240,7 +240,7 @@ namespace MistWorms.Dev
         /// lies in a capsule of radius <paramref name="clearRadius"/> from 0.3 to 3 m above it, and <paramref name="accept"/> (optional,
         /// scenario specific) agrees. When nothing is found in the loaded area, the player hops 150 m away (up to 3 times) to load more. Fallbacks: the last good site of the session is tried first (and always from an interior); after a failed search the player goes to the start temple (the Meadows) and searches there.
         /// </summary>
-        public static IEnumerator MoveToOpenGround(float clearRadius, Func<Vector3, bool> accept, OpenGroundResult result, Action<string> log, FlatSpec flat = null)
+        public static IEnumerator MoveToOpenGround(float clearRadius, Func<Vector3, bool> accept, OpenGroundResult result, Action<string> log, FlatSpec flat = null, Func<Vector3, bool> scenarioAccept = null)
         {
             Player player = Player.m_localPlayer;
             if (player == null || ZoneSystem.instance == null || WorldGenerator.instance == null) { result.Error = "not in game"; yield break; }
@@ -303,7 +303,8 @@ namespace MistWorms.Dev
                 yield return new WaitForSecondsRealtime(1f);
             }
             _lastGoodSite = result.Spot;
-            yield return Reverify(clearRadius, accept, result, log, flat);
+            // Decision 278 (amended): only the scenario's own criterion is judged again; without one, no Reverify.
+            if (scenarioAccept != null) yield return Reverify(clearRadius, accept, scenarioAccept, result, log, flat);
         }
 
         private const float ReverifyRadius = 60f;
@@ -316,12 +317,11 @@ namespace MistWorms.Dev
         /// <summary>
         /// Decision 278. The spiral measures ground up to 400 m away, but the trees, logs and rocks exist only around the player (the active area): a site far from where the search started
         /// is judged without its objects (p9j: a PineTree_log 1 m from the site, invisible to the capsule and to the acceptance). Once the player stands on the site and the area is loaded,
-        /// the clearance and the acceptance are judged again; a site that fails is replaced by a search around the player (where everything is loaded), at most
+        /// the scenario's own criterion (not the general clearance capsule: a tree always stands within 14 m in a forest) is judged again; a site that fails is replaced by a search around the player (where everything is loaded), at most
         /// <see cref="ReverifyRounds"/> times (the loaded areas where nothing fits are not searched again). Public: also run after an imposed site (param site=).
         /// </summary>
-        public static IEnumerator Reverify(float clearRadius, Func<Vector3, bool> accept, OpenGroundResult result, Action<string> log, FlatSpec flat)
+        public static IEnumerator Reverify(float clearRadius, Func<Vector3, bool> accept, Func<Vector3, bool> scenarioAccept, OpenGroundResult result, Action<string> log, FlatSpec flat)
         {
-            int clutter = ClutterMask();
             var explored = new System.Collections.Generic.List<Vector3>();   // centres of the loaded areas where the search found nothing: their candidates are not tried again
             Func<Vector3, bool> fresh = p =>
             {
@@ -331,11 +331,9 @@ namespace MistWorms.Dev
             for (int round = 0; round <= ReverifyRounds && result.Found; round++)
             {
                 Vector3 g = result.Spot;
-                bool blocked = Physics.CheckCapsule(g + Vector3.up * 0.3f, g + Vector3.up * 3f, clearRadius, clutter, QueryTriggerInteraction.Ignore);
-                bool refused = !blocked && accept != null && !accept(g);
-                if (!blocked && !refused) yield break;
+                if (scenarioAccept == null || scenarioAccept(g)) yield break;
                 if (round == ReverifyRounds) { result.Found = false; result.Error = $"site {g.ToString("0.00")} still refused after {ReverifyRounds} rounds"; yield break; }
-                log?.Invoke($"site {g.ToString("0.00")} refused once its surroundings are loaded ({(blocked ? "an object within " + clearRadius.ToString("0") + " m" : "acceptance")}), round {round + 1}: searching around the player");
+                log?.Invoke($"site {g.ToString("0.00")} refused once its surroundings are loaded (scenario criterion), round {round + 1}: searching around the player");
                 Vector3 centre = Player.m_localPlayer.transform.position;
                 result.Found = false;
                 // First the loaded area around the player, where every object exists; then, that area being exhausted, the far candidates not yet explored (they are judged again on arrival).
