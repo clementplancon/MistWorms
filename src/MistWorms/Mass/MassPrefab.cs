@@ -20,8 +20,8 @@ namespace MistWorms.Mass
     /// </summary>
     internal static class MassPrefab
     {
-        /// <summary>Degrees per second of the turn of a mass (decision 269): a half turn to within the 10 degrees of BaseAI.m_moveMinAngle in 0.5 s (MassTurn.SecondsToTurn).</summary>
-        public const float MassTurnSpeed = 420f;
+        /// <summary>Degrees per second of the turn of a mass (decision 269): a half turn to within the 10 degrees of BaseAI.m_moveMinAngle in 0.7 s (MassTurn.SecondsToTurn).</summary>
+        public const float MassTurnSpeed = 300f;
 
         public static void Register()
         {

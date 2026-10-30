@@ -17,9 +17,11 @@ namespace MistWorms.Tests
         }
 
         [Fact]
-        public void TheMassTurnSpeedTurnsBackInHalfASecond()
+        public void TheMassTurnSpeedTurnsBackInWithinAFullSecond()
         {
-            Assert.Equal(0.5f, MassTurn.SecondsToTurn(MassPrefab.MassTurnSpeed, 180f, 10f), 2);
+            float seconds = MassTurn.SecondsToTurn(MassPrefab.MassTurnSpeed, 180f, 10f);
+            Assert.Equal(210f / MassPrefab.MassTurnSpeed, seconds, 3);
+            Assert.InRange(seconds, 0.4f, 1.0f);
         }
 
         [Fact]
