@@ -305,10 +305,12 @@ namespace MistWorms.Dev.Scenarios
                     S18_GroupCoherence.ClearCreatures(ctx, player);
                     float lowH = 0.5f * 0.45f * r;
                     Vector3 blockAt = LowStoneSite(ctx, player.transform.position, r);
-                    placed = V14_GpuMassSandbox.PlaceBlock(blockAt, new Vector3(1.6f, lowH, 1.0f), "MW_V12_Low");
+                    // the stone is turned toward the approach, as V14's (decision 277): its 1.6 m face across the way, its 1 m depth along it
+                    Vector3 along = player.transform.position - blockAt; along.y = 0f;
+                    along = along.sqrMagnitude > 1e-4f ? along.normalized : Vector3.forward;
+                    placed = V14_GpuMassSandbox.PlaceBlock(blockAt, new Vector3(1.6f, lowH, 1.0f), "MW_V12_Low", Quaternion.LookRotation(-along, Vector3.up));
                     Collider stone = placed.GetComponent<Collider>();
                     Bounds sb = stone.bounds;
-                    Vector3 along = (player.transform.position - sb.center); along.y = 0f; along = along.normalized;
                     Vector3 from = sb.center + along * (sb.extents.magnitude + r + 2.5f);
                     from.y = V14_GpuMassSandbox.GroundOf(from, player.transform.position.y);
                     Vector3 to = sb.center - along * (sb.extents.magnitude + 2f);
@@ -366,12 +368,13 @@ namespace MistWorms.Dev.Scenarios
                                     {
                                         Vector3 p = new Vector3(snap.Nodes[i].x + snap.Origin.x, snap.Nodes[i].y + snap.Origin.y, snap.Nodes[i].z + snap.Origin.z);
                                         total++;
-                                        if (p.x > sb.min.x && p.x < sb.max.x && p.z > sb.min.z && p.z < sb.max.z && p.y > sb.max.y - 0.002f) on++;
+                                        Vector3 lp = stone.transform.InverseTransformPoint(p);      // the stone is turned: its top is measured in its own axes
+                                        if (Mathf.Abs(lp.x) < 0.5f && Mathf.Abs(lp.z) < 0.5f && p.y > sb.max.y - 0.002f) on++;
                                     }
                                     maxOn = Mathf.Max(maxOn, 100f * on / Mathf.Max(1, total));
                                     maxInside = Mathf.Max(maxInside, inside);
                                     snapshots++;
-                                    ctx.Log($"low stone snapshot {snapshots}: {Mathf.RoundToInt(inside * ((total + 6) / 7) / 100f)} of {(total + 6) / 7} sampled nodes inside the stone ({inside:0.00} %), centre {d:0.00} m from the stone centre");
+                                    ctx.Log($"low stone snapshot {snapshots}: {Mathf.RoundToInt(inside * ((total + 6) / 7) / 100f)} of {(total + 6) / 7} sampled nodes inside the stone ({inside:0.00} %), centre {d:0.00} m from the stone centre, step assists {ai.StepAssists}, stalled checks {ai.StalledChecks}, last assist note {ai.LastAssistNote ?? "-"}, path ticks {ai.PathTicks}");
                                 }
                             }
                             float next = Time.time + PollSeconds;
