@@ -42,8 +42,15 @@ namespace MistWorms.Bites
             // 0 would mean "everybody" for a routed RPC; a player without owner cannot be bitten.
             if (id.IsNone() || owner == 0L) return false;
 
+#if MW_DEV
+            long devT0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            s_devHandlerMs = s_devDamageMs = 0f;
+#endif
             rpc.InvokeRoutedRPC(owner, MWNames.RpcWormBite, id, MWConfig.Worm.CobraDurability.Value,
                 MWConfig.Worm.CobraCreatureDamage.Value, point, dir, WormTag(colony, slot, generation));
+#if MW_DEV
+            DevRecordBite(DevMs(devT0));
+#endif
             return true;
         }
 
@@ -131,15 +138,27 @@ namespace MistWorms.Bites
                 if (target == null) return;
 
                 HitData hit = NewHit(hpDamage, point, dir);
+#if MW_DEV
+                long devH0 = System.Diagnostics.Stopwatch.GetTimestamp();
+#endif
                 WormBiteContext.Begin(target, durability, hpDamage);
                 ReadWormTag(worm);
                 try
                 {
+#if MW_DEV
+                    long devD0 = System.Diagnostics.Stopwatch.GetTimestamp();
+#endif
                     target.Damage(hit);
+#if MW_DEV
+                    s_devDamageMs = DevMs(devD0);
+#endif
                 }
                 finally
                 {
                     WormBiteContext.End();
+#if MW_DEV
+                    s_devHandlerMs = DevMs(devH0);
+#endif
                 }
             }
             catch (Exception e)
@@ -147,6 +166,44 @@ namespace MistWorms.Bites
                 Plugin.LogException("WormBite.OnBite", e);
             }
         }
+
+#if MW_DEV
+        // Decision 272 (S11): the cost of a strike on a player split in the routed RPC (the call without the handler), the handler of the mod (OnBite, Damage included) and Character.Damage (vanilla).
+        // When the target is owned here the routed call runs the handler synchronously, so the handler time is inside the call time.
+        private static float s_devHandlerMs, s_devDamageMs;
+        public static int DevBites { get; private set; }
+        public static float DevWorstCallMs { get; private set; }
+        public static float DevWorstHandlerMs { get; private set; }
+        public static float DevWorstDamageMs { get; private set; }
+        public static float DevWorstRpcOnlyMs { get; private set; }
+        public static float DevSumCallMs { get; private set; }
+        public static float DevSumHandlerMs { get; private set; }
+        public static float DevSumDamageMs { get; private set; }
+
+        private static float DevMs(long t0) => (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000f / System.Diagnostics.Stopwatch.Frequency;
+
+        private static void DevRecordBite(float callMs)
+        {
+            DevBites++;
+            DevSumCallMs += callMs;
+            DevSumHandlerMs += s_devHandlerMs;
+            DevSumDamageMs += s_devDamageMs;
+            if (callMs > DevWorstCallMs)
+            {
+                DevWorstCallMs = callMs;
+                DevWorstHandlerMs = s_devHandlerMs;
+                DevWorstDamageMs = s_devDamageMs;
+                DevWorstRpcOnlyMs = callMs - s_devHandlerMs;
+            }
+        }
+
+        public static void DevResetBites()
+        {
+            DevBites = 0;
+            DevWorstCallMs = DevWorstHandlerMs = DevWorstDamageMs = DevWorstRpcOnlyMs = 0f;
+            DevSumCallMs = DevSumHandlerMs = DevSumDamageMs = 0f;
+        }
+#endif
 
         /// <summary>The worm behind a strike (colony, slot, generation) as a package: the routed RPC is at its six parameter limit (decision 141).</summary>
         private static readonly ZPackage s_tag = new ZPackage();

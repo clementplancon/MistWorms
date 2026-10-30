@@ -280,7 +280,7 @@ namespace MistWorms.Colony
             WormStore s = Store;
             if (s == null) return;
             for (int i = 0; i < s.HighWater; i++)
-                if (s.alive[i]) KillWorm(i, false);
+                if (s.alive[i]) { DevLogSilentKill("hand-off to the next owner", i); KillWorm(i, false); }
             if (_reserve != null) _reserve.Clear();
             ResetWake();
         }

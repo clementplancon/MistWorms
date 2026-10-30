@@ -83,6 +83,7 @@ namespace MistWorms.Dev.Scenarios
                 // ---- warm-up: the first strikes, the paths, the JIT; then the window
                 yield return ctx.Wait(WarmSeconds);
                 colony.ResetSimPeaks();
+                MistWorms.Bites.WormBite.DevResetBites();
                 colony.ResetNetCounters();
                 WormColony.DevResetAlloc();
                 WormColony.DevMeasureAlloc = true;
@@ -128,8 +129,15 @@ namespace MistWorms.Dev.Scenarios
                 // the raw peak and the number of excluded ticks are reported, and more than 1 % excluded fails anyway (a chronic allocation is not masked).
                 int excluded = colony.TicksWithGc, measured = Math.Max(1, colony.TicksMeasured);
                 ctx.Log($"sim max: {colony.PeakMsWithoutGc:0.00} ms without GC ticks, raw {colony.PeakMsWithoutFirstStrike:0.00} ms, {excluded} of {measured} ticks excluded for a collection of generation 0 ({100.0 * excluded / measured:0.00} %)");
+                // Decision 272: as S18 since decision 255, the peak is judged without the time inside the strike's call on the player (vanilla Damage), still without the GC ticks. Everything is reported.
+                ctx.Log($"sim max detail: judged {colony.PeakMsWithoutVanillaWithoutGc:0.00} ms (no GC tick, no vanilla damage time); without GC ticks but with the vanilla call {colony.PeakMsWithoutGc:0.00} ms; raw {colony.PeakMsWithoutFirstStrike:0.00} ms; " +
+                        $"worst time inside the vanilla call in one frame {colony.WorstVanillaMs:0.00} ms; vanilla time of the worst frame {colony.WorstFrameVanillaMs:0.00} ms");
+                ctx.Log($"bites on the player: {MistWorms.Bites.WormBite.DevBites} calls, total {MistWorms.Bites.WormBite.DevSumCallMs:0.00} ms (handler of the mod {MistWorms.Bites.WormBite.DevSumHandlerMs:0.00} ms, of which Character.Damage {MistWorms.Bites.WormBite.DevSumDamageMs:0.00} ms); " +
+                        $"slowest call {MistWorms.Bites.WormBite.DevWorstCallMs:0.00} ms = routed RPC without the handler {MistWorms.Bites.WormBite.DevWorstRpcOnlyMs:0.00} + handler {MistWorms.Bites.WormBite.DevWorstHandlerMs:0.00} (Character.Damage {MistWorms.Bites.WormBite.DevWorstDamageMs:0.00}, the rest of the handler is the mod's context and tag {MistWorms.Bites.WormBite.DevWorstHandlerMs - MistWorms.Bites.WormBite.DevWorstDamageMs:0.00})");
+                if (MistWorms.Bites.WormBite.DevWorstCallMs - MistWorms.Bites.WormBite.DevWorstDamageMs > 1f)
+                    ctx.Log($"WARNING: {MistWorms.Bites.WormBite.DevWorstCallMs - MistWorms.Bites.WormBite.DevWorstDamageMs:0.00} ms of the slowest bite is outside Character.Damage (routed RPC or mod handler): a cost of the mod to look at");
                 ctx.Assert("sim_gc_ticks", excluded * 100 <= measured, "<= 1 % of the ticks hit by a GC collection", $"{excluded} / {measured}");
-                ctx.Assert("sim_max", colony.PeakMsWithoutGc <= SimMaxBudget, $"<= {SimMaxBudget} ms (worst tick without a GC collection, the first strike of the session left out; raw max {colony.PeakMsWithoutFirstStrike:0.00} ms, {excluded} ticks excluded)", colony.PeakMsWithoutGc.ToString("0.00"));
+                ctx.Assert("sim_max", colony.PeakMsWithoutVanillaWithoutGc <= SimMaxBudget, $"<= {SimMaxBudget} ms (worst tick without a GC collection and without the vanilla damage call of a strike, the first strike of the session left out; with the vanilla call {colony.PeakMsWithoutGc:0.00} ms, raw max {colony.PeakMsWithoutFirstStrike:0.00} ms, {excluded} ticks excluded)", colony.PeakMsWithoutVanillaWithoutGc.ToString("0.00"));
                 ctx.Assert("render_mean", renderMean <= RenderBudget, $"<= {RenderBudget} ms (main thread, flipbook renderer + GPU colony; decision 218)", renderMean.ToString("0.000"));
                 ctx.Assert("draw_calls_max", callsMax <= CallBudget, $"<= {CallBudget} instanced calls in all", callsMax);
                 ctx.Assert("dropped", droppedMax == 0, 0, droppedMax);

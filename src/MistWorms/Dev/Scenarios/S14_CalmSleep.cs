@@ -217,6 +217,11 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Log($"calm: {colony.GroupsSlept} groups slept, {colony.WormsCalmed} worms walked home, {colony.SleptWorms} worms laid down by masses, {took:0.0} s");
 
                 // ---- 5. the player comes back: the group wakes in under a second, same worms, same pool
+                // Decision 272 trace: every living slot before the return, to name the worm that goes missing (S14 116/117 in p9h).
+                var slotsBefore = new System.Text.StringBuilder();
+                for (int i = 0; i < s.HighWater; i++)
+                    if (s.alive[i]) slotsBefore.Append($"[{i} {(WormState)s.state[i]} {s.pos[i]} nest {s.nestIndex[i]}] ");
+                ctx.Log($"slots alive before the return ({s.AliveCount}): {slotsBefore}");
                 WormColony.DevPassiveWake = true;
                 var again = new TpMineResult();
                 yield return DevWorld.TpMine(again, ctx.Log);
@@ -239,6 +244,11 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert("the_group_wakes_when_the_player_returns", wokeBack >= 0f && wokeBack <= 1f, "< 1 s", wokeBack < 0f ? "never" : $"{wokeBack:0.00} s");
                 yield return ctx.WaitGame(1f);
                 colony.DevTotals(out int n2, out float pool2);
+                ctx.Log($"after the return: {n2} worms, {s.AliveCount} alive slots, death causes: {(colony.DeathCauses.Count == 0 ? "none" : string.Join(" | ", colony.DeathCauses))}");
+                var slotsAfter = new System.Text.StringBuilder();
+                for (int i = 0; i < s.HighWater; i++)
+                    if (s.alive[i]) slotsAfter.Append($"[{i} {(WormState)s.state[i]} {s.pos[i]} nest {s.nestIndex[i]}] ");
+                ctx.Log($"slots alive after the return: {slotsAfter}");
                 ctx.Assert("same_number_of_worms_after_the_return", n2 == n0, n0, n2);
                 ctx.Assert("same_pool_after_the_return", Mathf.Abs(pool2 - pool0) <= PoolTolerance, $"{pool0:0.####} +- {PoolTolerance}", pool2);
                 yield return ctx.Shot("awake_again");

@@ -220,7 +220,7 @@ namespace MistWorms.Colony
             }
 
             // Spec §8.4: a worm that ends up outside the box (fell, was pushed) is destroyed without drop.
-            if (s.alive[i] && !InBox(s.pos[i])) KillWorm(i, false);
+            if (s.alive[i] && !InBox(s.pos[i])) { DevLogSilentKill("out of the box", i); KillWorm(i, false); }
         }
 
         private void SetState(int i, WormState state, float now)
@@ -808,6 +808,7 @@ namespace MistWorms.Colony
                 s.groundNormal[i] = hit.normal;
                 return;
             }
+            DevLogSilentKill("no floor", i);
             KillWorm(i, false);
         }
     }

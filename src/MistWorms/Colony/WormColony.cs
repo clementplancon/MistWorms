@@ -357,6 +357,15 @@ namespace MistWorms.Colony
             return i;
         }
 
+        /// <summary>Dev trace (decision 272): a worm removed without a trace by one of the silent paths (out of the box, no floor, hand-off). Does not exist in Release.</summary>
+        [System.Diagnostics.Conditional("MW_DEV")]
+        internal void DevLogSilentKill(string why, int i)
+        {
+            if (Store == null || (uint)i >= (uint)Store.Capacity || !Store.alive[i]) return;
+            Vector3 p = Store.pos[i];
+            Plugin.DevInfo($"[Colony] silent removal ({why}): worm {i} at {p}, state {(WormState)Store.state[i]}, in box {InBox(p)}, nest {Store.nestIndex[i]}");
+        }
+
         /// <summary>Removes a worm. <paramref name="withDrops"/> false = no effect and no drop (out of the box, no floor, dev kill).</summary>
         public void KillWorm(int i, bool withDrops)
         {
@@ -397,6 +406,12 @@ namespace MistWorms.Colony
         /// session as before. Decision 255: a strike on the player is 3 ms in one frame of 0.08 ms of simulation, a cost of the game that the mod does not control.
         /// </summary>
         public float PeakMsWithoutVanilla { get; private set; }
+
+        /// <summary>Decision 272: worst tick without the vanilla damage call AND without a GC collection in the tick (the first strike of the session left out), the rule of S11 and S18.</summary>
+        public float PeakMsWithoutVanillaWithoutGc { get; private set; }
+
+        /// <summary>Time inside the vanilla damage call of the worst frame (by raw cost), for the log.</summary>
+        public float WorstFrameVanillaMs { get; private set; }
 
         /// <summary>Largest time (ms) one frame spent in the vanilla damage call of its strikes since the last reset, reported apart from the budget.</summary>
         public float WorstVanillaMs { get; private set; }
@@ -442,6 +457,8 @@ namespace MistWorms.Colony
             if (_frameFirstSessionStrike) FirstSessionStrikeMs = ms;
             else if (ms > PeakMsWithoutFirstStrike) PeakMsWithoutFirstStrike = ms;
             if (!_frameFirstSessionStrike && ms - _frameVanillaMs > PeakMsWithoutVanilla) PeakMsWithoutVanilla = ms - _frameVanillaMs;
+            if (!gcInTick && !_frameFirstSessionStrike && ms - _frameVanillaMs > PeakMsWithoutVanillaWithoutGc) PeakMsWithoutVanillaWithoutGc = ms - _frameVanillaMs;
+            if (ms > _worstMs[0]) WorstFrameVanillaMs = _frameVanillaMs;
             if (_frameVanillaMs > WorstVanillaMs) WorstVanillaMs = _frameVanillaMs;
             _frameFirstSessionStrike = false;
             int slot = -1;
@@ -466,6 +483,8 @@ namespace MistWorms.Colony
             MaxSimMs = 0f;
             PeakMsWithoutFirstStrike = 0f;
             PeakMsWithoutVanilla = 0f;
+            PeakMsWithoutVanillaWithoutGc = 0f;
+            WorstFrameVanillaMs = 0f;
             PeakMsWithoutGc = 0f;
             TicksMeasured = TicksWithGc = 0;
             WorstVanillaMs = 0f;

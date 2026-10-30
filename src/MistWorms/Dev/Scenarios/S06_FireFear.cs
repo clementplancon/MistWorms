@@ -121,6 +121,18 @@ namespace MistWorms.Dev.Scenarios
                         yield return ctx.Wait(1.5f);
                         yield return ctx.WaitUntil(() => !InfestedEffect.IsActive(player), 3f);
                     }
+                    // Decision 272: the torch set-up walks the player about 3 m, onto a log in p9e-p9h. Back to the verified site, and check it is still the site (p9h: 12 lines ended on the same log).
+                    Vector3 site = ctx.LastOpenGround.Spot;
+                    var backToSite = new TeleportOutcome();
+                    yield return DevWorld.TeleportPlayer(site + Vector3.up * 0.2f, player.transform.rotation, false, 30f, backToSite);
+                    ctx.Assert("sword_site_reached", backToSite.Ok, true, backToSite.Ok ? "arrived" : backToSite.Error);
+                    if (!backToSite.Ok) yield break;
+                    yield return ctx.WaitGame(1f);
+                    player = Player.m_localPlayer;
+                    fwd = Flat(player.transform.forward);
+                    string siteReport = CheckSwordSite(player, site, out bool siteClear);
+                    ctx.Log($"sword site check{repTag}: {siteReport}");
+                    if (!ctx.Assert("sword_site_clear", siteClear, "ground within 0.1 m of the site, no solid over 0.2 m within 2 m", siteReport)) yield break;
                     mass = Spawn(ctx, player, fwd, 8f, flatLine: true);
                     if (mass == null) yield break;
                     ai = mass.GetComponent<WritheMassAI>();
@@ -281,6 +293,7 @@ namespace MistWorms.Dev.Scenarios
                         return m;
                     }
                     worst = $"angle {a}: {report}";
+                    ctx.Log($"flat line rejected at angle {a} (level {level}, sight {sight}): {report}");
                     MassDev.Destroy(m);
                 }
                 ctx.Log($"NOTE: no flat line (relief <= {LineMaxRise:0.0} m, no obstacle above {LineMaxObstacle:0.0} m) at {distance:0} m in 12 angles, falling back to the usual attempts; last tried {worst}; the sword time then includes the relief of the retained line");
@@ -313,6 +326,35 @@ namespace MistWorms.Dev.Scenarios
                     }
             ctx.Assert("mass_created", false, "a mass with a floor near the player's height", $"none in {tried} attempts around {origin}");
             return null;
+        }
+
+        private static readonly Collider[] SiteHits = new Collider[64];
+
+        /// <summary>The ground under the player is the ground of the verified site (0.1 m) and no non-terrain solid taller than 0.2 m is within 2 m.</summary>
+        private static string CheckSwordSite(Player player, Vector3 site, out bool clear)
+        {
+            Vector3 pp = player.transform.position;
+            if (!Physics.Raycast(pp + Vector3.up * 2f, Vector3.down, out RaycastHit g, 6f, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore))
+            {
+                clear = false;
+                return $"no ground under the player at {pp.ToString("0.00")}";
+            }
+            float dy = Mathf.Abs(g.point.y - site.y);
+            var blockers = new System.Collections.Generic.List<string>();
+            Vector3 centre = new Vector3(pp.x, g.point.y + 1.1f, pp.z);   // 0.2 m to 2.0 m above the ground
+            int c = Physics.OverlapBoxNonAlloc(centre, new Vector3(2f, 0.9f, 2f), SiteHits, Quaternion.identity, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore);
+            for (int k = 0; k < c; k++)
+            {
+                Collider col = SiteHits[k];
+                if (col == null || col.GetComponentInParent<Heightmap>() != null || col.GetComponentInParent<Character>() != null) continue;
+                Vector3 near = col.ClosestPoint(pp);
+                near.y = pp.y;
+                if ((near - pp).magnitude > 2f) continue;
+                string nm = $"{col.name} (top {col.bounds.max.y - g.point.y:0.00} m)";
+                if (!blockers.Contains(nm)) blockers.Add(nm);
+            }
+            clear = dy <= 0.1f && blockers.Count == 0;
+            return $"ground {g.point.y:0.00} under the player (collider {g.collider.name}), site {site.y:0.00}, difference {dy:0.00} m, solids over 0.2 m within 2 m: {(blockers.Count == 0 ? "none" : string.Join("/", blockers))}";
         }
 
         private const float LineMaxRise = 0.3f, LineMaxObstacle = 0.2f, LineStep = 0.5f, LineMaxGrade = 0.4f;
