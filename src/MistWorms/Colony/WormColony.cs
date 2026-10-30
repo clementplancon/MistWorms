@@ -370,7 +370,9 @@ namespace MistWorms.Colony
         internal void DevLogSilentKill(string why, int i)
         {
             if (Store == null || (uint)i >= (uint)Store.Capacity || !Store.alive[i]) return;
+#if MW_DEV
             _devKillWhy = why;
+#endif
             Vector3 p = Store.pos[i];
             Plugin.DevInfo($"[Colony] silent removal ({why}): worm {i} at {p}, state {(WormState)Store.state[i]}, in box {InBox(p)}, nest {Store.nestIndex[i]}");
         }
