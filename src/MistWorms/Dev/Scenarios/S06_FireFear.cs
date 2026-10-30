@@ -121,7 +121,7 @@ namespace MistWorms.Dev.Scenarios
                         yield return ctx.Wait(1.5f);
                         yield return ctx.WaitUntil(() => !InfestedEffect.IsActive(player), 3f);
                     }
-                    mass = Spawn(ctx, player, fwd, 8f);
+                    mass = Spawn(ctx, player, fwd, 8f, flatLine: true);
                     if (mass == null) yield break;
                     ai = mass.GetComponent<WritheMassAI>();
                     if (ctx.Params.TryGetValue("spawnyaw", out string yawText) && float.TryParse(yawText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float yawOff))
@@ -165,7 +165,7 @@ namespace MistWorms.Dev.Scenarios
                     }
                     if (swordDebug) drained = DrainProbe(ctx, drained, repTag);
                     float took = Time.time - t0;
-                    ctx.Log($"sword summary{repTag}: heading error at spawn {startErr:0} deg, body above 0.5 m/s from t={firstMove:0.00} s, flat < 1.40 m at t={below:0.00} s, engulf after {took:0.00} s, path {ai.PathTicks}, no path {ai.NoPathTicks}, stalled {ai.StalledChecks}, assists {ai.StepAssists}" +
+                    ctx.Log($"sword summary{repTag}: heading error at spawn {startErr:0} deg, body above 0.5 m/s from t={firstMove:0.00} s, flat < 1.40 m at t={below:0.00} s, engulf after {took:0.00} s, path {ai.PathTicks}, no path {ai.NoPathTicks}, stalled {ai.StalledChecks}, assists {ai.StepAssists}, line {lastLine}" +
                         (swordDebug ? $", initial path length {MassPathProbe.InitialPathLen:0.00} m, FindPath calls {MassPathProbe.FindPathCalls}" : ""));
                     bool inEngulf = mass != null && MassStateCodes.Mode(mass.StateCode) == MassStateCodes.Engulf;
                     ctx.Assert("sword_engulfs", inEngulf && took <= SwordSeconds, $"Engulf within {SwordSeconds:0} s", inEngulf ? $"{took:0.0} s" : "never");
@@ -255,8 +255,36 @@ namespace MistWorms.Dev.Scenarios
         /// 0.6 of the distance; a spot is kept when it has a floor within 2.5 m of the player's height. The first pass also wants a line of sight to the player,
         /// the second takes any floor. The attempt that worked is logged.
         /// </summary>
-        private static WritheMassState Spawn(ScenarioContext ctx, Player player, Vector3 fwd, float distance)
+        private static WritheMassState Spawn(ScenarioContext ctx, Player player, Vector3 fwd, float distance, bool flatLine = false)
         {
+            lastLine = "";
+            Vector3 origin0 = player.transform.position;
+            if (flatLine)
+            {
+                // Sword witness: the mass must walk on a flat line (the phase measures the AI, not the relief). Full distance, every 30 degrees around the player.
+                float[] around = { 0f, 30f, -30f, 60f, -60f, 90f, -90f, 120f, -120f, 150f, -150f, 180f };
+                string worst = "";
+                foreach (float a in around)
+                {
+                    Vector3 at = origin0 + Quaternion.AngleAxis(a, Vector3.up) * fwd * distance;
+                    WritheMassState m = MassDev.SpawnAt(at, WormCount, ZDOID.None, freezeAI: false);
+                    if (m == null) continue;
+                    bool sight = !Physics.Linecast(m.transform.position + Vector3.up * EyeHeight, player.GetCenterPoint(), WormPhysics.ViewBlockMask, QueryTriggerInteraction.Ignore);
+                    bool level = Mathf.Abs(m.transform.position.y - origin0.y) <= 2.5f;
+                    bool flat = LineFlat(m.transform.position, origin0, out string report);
+                    if (level && sight && flat)
+                    {
+                        lastLine = report;
+                        ctx.Log($"mass spawned {Utils.DistanceXZ(m.transform.position, origin0):0.#} m away at flat-line angle {a}, line of sight true; line {report}");
+                        ctx.Assert("mass_created", m.Valid, "a valid mass", m.ZdoId.ToString());
+                        m.GetComponent<WritheMassAI>().DevForcedTarget = player;
+                        return m;
+                    }
+                    worst = $"angle {a}: {report}";
+                    MassDev.Destroy(m);
+                }
+                ctx.Log($"NOTE: no flat line (relief <= {LineMaxRise:0.0} m, no obstacle above {LineMaxObstacle:0.0} m) at {distance:0} m in 12 angles, falling back to the usual attempts; last tried {worst}; the sword time then includes the relief of the retained line");
+            }
             float[] scales = { 1f, 0.8f, 0.6f };
             float[] angles = { 0f, 25f, -25f, 50f, -50f, 90f, -90f };
             Vector3 origin = player.transform.position;
@@ -277,13 +305,55 @@ namespace MistWorms.Dev.Scenarios
                             continue;
                         }
                         float d = Utils.DistanceXZ(m.transform.position, origin);
-                        ctx.Log($"mass spawned {d:0.#} m away at attempt {tried} (scale {k}, angle {a}), line of sight {sight}");
+                        if (flatLine) { LineFlat(m.transform.position, origin, out string rep); lastLine = rep; }
+                        ctx.Log($"mass spawned {d:0.#} m away at attempt {tried} (scale {k}, angle {a}), line of sight {sight}" + (flatLine ? $"; line {lastLine}" : ""));
                         ctx.Assert("mass_created", m.Valid, "a valid mass", m.ZdoId.ToString());
                         m.GetComponent<WritheMassAI>().DevForcedTarget = player;
                         return m;
                     }
             ctx.Assert("mass_created", false, "a mass with a floor near the player's height", $"none in {tried} attempts around {origin}");
             return null;
+        }
+
+        private const float LineMaxRise = 0.3f, LineMaxObstacle = 0.2f, LineStep = 0.5f, LineMaxGrade = 0.4f;
+        private static string lastLine = "";
+        private static readonly Collider[] LineHits = new Collider[16];
+
+        /// <summary>
+        /// Samples the line from <paramref name="from"/> to <paramref name="to"/> every 0.5 m: ground height (rise = max - min <= 0.3 m, no step steeper than
+        /// grade 0.4) and any non-terrain collider over 0.2 m high in a corridor of the mass radius. Always fills <paramref name="report"/> (rise, obstacles).
+        /// </summary>
+        private static bool LineFlat(Vector3 from, Vector3 to, out string report)
+        {
+            Vector3 d = to - from; d.y = 0f;
+            float len = d.magnitude;
+            Vector3 dir = len > 1e-3f ? d / len : Vector3.forward;
+            float half = Mathf.Min(MassMath.Radius(WormCount), 1f);
+            float lo = float.MaxValue, hi = float.MinValue, prev = float.NaN, maxGrade = 0f;
+            var obstacles = new System.Collections.Generic.List<string>();
+            int n = Mathf.Max(1, Mathf.CeilToInt(len / LineStep));
+            bool missing = false;
+            for (int i = 0; i <= n; i++)
+            {
+                Vector3 p = from + dir * Mathf.Min(len, i * LineStep);
+                if (!Physics.Raycast(p + Vector3.up * 3f, Vector3.down, out RaycastHit g, 8f, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore)) { missing = true; continue; }
+                lo = Mathf.Min(lo, g.point.y); hi = Mathf.Max(hi, g.point.y);
+                if (!float.IsNaN(prev)) maxGrade = Mathf.Max(maxGrade, Mathf.Abs(g.point.y - prev) / LineStep);
+                prev = g.point.y;
+                Vector3 centre = new Vector3(p.x, g.point.y + LineMaxObstacle + 0.4f, p.z);
+                int c = Physics.OverlapBoxNonAlloc(centre, new Vector3(half, 0.4f, LineStep * 0.5f), LineHits, Quaternion.LookRotation(dir), WormPhysics.SolidMask, QueryTriggerInteraction.Ignore);
+                for (int k = 0; k < c; k++)
+                {
+                    Collider col = LineHits[k];
+                    if (col == null || col.GetComponentInParent<Heightmap>() != null || col.GetComponentInParent<Character>() != null) continue;
+                    string nm = col.name;
+                    if (!obstacles.Contains(nm)) obstacles.Add(nm);
+                }
+            }
+            float rise = hi >= lo ? hi - lo : 0f;
+            bool ok = !missing && rise <= LineMaxRise && maxGrade <= LineMaxGrade && obstacles.Count == 0;
+            report = $"rise {rise:0.00} m over {len:0.0} m, max grade {maxGrade:0.00}, obstacles {(obstacles.Count == 0 ? "none" : string.Join("/", obstacles))}{(missing ? ", missing floor samples" : "")}";
+            return ok;
         }
 
         /// <summary>Distance from the edge of the mass to the player, with the measure the AI uses (centre at eye height, 3D).</summary>
