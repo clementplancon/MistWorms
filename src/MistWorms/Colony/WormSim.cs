@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using MistWorms.Config;
 using UnityEngine;
@@ -76,6 +77,9 @@ namespace MistWorms.Colony
 
         private void Tick()
         {
+#if MW_DEV
+            int gcAtStart = GC.CollectionCount(0);
+#endif
             long start = Stopwatch.GetTimestamp();
             float now = Time.time;
             WormStore s = Store;
@@ -146,7 +150,7 @@ namespace MistWorms.Colony
             LastSimSteps = steps;
             LastSimMs = (float)((Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency);
 #if MW_DEV
-            RecordFrame(now, steps, gridRebuilt);
+            RecordFrame(now, steps, gridRebuilt, GC.CollectionCount(0) != gcAtStart);
 #endif
             AvgSimMs = AvgSimMs <= 0f ? LastSimMs : AvgSimMs + (LastSimMs - AvgSimMs) * 0.02f;
             if (LastSimMs > MaxSimMs) MaxSimMs = LastSimMs;

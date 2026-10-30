@@ -425,12 +425,20 @@ namespace MistWorms.Colony
                 : $"worm {i} removed without drops at {p} (in box {InBox(p)}, state {(WormState)Store.state[i]})");
             _lastKillCause = null;
         }
+        /// <summary>Decision 270: worst tick (first strike of the session left out) among those during which no garbage collection ran (<c>GC.CollectionCount(0)</c> unchanged between the start and the end of the tick); a GC pause lands in the wall clock of the tick without being a simulation cost.</summary>
+        public float PeakMsWithoutGc { get; private set; }
+        /// <summary>Ticks measured and ticks that contained a garbage collection since the last <see cref="ResetSimPeaks"/>.</summary>
+        public int TicksMeasured { get; private set; }
+        public int TicksWithGc { get; private set; }
         public readonly string[] WorstFrames = new string[3];
         private readonly float[] _worstMs = new float[3];
 
-        private void RecordFrame(float now, int steps, bool gridRebuilt)
+        private void RecordFrame(float now, int steps, bool gridRebuilt, bool gcInTick)
         {
             float ms = LastSimMs;
+            TicksMeasured++;
+            if (gcInTick) TicksWithGc++;
+            else if (!_frameFirstSessionStrike && ms > PeakMsWithoutGc) PeakMsWithoutGc = ms;
             if (_frameFirstSessionStrike) FirstSessionStrikeMs = ms;
             else if (ms > PeakMsWithoutFirstStrike) PeakMsWithoutFirstStrike = ms;
             if (!_frameFirstSessionStrike && ms - _frameVanillaMs > PeakMsWithoutVanilla) PeakMsWithoutVanilla = ms - _frameVanillaMs;
@@ -458,6 +466,8 @@ namespace MistWorms.Colony
             MaxSimMs = 0f;
             PeakMsWithoutFirstStrike = 0f;
             PeakMsWithoutVanilla = 0f;
+            PeakMsWithoutGc = 0f;
+            TicksMeasured = TicksWithGc = 0;
             WorstVanillaMs = 0f;
             for (int k = 0; k < 3; k++) { _worstMs[k] = 0f; WorstFrames[k] = null; }
         }

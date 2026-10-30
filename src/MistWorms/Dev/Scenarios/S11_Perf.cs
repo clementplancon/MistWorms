@@ -124,7 +124,12 @@ namespace MistWorms.Dev.Scenarios
                 ctx.Assert("free_worms_still_alive", colony.Store.AliveCount >= FreeWorms * 9 / 10, $">= {FreeWorms * 9 / 10} free worms at the end", colony.Store.AliveCount);
                 ctx.Assert("melee_engaged", hunting >= FreeWorms / 2, $">= {FreeWorms / 2} worms hunting or striking at the end", hunting);
                 ctx.Assert("sim_mean", simMean <= SimMeanBudget, $"<= {SimMeanBudget} ms per frame (mean)", simMean.ToString("0.000"));
-                ctx.Assert("sim_max", colony.PeakMsWithoutFirstStrike <= SimMaxBudget, $"<= {SimMaxBudget} ms (worst frame, the first strike of the session left out)", colony.PeakMsWithoutFirstStrike.ToString("0.00"));
+                // Decision 270: the clock of a tick is the wall clock, a garbage collection inside the tick lands in it without being a simulation cost. The peak is judged on the ticks without a collection;
+                // the raw peak and the number of excluded ticks are reported, and more than 1 % excluded fails anyway (a chronic allocation is not masked).
+                int excluded = colony.TicksWithGc, measured = Math.Max(1, colony.TicksMeasured);
+                ctx.Log($"sim max: {colony.PeakMsWithoutGc:0.00} ms without GC ticks, raw {colony.PeakMsWithoutFirstStrike:0.00} ms, {excluded} of {measured} ticks excluded for a collection of generation 0 ({100.0 * excluded / measured:0.00} %)");
+                ctx.Assert("sim_gc_ticks", excluded * 100 <= measured, "<= 1 % of the ticks hit by a GC collection", $"{excluded} / {measured}");
+                ctx.Assert("sim_max", colony.PeakMsWithoutGc <= SimMaxBudget, $"<= {SimMaxBudget} ms (worst tick without a GC collection, the first strike of the session left out; raw max {colony.PeakMsWithoutFirstStrike:0.00} ms, {excluded} ticks excluded)", colony.PeakMsWithoutGc.ToString("0.00"));
                 ctx.Assert("render_mean", renderMean <= RenderBudget, $"<= {RenderBudget} ms (main thread, flipbook renderer + GPU colony; decision 218)", renderMean.ToString("0.000"));
                 ctx.Assert("draw_calls_max", callsMax <= CallBudget, $"<= {CallBudget} instanced calls in all", callsMax);
                 ctx.Assert("dropped", droppedMax == 0, 0, droppedMax);
