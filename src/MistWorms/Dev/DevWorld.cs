@@ -303,6 +303,56 @@ namespace MistWorms.Dev
                 yield return new WaitForSecondsRealtime(1f);
             }
             _lastGoodSite = result.Spot;
+            yield return Reverify(clearRadius, accept, result, log, flat);
+        }
+
+        private const float ReverifyRadius = 60f;
+        private const int ReverifyRounds = 12;
+
+        /// <summary>The clutter mask of the open ground search: everything a tree, rock, piece or dropped item could be on (the terrain itself is allowed under the capsule).</summary>
+        private static int ClutterMask() => LayerMask.GetMask(VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, VanillaNames.LayerDefaultSmall,
+            VanillaNames.LayerPiece, "piece_nonsolid", VanillaNames.LayerVehicle, "item");
+
+        /// <summary>
+        /// Decision 278. The spiral measures ground up to 400 m away, but the trees, logs and rocks exist only around the player (the active area): a site far from where the search started
+        /// is judged without its objects (p9j: a PineTree_log 1 m from the site, invisible to the capsule and to the acceptance). Once the player stands on the site and the area is loaded,
+        /// the clearance and the acceptance are judged again; a site that fails is replaced by a search around the player (where everything is loaded), at most
+        /// <see cref="ReverifyRounds"/> times (the loaded areas where nothing fits are not searched again). Public: also run after an imposed site (param site=).
+        /// </summary>
+        public static IEnumerator Reverify(float clearRadius, Func<Vector3, bool> accept, OpenGroundResult result, Action<string> log, FlatSpec flat)
+        {
+            int clutter = ClutterMask();
+            var explored = new System.Collections.Generic.List<Vector3>();   // centres of the loaded areas where the search found nothing: their candidates are not tried again
+            Func<Vector3, bool> fresh = p =>
+            {
+                foreach (Vector3 c in explored) if (Utils.DistanceXZ(p, c) < ReverifyRadius) return false;
+                return accept == null || accept(p);
+            };
+            for (int round = 0; round <= ReverifyRounds && result.Found; round++)
+            {
+                Vector3 g = result.Spot;
+                bool blocked = Physics.CheckCapsule(g + Vector3.up * 0.3f, g + Vector3.up * 3f, clearRadius, clutter, QueryTriggerInteraction.Ignore);
+                bool refused = !blocked && accept != null && !accept(g);
+                if (!blocked && !refused) yield break;
+                if (round == ReverifyRounds) { result.Found = false; result.Error = $"site {g.ToString("0.00")} still refused after {ReverifyRounds} rounds"; yield break; }
+                log?.Invoke($"site {g.ToString("0.00")} refused once its surroundings are loaded ({(blocked ? "an object within " + clearRadius.ToString("0") + " m" : "acceptance")}), round {round + 1}: searching around the player");
+                Vector3 centre = Player.m_localPlayer.transform.position;
+                result.Found = false;
+                // First the loaded area around the player, where every object exists; then, that area being exhausted, the far candidates not yet explored (they are judged again on arrival).
+                yield return SearchWithHops(centre, 0, clearRadius, fresh, flat, result, log, maxRadius: ReverifyRadius);
+                if (!result.Found)
+                {
+                    explored.Add(centre);
+                    yield return SearchWithHops(centre, 0, clearRadius, fresh, flat, result, log);
+                }
+                if (!result.Found) { result.Error = $"no open ground once the surroundings are loaded ({result.Tested} candidates)"; yield break; }
+                Vector3 spot = result.Spot;
+                var arrive = new TeleportOutcome();
+                yield return TeleportPlayer(spot + Vector3.up * 0.1f, Player.m_localPlayer.transform.rotation, Vector3.Distance(spot, Player.m_localPlayer.transform.position) > 64f, 60f, arrive);
+                if (!arrive.Ok) { result.Found = false; result.Error = "teleport to the spot failed: " + arrive.Error; yield break; }
+                yield return new WaitForSecondsRealtime(1f);
+                _lastGoodSite = spot;
+            }
         }
 
         /// <summary>The last open ground found in this game session (statics survive the scenarios); tried first by the next search.</summary>
@@ -325,14 +375,14 @@ namespace MistWorms.Dev
         }
 
         /// <summary>The spiral search around <paramref name="center"/>, then up to <paramref name="maxHops"/> hops of 150 m to load more ground; fills <paramref name="result"/> when found.</summary>
-        private static IEnumerator SearchWithHops(Vector3 center, int maxHops, float clearRadius, Func<Vector3, bool> accept, FlatSpec flat, OpenGroundResult result, Action<string> log, bool onlyCenter = false)
+        private static IEnumerator SearchWithHops(Vector3 center, int maxHops, float clearRadius, Func<Vector3, bool> accept, FlatSpec flat, OpenGroundResult result, Action<string> log, bool onlyCenter = false, float maxRadius = OpenSearchRadius)
         {
             Quaternion rot = Player.m_localPlayer.transform.rotation;
             var directions = new[] { Vector3.right, Vector3.forward, Vector3.left, Vector3.back };
             for (int hop = 0; hop <= maxHops; hop++)
             {
                 result.Hops += hop > 0 ? 1 : 0;
-                bool found = Search(center, clearRadius, accept, flat, result.Stats, out Vector3 spot, out float deviation, out int tested, onlyCenter ? 0f : OpenSearchRadius);
+                bool found = Search(center, clearRadius, accept, flat, result.Stats, out Vector3 spot, out float deviation, out int tested, onlyCenter ? 0f : maxRadius);
                 result.Tested += tested;
                 if (found)
                 {
@@ -393,8 +443,7 @@ namespace MistWorms.Dev
             float fallbackRadius = 0f;
             int terrain = LayerMask.GetMask(VanillaNames.LayerTerrain);
             // Everything a tree, rock, piece or dropped item could be on; the terrain itself is allowed under the capsule.
-            int clutter = LayerMask.GetMask(VanillaNames.LayerDefault, VanillaNames.LayerStaticSolid, VanillaNames.LayerDefaultSmall,
-                VanillaNames.LayerPiece, "piece_nonsolid", VanillaNames.LayerVehicle, "item");
+            int clutter = ClutterMask();
             float water = ZoneSystem.instance.m_waterLevel + 1f;
 
             for (float radius = 0f; radius <= maxRadius; radius += OpenSearchStep)

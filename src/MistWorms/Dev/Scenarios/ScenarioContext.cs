@@ -276,6 +276,8 @@ namespace MistWorms.Dev.Scenarios
             if (TryParseSite(Param("site"), out float sx, out float sz))
             {
                 yield return GoToSite(sx, sz, result);
+                // The imposed site is judged like a found one (decision 278): a log beside it sends the search around the player.
+                if (result.Found) yield return DevWorld.Reverify(clearRadius, p => (accept == null || accept(p)) && !V14_GpuMassSandbox.NearWater(p, V14_GpuMassSandbox.WaterClearance), result, Log, new FlatSpec(flatRadius, flatTolerance, lenientTolerance));
                 if (result.Found && Player.m_localPlayer != null)
                 {
                     Player.m_localPlayer.SetGodMode(true);
