@@ -508,7 +508,7 @@ namespace MistWorms.Colony
 
         /// <summary>
         /// The sleeping worms of a mass that went home: <paramref name="n"/> worms laid on the ring of 0.4 to 2 m around <paramref name="center"/> (on the floor, no wall
-        /// between, in the box; the centre itself when no place is found), their pool in equal shares and their nest of origin exactly as the mass counted them. No leap,
+        /// between, in the box; else the floor under the centre by the long probe, else the centre itself, kept: decision 275), their pool in equal shares and their nest of origin exactly as the mass counted them. No leap,
         /// no flight: they are asleep. They already existed, so the mine cap does not apply.
         /// </summary>
         private void LayDownSleepers(ZDOID mass, int n, Vector3 center)
@@ -553,6 +553,11 @@ namespace MistWorms.Colony
                 if (Physics.Linecast(center + Vector3.up * 0.6f, hit.point + Vector3.up * 0.3f, solid, QueryTriggerInteraction.Ignore)) continue;
                 return hit.point;
             }
+            // No place on the ring (decision 275): the floor under the mass itself, with the long probe. Never the raw mass position when a floor exists below it.
+            bool found = WormPhysics.ProbeFall(center, out RaycastHit under) && InBox(under.point);
+            if (WormGround.ChooseDepositSpot(false, found) == WormGround.DepositSpot.LongProbe) return under.point;
+            // No floor at all: the worm is kept at the mass position (never lost, its pool share is given as usual); as a sleeper it drops to a floor when one appears (WormSim.GroundMaintain).
+            Plugin.DevInfo($"[Colony] no floor under the mass at {center}: sleeper laid at the mass position, without floor");
             return center;
         }
     }

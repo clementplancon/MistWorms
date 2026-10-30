@@ -24,6 +24,31 @@ namespace MistWorms.Colony
         /// </summary>
         public const float FirstFloorWait = 30f;
 
+        /// <summary>Where a sleeper of a mass that went back to sleep is laid (decision 275): on the ring, else on the floor found under the mass with the long probe, else (no floor at all) at the mass position, kept and traced.</summary>
+        public enum DepositSpot
+        {
+            Ring,
+            LongProbe,
+            Unsupported,
+        }
+
+        public static DepositSpot ChooseDepositSpot(bool ringFound, bool longProbeFound) =>
+            ringFound ? DepositSpot.Ring : longProbeFound ? DepositSpot.LongProbe : DepositSpot.Unsupported;
+
+        /// <summary>What a sleeper does when its floor probe fails once its first-floor window is over (decision 275).</summary>
+        public enum SleeperAction
+        {
+            Wait,         // zone not loaded, or still inside the first-floor window: nothing
+            Fall,         // a floor exists below (long probe, inside the box): drop onto it
+            KeepTraced,   // no floor anywhere: it stays where it is (a sleeper never dies for lack of a floor), traced in dev
+        }
+
+        public static SleeperAction OnSleeperNoFloor(bool zoneLoaded, bool hadGround, float now, float waitEnd, bool fallFloorFound)
+        {
+            if (!zoneLoaded || AwaitingFirstFloor(hadGround, now, waitEnd)) return SleeperAction.Wait;
+            return fallFloorFound ? SleeperAction.Fall : SleeperAction.KeepTraced;
+        }
+
         /// <summary>The worm has never had a floor and its wait window (<paramref name="waitEnd"/>) is still open: it must not move, fall or die.</summary>
         public static bool AwaitingFirstFloor(bool hadGround, float now, float waitEnd) => !hadGround && now < waitEnd;
 

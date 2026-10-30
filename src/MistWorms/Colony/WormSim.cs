@@ -828,6 +828,29 @@ namespace MistWorms.Colony
                 return;
             }
 
+            // A sleeper whose window is over drops onto the first floor below (long probe), else it stays and is traced: it never dies for lack of a floor (decision 275).
+            if (s.state[i] == (byte)WormState.Sleeping)
+            {
+                bool loaded = ZoneSystem.instance != null && ZoneSystem.instance.IsZoneLoaded(p);
+                RaycastHit fall = default;
+                bool found = loaded && !WormGround.AwaitingFirstFloor(s.hadGround[i], now, s.groundWaitEnd[i]) && WormPhysics.ProbeFall(p, out fall) && InBox(fall.point);
+                WormGround.SleeperAction act = WormGround.OnSleeperNoFloor(loaded, s.hadGround[i], now, s.groundWaitEnd[i], found);
+                if (act == WormGround.SleeperAction.Fall)
+                {
+                    s.hadGround[i] = true;
+                    s.groundFailSince[i] = WormGround.NoFailure;
+                    s.pos[i] = fall.point;
+                    s.prevPos[i] = fall.point;
+                    s.groundNormal[i] = fall.normal;
+                    s.home[i] = fall.point;
+                    s.den[i] = fall.point;
+                    s.progressPos[i] = fall.point;
+                }
+                else if (act == WormGround.SleeperAction.KeepTraced) DevTraceFloorlessSleeper(i, now);
+                s.groundFailSince[i] = WormGround.NoFailure;
+                return;
+            }
+
             // A zone that is not loaded freezes the worm; a sleeper keeps its place; an awake worm is removed only after WormGround.FailGrace of continuous failure (decision 273).
             bool zoneLoaded = ZoneSystem.instance != null && ZoneSystem.instance.IsZoneLoaded(p);
             if (WormGround.OnProbeFailed(zoneLoaded, s.state[i] == (byte)WormState.Sleeping, now, ref s.groundFailSince[i], WormGround.FailGrace, s.hadGround[i], s.groundWaitEnd[i]) == GroundVerdict.Keep) return;

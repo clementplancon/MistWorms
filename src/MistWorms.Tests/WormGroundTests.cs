@@ -100,5 +100,35 @@ namespace MistWorms.Tests
         {
             Assert.True(WormGround.FirstFloorWait > 20f);   // RestoreGroundWait
         }
+
+        // ---- fallback of the sleepers and sleepers after the window (decision 275)
+
+        [Fact]
+        public void DepositUsesTheRingFirstThenTheLongProbeThenKeepsTheWormUnsupported()
+        {
+            Assert.Equal(WormGround.DepositSpot.Ring, WormGround.ChooseDepositSpot(true, true));
+            Assert.Equal(WormGround.DepositSpot.Ring, WormGround.ChooseDepositSpot(true, false));
+            Assert.Equal(WormGround.DepositSpot.LongProbe, WormGround.ChooseDepositSpot(false, true));
+            Assert.Equal(WormGround.DepositSpot.Unsupported, WormGround.ChooseDepositSpot(false, false));
+        }
+
+        [Fact]
+        public void SleeperWaitsWhileTheZoneIsNotLoadedOrTheWindowIsOpen()
+        {
+            float waitEnd = 100f + WormGround.FirstFloorWait;
+            Assert.Equal(WormGround.SleeperAction.Wait, WormGround.OnSleeperNoFloor(false, true, 500f, waitEnd, true));
+            Assert.Equal(WormGround.SleeperAction.Wait, WormGround.OnSleeperNoFloor(true, false, 110f, waitEnd, true));
+            // A sleeper that had a floor is not in a window, whatever the time.
+            Assert.Equal(WormGround.SleeperAction.Fall, WormGround.OnSleeperNoFloor(true, true, 110f, waitEnd, true));
+        }
+
+        [Fact]
+        public void SleeperAfterTheWindowFallsToAFloorOrIsKeptNeverKilled()
+        {
+            float waitEnd = 100f + WormGround.FirstFloorWait;
+            Assert.Equal(WormGround.SleeperAction.Fall, WormGround.OnSleeperNoFloor(true, false, waitEnd, waitEnd, true));
+            for (float t = waitEnd; t < waitEnd + 120f; t += 0.25f)
+                Assert.Equal(WormGround.SleeperAction.KeepTraced, WormGround.OnSleeperNoFloor(true, false, t, waitEnd, false));
+        }
     }
 }

@@ -29,9 +29,12 @@ namespace MistWorms.Colony
 #if MW_DEV
         // Dev trace (decision 274): worms of the last restore that found no floor at once, and how long they waited for it.
         private float _gwRestoredAt;
-        private int _gwNone, _gwGot;
+        private int _gwNone, _gwGot, _gwDied, _gwDiedAfter;   // restored without floor; found one (alive); died before any floor; died after finding one
         private float _gwMaxWait;
         private bool _gwLogged = true;
+        private bool[] _gwMark = Array.Empty<bool>();          // per slot: restored without a floor, run still open
+        private string _gwCauses = "";
+        private float _floorlessNext;
 #endif
         private float _snapNext;
         private float _snapFirstTick = -1f;
@@ -122,7 +125,15 @@ namespace MistWorms.Colony
                 _snapSlots[w] = slot;
                 restored++;
                 if (state == WormState.Sleeping) asleep++;
-                if (!s.hadGround[slot]) noGround++;
+                if (!s.hadGround[slot])
+                {
+                    noGround++;
+#if MW_DEV
+                    if (_gwMark.Length < s.Capacity) Array.Resize(ref _gwMark, s.Capacity);
+                    if (_gwLogged) { _gwNone = 0; _gwGot = 0; _gwDied = 0; _gwDiedAfter = 0; _gwMaxWait = 0f; _gwCauses = ""; Array.Clear(_gwMark, 0, _gwMark.Length); _gwLogged = false; }
+                    _gwMark[slot] = true;
+#endif
+                }
             }
 
             int at = SnapshotFormat.PoolSectionStart(n);
@@ -149,11 +160,9 @@ namespace MistWorms.Colony
 #if MW_DEV
             if (noGround > 0)
             {
-                // A new restore (a duplicate colony merged in) adds to a run that is still open.
-                if (_gwLogged) { _gwNone = 0; _gwGot = 0; _gwMaxWait = 0f; }
+                // A new restore (a duplicate colony merged in) adds to a run that is still open (the run is opened, and the slots marked, in the loop above).
                 _gwRestoredAt = now;
                 _gwNone += noGround;
-                _gwLogged = false;
             }
 #endif
             Plugin.DevInfo($"[Snapshot] colony {ZdoId}: {restored}/{n} worms {(merge ? "taken over from a duplicate colony" : "restored")} ({asleep} asleep, {restored - asleep} idle), {skipped} left out, {noGround} without a floor yet, {pools} pools, reserve {(_reserve != null ? _reserve.TotalAll() : 0f):0.###}");
@@ -175,9 +184,33 @@ namespace MistWorms.Colony
 #if MW_DEV
             if (_gwLogged) return;
             bool window = now - _gwRestoredAt >= WormGround.FirstFloorWait;
-            if (_gwGot < _gwNone && !window) return;
+            if (_gwGot + _gwDied + _gwDiedAfter < _gwNone && !window) return;
             _gwLogged = true;
-            Plugin.DevInfo($"[Snapshot] colony {ZdoId}: {_gwNone} worms restored without a floor, {_gwGot} found one (longest wait {_gwMaxWait:0.0} s), {_gwNone - _gwGot} still without after {now - _gwRestoredAt:0.0} s");
+            Array.Clear(_gwMark, 0, _gwMark.Length);
+            int still = _gwNone - _gwGot - _gwDied - _gwDiedAfter;
+            Plugin.DevInfo($"[Snapshot] colony {ZdoId}: {_gwNone} worms restored without a floor, {_gwGot} found one and are alive (longest wait {_gwMaxWait:0.0} s), {_gwDiedAfter} found one then died, {_gwDied} died before finding one{(_gwCauses.Length > 0 ? " (" + _gwCauses + ")" : "")}, {still} still alive without after {now - _gwRestoredAt:0.0} s");
+#endif
+        }
+
+        /// <summary>Dev trace (decision 275): a worm of the open restore run is removed. Called by KillWorm before the slot is freed, with the cause.</summary>
+        private void DevRestoreRunDeath(int i, string cause)
+        {
+#if MW_DEV
+            if (_gwLogged || (uint)i >= (uint)_gwMark.Length || !_gwMark[i]) return;
+            _gwMark[i] = false;
+            if (Store.hadGround[i]) { _gwGot--; _gwDiedAfter++; }
+            else _gwDied++;
+            if (_gwCauses.Length < 200 && !_gwCauses.Contains(cause)) _gwCauses += (_gwCauses.Length > 0 ? "; " : "") + cause;
+#endif
+        }
+
+        /// <summary>Dev trace (decision 275): a sleeper without any floor within reach is kept where it is; one line per 10 s per colony.</summary>
+        private void DevTraceFloorlessSleeper(int i, float now)
+        {
+#if MW_DEV
+            if (now < _floorlessNext) return;
+            _floorlessNext = now + 10f;
+            Plugin.DevInfo($"[Colony] sleeper without any floor kept in place: worm {i} at {Store.pos[i]} (in box {InBox(Store.pos[i])}, nest {Store.nestIndex[i]})");
 #endif
         }
 

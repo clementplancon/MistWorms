@@ -333,6 +333,9 @@ namespace MistWorms.Colony
             if (i < 0) return -1;
             _blacklist.Clear(i);
             _watch[i].Reset();
+#if MW_DEV
+            if ((uint)i < (uint)_gwMark.Length) _gwMark[i] = false;
+#endif
             _obstacleKey[i] = 0L;
             _livingSeen[i] = -1000f;
 #if MW_DEV
@@ -358,11 +361,16 @@ namespace MistWorms.Colony
             return i;
         }
 
+#if MW_DEV
+        private string _devKillWhy;   // cause of the next removal without drops (set by the silent paths and KillAll)
+#endif
+
         /// <summary>Dev trace (decision 272): a worm removed without a trace by one of the silent paths (out of the box, no floor, hand-off). Does not exist in Release.</summary>
         [System.Diagnostics.Conditional("MW_DEV")]
         internal void DevLogSilentKill(string why, int i)
         {
             if (Store == null || (uint)i >= (uint)Store.Capacity || !Store.alive[i]) return;
+            _devKillWhy = why;
             Vector3 p = Store.pos[i];
             Plugin.DevInfo($"[Colony] silent removal ({why}): worm {i} at {p}, state {(WormState)Store.state[i]}, in box {InBox(p)}, nest {Store.nestIndex[i]}");
         }
@@ -377,6 +385,8 @@ namespace MistWorms.Colony
             ReleasePath(i);
             ResetIdleSound(i);
 #if MW_DEV
+            DevRestoreRunDeath(i, withDrops ? "killed: " + (_lastKillCause ?? "an unknown hit") : (_devKillWhy ?? "removed without drops"));
+            _devKillWhy = null;
             RecordDeath(i, withDrops);
 #endif
             Store.Free(i);
@@ -515,6 +525,9 @@ namespace MistWorms.Colony
             for (int i = 0; i < Store.HighWater; i++)
             {
                 if (!Store.alive[i]) continue;
+#if MW_DEV
+                _devKillWhy = "KillAll (mw_kill, reset or seeder)";
+#endif
                 KillWorm(i, false);
                 n++;
             }
