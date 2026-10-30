@@ -111,50 +111,68 @@ namespace MistWorms.Dev.Scenarios
                 ItemDrop.ItemData sword = ctx.Give(VanillaNames.SwordBronze, equip: true);
                 yield return ctx.Wait(0.5f);
                 ctx.Assert("sword_is_not_fire", !FireSources.HoldsTorch(player), true, !FireSources.HoldsTorch(player));
-                mass = Spawn(ctx, player, fwd, 8f);
-                if (mass == null) yield break;
-                ai = mass.GetComponent<WritheMassAI>();
-                if (ctx.Params.TryGetValue("spawnyaw", out string yawText) && float.TryParse(yawText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float yawOff))
+                int repeats = Mathf.Max(1, ctx.ParamInt("repeat", 1));   // dev: replay this phase N times in one pass (a new mass each time, same site and spawnyaw)
+                for (int rep = 0; rep < repeats; rep++)
                 {
-                    // Dev: the mass is turned to face this many degrees away from the player (180 = its back to him), for the worst case of the turn.
-                    Quaternion faced = Quaternion.LookRotation(Flat(player.transform.position - mass.transform.position)) * Quaternion.Euler(0f, yawOff, 0f);
-                    mass.transform.rotation = faced;
-                    Rigidbody turned = mass.GetComponent<Rigidbody>();
-                    if (turned != null) turned.rotation = faced;
-                }
-                float t0 = Time.time;
-                // Instrumentation only (slow start diagnosis): same stop condition and timeout as the former WaitUntil.
-                Rigidbody swordRb = mass.GetComponent<Rigidbody>();
-                string groundNote = Physics.Raycast(player.transform.position + Vector3.up * 2f, Vector3.down, out RaycastHit pg, 6f, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore)
-                    ? $"{pg.point.y:0.00} (player y {player.transform.position.y:0.00}, collider {pg.collider.name}, normal.y {pg.normal.y:0.00})" : "none";
-                ctx.Log($"sword spawn: ground under player {groundNote}; mass y {mass.transform.position.y:0.00}");
-                bool swordDebug = ctx.ParamBool("debug", false);   // debug=1: the 0.25 s detail; else one summary line
-                float nextSwordLog = t0, below = -1f, startErr = Vector3.Angle(Flat(player.transform.position - mass.transform.position), Flat(mass.transform.forward)), firstMove = -1f;
-                while (true)
-                {
-                    float el = Time.time - t0;
-                    if (mass == null || MassStateCodes.Mode(mass.StateCode) == MassStateCodes.Engulf || el >= SwordSeconds + 1f) break;
-                    float flatD = Utils.DistanceXZ(mass.transform.position, player.transform.position);
-                    if (below < 0f && flatD < 1.40f)
+                    string repTag = repeats > 1 ? $" [rep {rep + 1}/{repeats}]" : "";
+                    if (rep > 0)
                     {
-                        below = el;
-                        ctx.Log($"sword: flat distance under 1.40 m at t={el:0.00} s");
+                        ctx.Console("mw_kill");
+                        yield return ctx.Wait(1.5f);
+                        yield return ctx.WaitUntil(() => !InfestedEffect.IsActive(player), 3f);
                     }
-                    if (firstMove < 0f && swordRb != null && Utils.LengthXZ(swordRb.linearVelocity) > 0.5f) firstMove = el;
-                    if (swordDebug && Time.time >= nextSwordLog)
+                    mass = Spawn(ctx, player, fwd, 8f);
+                    if (mass == null) yield break;
+                    ai = mass.GetComponent<WritheMassAI>();
+                    if (ctx.Params.TryGetValue("spawnyaw", out string yawText) && float.TryParse(yawText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float yawOff))
                     {
-                        nextSwordLog += el < 2f ? 0.25f : 1f;
-                        Vector3 v = swordRb != null ? swordRb.linearVelocity : Vector3.zero;
-                        ctx.Log($"sword t={el:0.00}: flat {flatD:0.00} m, body v {Utils.LengthXZ(v):0.00} m/s (y {v.y:0.00}), path {ai.PathTicks}, nopath {ai.NoPathTicks}, move {ai.MoveTicks}, stalled {ai.StalledChecks}, assists {ai.StepAssists}, state {MassStateCodes.Describe(mass.StateCode)}, target {(mass.TargetId == ZDOID.None ? "none" : "set")}; " +
-                                $"heading error {Vector3.Angle(Flat(player.transform.position - mass.transform.position), Flat(mass.transform.forward)):0.0} deg (moveMinAngle {ai.m_moveMinAngle:0}), moveDir {((Vector3)MoveDirField.GetValue(ai.GetComponent<Character>())).magnitude:0.00}, canMove {ai.GetComponent<Character>().CanMove()}, onGround {ai.GetComponent<Character>().IsOnGround()}, kinematic {swordRb.isKinematic}, sleeping {swordRb.IsSleeping()}, corner timer {CornerTimer(ai):0.0}");
+                        // Dev: the mass is turned to face this many degrees away from the player (180 = its back to him), for the worst case of the turn.
+                        Quaternion faced = Quaternion.LookRotation(Flat(player.transform.position - mass.transform.position)) * Quaternion.Euler(0f, yawOff, 0f);
+                        mass.transform.rotation = faced;
+                        Rigidbody turned = mass.GetComponent<Rigidbody>();
+                        if (turned != null) turned.rotation = faced;
                     }
-                    yield return null;
+                    float t0 = Time.time;
+                    // Instrumentation only (slow start diagnosis): same stop condition and timeout as the former WaitUntil.
+                    Rigidbody swordRb = mass.GetComponent<Rigidbody>();
+                    string groundNote = Physics.Raycast(player.transform.position + Vector3.up * 2f, Vector3.down, out RaycastHit pg, 6f, WormPhysics.SolidMask, QueryTriggerInteraction.Ignore)
+                        ? $"{pg.point.y:0.00} (player y {player.transform.position.y:0.00}, collider {pg.collider.name}, normal.y {pg.normal.y:0.00})" : "none";
+                    ctx.Log($"sword spawn: ground under player {groundNote}; mass y {mass.transform.position.y:0.00}");
+                    bool swordDebug = ctx.ParamBool("debug", false);   // debug=1: the 0.25 s detail; else one summary line
+                    if (swordDebug) MassPathProbe.Arm(ai);
+                    int drained = 0;
+                    float nextSwordLog = t0, below = -1f, startErr = Vector3.Angle(Flat(player.transform.position - mass.transform.position), Flat(mass.transform.forward)), firstMove = -1f;
+                    while (true)
+                    {
+                        float el = Time.time - t0;
+                        if (mass == null || MassStateCodes.Mode(mass.StateCode) == MassStateCodes.Engulf || el >= SwordSeconds + 1f) break;
+                        float flatD = Utils.DistanceXZ(mass.transform.position, player.transform.position);
+                        if (below < 0f && flatD < 1.40f)
+                        {
+                            below = el;
+                            ctx.Log($"sword: flat distance under 1.40 m at t={el:0.00} s");
+                        }
+                        if (firstMove < 0f && swordRb != null && Utils.LengthXZ(swordRb.linearVelocity) > 0.5f) firstMove = el;
+                        if (swordDebug && Time.time >= nextSwordLog)
+                        {
+                            nextSwordLog += el < 2f ? 0.25f : 1f;
+                            Vector3 v = swordRb != null ? swordRb.linearVelocity : Vector3.zero;
+                            ctx.Log($"sword t={el:0.00}: flat {flatD:0.00} m, body v {Utils.LengthXZ(v):0.00} m/s (y {v.y:0.00}), path {ai.PathTicks}, nopath {ai.NoPathTicks}, move {ai.MoveTicks}, stalled {ai.StalledChecks}, assists {ai.StepAssists}, state {MassStateCodes.Describe(mass.StateCode)}, target {(mass.TargetId == ZDOID.None ? "none" : "set")}; " +
+                                    $"heading error {Vector3.Angle(Flat(player.transform.position - mass.transform.position), Flat(mass.transform.forward)):0.0} deg (moveMinAngle {ai.m_moveMinAngle:0}), moveDir {((Vector3)MoveDirField.GetValue(ai.GetComponent<Character>())).magnitude:0.00}, canMove {ai.GetComponent<Character>().CanMove()}, onGround {ai.GetComponent<Character>().IsOnGround()}, kinematic {swordRb.isKinematic}, sleeping {swordRb.IsSleeping()}, corner timer {CornerTimer(ai):0.0}");
+                        }
+                        if (swordDebug) drained = DrainProbe(ctx, drained, repTag);
+                        yield return null;
+                    }
+                    if (swordDebug) drained = DrainProbe(ctx, drained, repTag);
+                    float took = Time.time - t0;
+                    ctx.Log($"sword summary{repTag}: heading error at spawn {startErr:0} deg, body above 0.5 m/s from t={firstMove:0.00} s, flat < 1.40 m at t={below:0.00} s, engulf after {took:0.00} s, path {ai.PathTicks}, no path {ai.NoPathTicks}, stalled {ai.StalledChecks}, assists {ai.StepAssists}" +
+                        (swordDebug ? $", initial path length {MassPathProbe.InitialPathLen:0.00} m, FindPath calls {MassPathProbe.FindPathCalls}" : ""));
+                    bool inEngulf = mass != null && MassStateCodes.Mode(mass.StateCode) == MassStateCodes.Engulf;
+                    ctx.Assert("sword_engulfs", inEngulf && took <= SwordSeconds, $"Engulf within {SwordSeconds:0} s", inEngulf ? $"{took:0.0} s" : "never");
+                    if (swordDebug) MassPathProbe.Disarm();
+                    if (!inEngulf) yield break;
+                    if (rep < repeats - 1) continue;
                 }
-                float took = Time.time - t0;
-                ctx.Log($"sword summary: heading error at spawn {startErr:0} deg, body above 0.5 m/s from t={firstMove:0.00} s, flat < 1.40 m at t={below:0.00} s, engulf after {took:0.00} s, path {ai.PathTicks}, no path {ai.NoPathTicks}, stalled {ai.StalledChecks}, assists {ai.StepAssists}");
-                bool inEngulf = mass != null && MassStateCodes.Mode(mass.StateCode) == MassStateCodes.Engulf;
-                ctx.Assert("sword_engulfs", inEngulf && took <= SwordSeconds, $"Engulf within {SwordSeconds:0} s", inEngulf ? $"{took:0.0} s" : "never");
-                if (!inEngulf) yield break;
                 yield return ctx.WaitUntil(() => InfestedEffect.IsActive(player), 3f);
                 ctx.Assert("infested_active_before_fire", InfestedEffect.IsActive(player), true, InfestedEffect.IsActive(player));
 
@@ -197,6 +215,17 @@ namespace MistWorms.Dev.Scenarios
                     Player.m_localPlayer.SetHealth(Player.m_localPlayer.GetMaxHealth());
                 }
             }
+        }
+
+        /// <summary>Writes the probe samples not yet written (one line per 0.25 s step); returns the new count.</summary>
+        private static int DrainProbe(ScenarioContext ctx, int from, string tag)
+        {
+            for (int i = from; i < MassPathProbe.Count; i++)
+            {
+                MassPathProbe.Sample s = MassPathProbe.Buffer[i];
+                ctx.Log($"probe{tag} t={s.T:0.00}: node err {s.NodeErrDeg:0}deg at {s.NodeDist:0.00} m, path {s.PathCount} nodes {s.PathLen:0.00} m (bird {s.Bird:0.00} m), vel-player {s.VelAngle:0}deg, FindPath +{s.FindPaths}, nodes removed +{s.Removed}, over moveMinAngle {s.OverAngle:0.00} s, player moved {s.PlayerMove:0.000} m, state {MassStateCodes.Describe(s.State)}, ground normal.y {s.GroundNy:0.00}");
+            }
+            return MassPathProbe.Count;
         }
 
         private static readonly System.Reflection.FieldInfo MoveDirField = HarmonyLib.AccessTools.Field(typeof(Character), "m_moveDir");

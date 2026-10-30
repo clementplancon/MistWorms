@@ -629,6 +629,7 @@ namespace MistWorms.Mass
                 StepAssist(true);
                 return;
             }
+            if (MassPathProbe.Armed) MassPathProbe.Tick(this, dt, goal, m_moveMinAngle, _state.StateCode);
 #endif
             bool done = MoveTo(dt, goal, stop, false);
             if (!done)
